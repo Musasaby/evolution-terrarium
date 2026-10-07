@@ -1,0 +1,826 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>円柱生物の進化箱庭</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=IBM+Plex+Mono:wght@400;500&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
+<style>
+/* Layout: 3D の箱庭を主役に、右側に観測所の計器盤パネル。狭い画面では縦積み。 */
+:root {
+  --bg: #111a19;        /* 計器盤の地 */
+  --surface: #172321;   /* パネル面 */
+  --raise: #1e2d2a;     /* 一段上の面 */
+  --line: #2b3c38;      /* 罫線 */
+  --fg: #e4e8dd;        /* 本文 */
+  --muted: #8f9d94;     /* 補助文字 */
+  --accent: #e2a849;    /* 標本ラベルの琥珀色 */
+  --water: #7fb4c8;     /* 第二系列（水・温度） */
+  --leaf: #8fbf6a;      /* 植物系列 */
+  --danger: #d97a62;    /* 絶滅・捕食 */
+  --font-display: "Dela Gothic One", "Hiragino Kaku Gothic StdN", sans-serif;
+  --font-body: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", sans-serif;
+  --font-data: "IBM Plex Mono", ui-monospace, "SFMono-Regular", monospace;
+  --r: 6px;
+  color-scheme: dark;
+}
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--fg);
+  font-family: var(--font-body); font-size: 13px; line-height: 1.5;
+  overflow: hidden;
+}
+#app { display: grid; grid-template-columns: minmax(0, 1fr) 340px; grid-template-rows: auto minmax(0, 1fr); height: 100%; }
+header {
+  grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px;
+  padding: 8px 16px; border-bottom: 1px solid var(--line); background: var(--surface);
+}
+h1 { font-family: var(--font-display); font-weight: 400; font-size: 17px; margin: 0; letter-spacing: 0.04em; white-space: nowrap; }
+h1 small { font-family: var(--font-body); font-size: 11px; color: var(--muted); letter-spacing: 0.1em; margin-left: 8px; }
+.readings { display: flex; flex-wrap: wrap; gap: 4px 16px; font-family: var(--font-data); font-size: 12px; font-variant-numeric: tabular-nums; }
+.readings span b { font-weight: 500; color: var(--fg); }
+.readings span { color: var(--muted); white-space: nowrap; }
+.chip { display: inline-block; padding: 1px 8px; border-radius: 99px; border: 1px solid var(--line); font-family: var(--font-body); font-size: 11px; color: var(--fg); }
+.chip.rain { border-color: var(--water); color: var(--water); }
+.chip.drought { border-color: var(--accent); color: var(--accent); }
+.chip.ice { border-color: #cfe3ea; color: #cfe3ea; }
+.controls { display: flex; flex-wrap: wrap; gap: 6px; margin-left: auto; align-items: center; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
+button {
+  font: inherit; font-size: 12px; color: var(--fg); background: var(--raise); border: 0; padding: 4px 10px; cursor: pointer;
+}
+.seg button + button { border-left: 1px solid var(--line); }
+button:hover { background: color-mix(in srgb, var(--raise) 70%, var(--accent) 30%); }
+button[aria-pressed="true"] { background: var(--accent); color: #1a1408; }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.lone { border: 1px solid var(--line); border-radius: var(--r); }
+
+#view { position: relative; min-width: 0; min-height: 0; }
+#view canvas { display: block; width: 100%; height: 100%; }
+#hint { position: absolute; left: 12px; bottom: 10px; font-size: 11px; color: rgba(255,255,255,.75); text-shadow: 0 1px 2px rgba(0,0,0,.6); pointer-events: none; }
+#loading { position: absolute; inset: 0; display: grid; place-items: center; background: var(--bg); z-index: 5; text-align: center; }
+#loading p { margin: 6px 0 0; color: var(--muted); }
+#loading .big { font-family: var(--font-display); font-size: 22px; color: var(--fg); }
+
+aside { border-left: 1px solid var(--line); background: var(--surface); display: flex; flex-direction: column; min-height: 0; }
+.tabs { display: flex; border-bottom: 1px solid var(--line); }
+.tabs button { flex: 1; background: transparent; padding: 9px 4px; border-bottom: 2px solid transparent; color: var(--muted); }
+.tabs button[aria-selected="true"] { color: var(--fg); border-bottom-color: var(--accent); }
+.pane { flex: 1; overflow-y: auto; padding: 12px 16px 16px; display: flex; flex-direction: column; gap: 14px; min-height: 0; }
+.pane h2 { font-size: 11px; font-weight: 700; letter-spacing: 0.12em; color: var(--muted); margin: 0 0 4px; }
+.chart { width: 100%; height: 110px; display: block; }
+.legend { display: flex; gap: 12px; font-size: 11px; color: var(--muted); }
+.legend i { display: inline-block; width: 10px; height: 2px; vertical-align: middle; margin-right: 4px; }
+.plantbar { display: flex; height: 10px; border-radius: 3px; overflow: hidden; background: var(--raise); }
+.plantlegend { display: flex; flex-wrap: wrap; gap: 2px 10px; font-size: 11px; color: var(--muted); margin-top: 6px; }
+.plantlegend i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+
+.empty { color: var(--muted); padding: 20px 0; line-height: 1.8; }
+.tag { border: 1px solid var(--line); border-radius: var(--r); padding: 10px 12px; background: var(--raise); }
+.tag .sp { font-family: var(--font-display); font-size: 18px; display: flex; align-items: center; gap: 8px; }
+.tag .sp i { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+.tag .sub { font-family: var(--font-data); font-size: 11px; color: var(--muted); }
+dl { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; margin: 0; font-size: 12px; }
+dt { color: var(--muted); }
+dd { margin: 0; font-family: var(--font-data); font-variant-numeric: tabular-nums; text-align: right; }
+.bar { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.bar > div { height: 100%; background: var(--accent); }
+#body2d { width: 100%; height: 150px; display: block; background: var(--bg); border-radius: var(--r); }
+.row { display: flex; gap: 6px; flex-wrap: wrap; }
+.costs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; font-size: 11px; text-align: center; }
+.costs div { background: var(--bg); border-radius: 4px; padding: 4px 2px; }
+.costs b { display: block; font-family: var(--font-data); font-weight: 500; font-size: 12px; }
+
+#tree { width: 100%; display: block; }
+.treewrap { overflow: auto; border: 1px solid var(--line); border-radius: var(--r); background: var(--bg); max-height: 100%; }
+.log { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.log li { display: grid; grid-template-columns: 54px 1fr; gap: 8px; font-size: 12px; }
+.log time { font-family: var(--font-data); color: var(--muted); font-size: 11px; }
+.log li.env span { color: var(--water); }
+.log li.species span { color: var(--accent); }
+.log li.extinct span { color: var(--danger); }
+.note { font-size: 11px; color: var(--muted); line-height: 1.7; }
+
+@media (max-width: 760px) {
+  body { overflow: auto; }
+  #app { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 52vh auto; height: auto; }
+  aside { border-left: 0; border-top: 1px solid var(--line); }
+  .pane { overflow: visible; }
+  .controls { margin-left: 0; }
+  #hint { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div id="app">
+  <header>
+    <h1>円柱生物の進化箱庭<small>EVOLUTION TERRARIUM</small></h1>
+    <div class="readings" id="readings">
+      <span>年 <b id="r-year">0.0</b> <b id="r-season">春</b></span>
+      <span>気温 <b id="r-temp">--</b>℃</span>
+      <span>湖面 <b id="r-water">--</b>m</span>
+      <span><span class="chip" id="r-weather">晴れ</span></span>
+      <span>個体 <b id="r-pop">0</b></span>
+      <span>種 <b id="r-sp">0</b></span>
+      <span>最大世代 <b id="r-gen">0</b></span>
+    </div>
+    <div class="controls">
+      <div class="seg" role="group" aria-label="速度" id="speeds">
+        <button id="sp-0" data-s="0">停止</button>
+        <button id="sp-1" data-s="1" aria-pressed="true">×1</button>
+        <button id="sp-3" data-s="3">×3</button>
+        <button id="sp-8" data-s="8">×8</button>
+        <button id="sp-max" data-s="999">最大</button>
+      </div>
+      <div class="seg" role="group" aria-label="環境イベント">
+        <button id="ev-rain" data-w="rain">雨</button>
+        <button id="ev-drought" data-w="drought">干ばつ</button>
+        <button id="ev-ice" data-w="ice">氷河期</button>
+      </div>
+      <button class="lone" id="btn-reset">新しい世界</button>
+    </div>
+  </header>
+
+  <div id="view">
+    <div id="loading"><div><div class="big">世界を生成中</div><p id="loading-msg">物理エンジンを読み込んでいます…</p></div></div>
+    <div id="hint">ドラッグで回転・右ドラッグで移動・ホイールで拡大／生物をクリックで観察</div>
+  </div>
+
+  <aside>
+    <div class="tabs" role="tablist">
+      <button role="tab" id="tab-stats" aria-selected="true" data-p="p-stats">統計</button>
+      <button role="tab" id="tab-ind" aria-selected="false" data-p="p-ind">個体</button>
+      <button role="tab" id="tab-tree" aria-selected="false" data-p="p-tree">系統樹</button>
+      <button role="tab" id="tab-log" aria-selected="false" data-p="p-log">記録</button>
+    </div>
+
+    <section class="pane" id="p-stats" role="tabpanel">
+      <div>
+        <h2>個体数と種数</h2>
+        <canvas class="chart" id="c-pop"></canvas>
+        <div class="legend"><span><i style="background:var(--accent)"></i>個体数</span><span><i style="background:var(--water)"></i>種数</span></div>
+      </div>
+      <div>
+        <h2>繁殖</h2>
+        <dl id="repro"></dl>
+      </div>
+      <div>
+        <h2>体のつくり（平均）</h2>
+        <canvas class="chart" id="c-body"></canvas>
+        <div class="legend"><span><i style="background:var(--accent)"></i>パーツ数</span><span><i style="background:var(--leaf)"></i>体積 ×10</span></div>
+      </div>
+      <div>
+        <h2>気候</h2>
+        <canvas class="chart" id="c-clim"></canvas>
+        <div class="legend"><span><i style="background:var(--danger)"></i>気温 ℃</span><span><i style="background:var(--water)"></i>湖面 m</span></div>
+      </div>
+      <div>
+        <h2>植生</h2>
+        <div class="plantbar" id="plantbar"></div>
+        <div class="plantlegend" id="plantlegend"></div>
+      </div>
+    </section>
+
+    <section class="pane" id="p-ind" role="tabpanel" hidden>
+      <div id="ind-empty" class="empty">3D 画面の生物をクリックすると、ここに遺伝子・エネルギー・系譜が表示されます。<br><button class="lone" id="btn-random">ランダムに1体選ぶ</button></div>
+      <div id="ind" hidden>
+        <div class="tag">
+          <div class="sp"><i id="i-dot"></i><span id="i-species"></span></div>
+          <div class="sub" id="i-sub"></div>
+        </div>
+        <div style="margin-top:12px">
+          <h2>エネルギー</h2>
+          <div class="bar"><div id="i-ebar"></div></div>
+          <div class="sub note" id="i-etext" style="font-family:var(--font-data)"></div>
+        </div>
+        <div style="margin-top:12px">
+          <h2>消費の内訳（毎秒）</h2>
+          <div class="costs">
+            <div>基礎<b id="c-base">0</b></div><div>運動<b id="c-move">0</b></div><div>寒暖<b id="c-clim2">0</b></div><div>水中<b id="c-wet">0</b></div>
+          </div>
+        </div>
+        <div style="margin-top:12px">
+          <h2>体の形（真上から）</h2>
+          <canvas id="body2d"></canvas>
+        </div>
+        <div style="margin-top:12px">
+          <h2>記録</h2>
+          <dl id="i-dl"></dl>
+        </div>
+        <div class="row" style="margin-top:12px">
+          <button class="lone" id="btn-follow" aria-pressed="false">追跡する</button>
+          <button class="lone" id="btn-clear">選択を解除</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="pane" id="p-tree" role="tabpanel" hidden>
+      <div class="note">横軸は時間。線は種の存続期間、太線は現存種です。縦の細線は祖先種からの分岐を表します。<br>種は「互いを配偶相手と認め、育つ子を残せるか」で判定します。集団が別々に変異を溜め、体色や体つきの違いで相手と認めなくなったり、雑種が育たなくなったりすると、別の種として分かれます。</div>
+      <div class="treewrap"><canvas id="tree"></canvas></div>
+    </section>
+
+    <section class="pane" id="p-log" role="tabpanel" hidden>
+      <ul class="log" id="log"></ul>
+    </section>
+  </aside>
+</div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/",
+  "rapier": "https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.14.0/rapier.es.js"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import RAPIER from 'rapier';
+import { Sim, CFG, PLANT_SPECIES, compatibility } from './sim.js';
+
+const $ = (id) => document.getElementById(id);
+const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const COL = { accent: css('--accent'), water: css('--water'), leaf: css('--leaf'), danger: css('--danger'), muted: css('--muted'), line: css('--line'), fg: css('--fg'), bg: css('--bg') };
+const nextFrame = () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
+
+// ---------- Three.js ----------
+const view = $('view');
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(1.5, devicePixelRatio));
+view.prepend(renderer.domElement);
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(50, 1, 0.3, 600);
+camera.position.set(0, 62, 82);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; controls.maxPolarAngle = Math.PI * 0.48; controls.minDistance = 4; controls.maxDistance = 220;
+const hemi = new THREE.HemisphereLight(0xdfeefc, 0x4a4630, 1.1);
+const sun = new THREE.DirectionalLight(0xfff2dc, 1.6);
+sun.position.set(40, 80, 30);
+scene.add(hemi, sun);
+scene.fog = new THREE.Fog(0x9cc3d9, 120, 320);
+
+function resize() {
+  const w = view.clientWidth, h = view.clientHeight;
+  renderer.setSize(w, h, false); camera.aspect = w / Math.max(1, h); camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(view);
+
+let sim = null, terrainMesh, waterMesh, creatureMesh, marker, rain, plantMeshes = {};
+let lastTerrainV = -1, lastPlantRebuild = 0, lastColorUpdate = 0;
+const instToCreature = [];
+let selected = null, follow = false;
+
+// ---------- 地形 ----------
+function buildTerrain() {
+  if (terrainMesh) { scene.remove(terrainMesh); terrainMesh.geometry.dispose(); }
+  const N = CFG.GRID, W = N + 1, S = CFG.WORLD;
+  const g = new THREE.BufferGeometry();
+  const pos = new Float32Array(W * W * 3), col = new Float32Array(W * W * 3);
+  const idx = [];
+  for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
+    const a = i * W + j, b = (i + 1) * W + j, c = i * W + j + 1, d = (i + 1) * W + j + 1;
+    idx.push(a, c, b, b, c, d);
+  }
+  g.setIndex(idx);
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  terrainMesh = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ vertexColors: true }));
+  scene.add(terrainMesh);
+  updateTerrainGeometry();
+}
+function updateTerrainGeometry() {
+  const N = CFG.GRID, W = N + 1, S = CFG.WORLD, H = sim.H;
+  const pos = terrainMesh.geometry.attributes.position.array;
+  for (let i = 0; i <= N; i++) for (let j = 0; j <= N; j++) {
+    const k = (i * W + j) * 3;
+    pos[k] = -S / 2 + i * S / N; pos[k + 1] = H[i * W + j]; pos[k + 2] = -S / 2 + j * S / N;
+  }
+  terrainMesh.geometry.attributes.position.needsUpdate = true;
+  terrainMesh.geometry.computeVertexNormals();
+  terrainMesh.geometry.computeBoundingSphere();
+  updateTerrainColors();
+  lastTerrainV = sim.terrainVersion;
+}
+const cSand = new THREE.Color('#c8b78a'), cDry = new THREE.Color('#a99a5c'), cLush = new THREE.Color('#4d7a37'),
+  cRock = new THREE.Color('#7a7268'), cSnow = new THREE.Color('#eef3f5'), cMud = new THREE.Color('#5e5640'), tmp = new THREE.Color();
+function updateTerrainColors() {
+  const N = CFG.GRID, W = N + 1, H = sim.H, cl = sim.climate;
+  const col = terrainMesh.geometry.attributes.color.array, nrm = terrainMesh.geometry.attributes.normal.array;
+  for (let i = 0; i <= N; i++) for (let j = 0; j <= N; j++) {
+    const id = i * W + j, h = H[id];
+    const ny = nrm[id * 3 + 1];
+    const dw = sim.distWater[id];
+    const moist = Math.min(1, 0.15 + 0.5 * cl.humidity + 0.55 * Math.exp(-dw / 10));
+    if (h < cl.water) tmp.copy(cMud);
+    else if (h < cl.water + 0.4) tmp.copy(cSand);
+    else {
+      tmp.copy(cDry).lerp(cLush, moist);
+      const rock = Math.min(1, Math.max(0, (0.86 - ny) * 4) + Math.max(0, (h - 15) / 8));
+      tmp.lerp(cRock, rock);
+    }
+    const T = cl.temp - 0.55 * Math.max(0, h - cl.baseWater);
+    if (T < 1 && h >= cl.water) tmp.lerp(cSnow, Math.min(1, (1 - T) / 5));
+    col[id * 3] = tmp.r; col[id * 3 + 1] = tmp.g; col[id * 3 + 2] = tmp.b;
+  }
+  terrainMesh.geometry.attributes.color.needsUpdate = true;
+}
+
+// ---------- 水・雨 ----------
+function buildWater() {
+  if (waterMesh) scene.remove(waterMesh);
+  const g = new THREE.PlaneGeometry(CFG.WORLD, CFG.WORLD); g.rotateX(-Math.PI / 2);
+  waterMesh = new THREE.Mesh(g, new THREE.MeshPhongMaterial({ color: 0x3f7fa0, transparent: true, opacity: 0.78, shininess: 80, depthWrite: false }));
+  scene.add(waterMesh);
+}
+function buildRain() {
+  const n = 1800, g = new THREE.BufferGeometry(), p = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) { p[i * 3] = (Math.random() - 0.5) * 80; p[i * 3 + 1] = Math.random() * 40; p[i * 3 + 2] = (Math.random() - 0.5) * 80; }
+  g.setAttribute('position', new THREE.BufferAttribute(p, 3));
+  rain = new THREE.Points(g, new THREE.PointsMaterial({ color: 0xc9dce6, size: 0.25, transparent: true, opacity: 0.7, depthWrite: false }));
+  rain.frustumCulled = false;
+  scene.add(rain);
+}
+
+// ---------- 生物（円柱のインスタンス描画） ----------
+const MAX_INST = 2400;
+function buildCreatureMesh() {
+  if (creatureMesh) scene.remove(creatureMesh);
+  const geo = new THREE.CylinderGeometry(1, 1, 1, 12, 1);
+  creatureMesh = new THREE.InstancedMesh(geo, new THREE.MeshStandardMaterial({ roughness: 0.55, metalness: 0.05 }), MAX_INST);
+  creatureMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  creatureMesh.setColorAt(0, new THREE.Color());
+  creatureMesh.frustumCulled = false;
+  scene.add(creatureMesh);
+  if (!marker) {
+    marker = new THREE.Mesh(new THREE.ConeGeometry(0.35, 0.8, 4), new THREE.MeshBasicMaterial({ color: COL.accent }));
+    marker.rotation.x = Math.PI; scene.add(marker);
+  }
+}
+const m4 = new THREE.Matrix4(), qv = new THREE.Quaternion(), pv = new THREE.Vector3(), sv = new THREE.Vector3(), cc = new THREE.Color();
+function speciesColor(sp, out, light = 0.5) { return out.setHSL(sp ? sp.hue : 0, 0.55, light); }
+function updateCreatures() {
+  let k = 0;
+  instToCreature.length = 0;
+  for (const c of sim.creatures) {
+    if (!c.alive) continue;
+    const parts = c.genome.parts;
+    for (let i = 0; i < c.bodies.length && k < MAX_INST; i++) {
+      const b = c.bodies[i], t = b.translation(), r = b.rotation();
+      pv.set(t.x, t.y, t.z); qv.set(r.x, r.y, r.z, r.w); sv.set(parts[i].r, parts[i].len, parts[i].r);
+      m4.compose(pv, qv, sv);
+      creatureMesh.setMatrixAt(k, m4);
+      if (c.dead) cc.set('#6b5b4b');
+      else speciesColor(c.species, cc, i === 0 ? 0.42 : 0.56);
+      if (c === selected && !c.dead) cc.offsetHSL(0, 0, 0.12);
+      creatureMesh.setColorAt(k, cc);
+      instToCreature[k] = c;
+      k++;
+    }
+  }
+  creatureMesh.count = k;
+  creatureMesh.instanceMatrix.needsUpdate = true;
+  if (creatureMesh.instanceColor) creatureMesh.instanceColor.needsUpdate = true;
+  if (selected && selected.alive && selected.bodies[0]) {
+    const t = selected.bodies[0].translation();
+    marker.visible = true; marker.position.set(t.x, t.y + 1.6 + Math.sin(performance.now() / 300) * 0.15, t.z);
+  } else marker.visible = false;
+}
+
+// ---------- 植物 ----------
+// 植物は種類ごとに形の部品（葉・茎・幹・樹冠・円錐）を組み合わせて描く
+function buildPlantMeshes() {
+  for (const k in plantMeshes) scene.remove(plantMeshes[k]);
+  const mk = (geo, n, rough = 0.85) => {
+    const m = new THREE.InstancedMesh(geo, new THREE.MeshStandardMaterial({ roughness: rough }), n);
+    m.setColorAt(0, new THREE.Color()); m.frustumCulled = false; m.count = 0; scene.add(m); return m;
+  };
+  const blade = new THREE.ConeGeometry(0.06, 1, 4); blade.translate(0, 0.5, 0);
+  const stem = new THREE.CylinderGeometry(1, 1, 1, 6); stem.translate(0, 0.5, 0);
+  const ball = new THREE.IcosahedronGeometry(1, 1);
+  const cone = new THREE.ConeGeometry(1, 1, 7); cone.translate(0, 0.5, 0);
+  const disc = new THREE.CylinderGeometry(1, 1, 0.08, 9);
+  plantMeshes = { blade: mk(blade, 9000), stem: mk(stem, 6000), ball: mk(ball, 5000), cone: mk(cone, 3000), disc: mk(disc, 1800) };
+}
+const PCOL = {
+  草: '#5f9a3e', 花: '#4f8a3a', 葦: '#8a9a52', 低木: '#3f6f34', 広葉樹: '#3d7a35', 針葉樹: '#25543a', サボテン: '#5f8d4e', 苔: '#56703a',
+};
+const BLOOM = ['#e8d36a', '#e889a6', '#f2efe6', '#a38fe0'];
+function rebuildPlants() {
+  const cnt = { blade: 0, stem: 0, ball: 0, cone: 0, disc: 0 };
+  const cl = sim.climate;
+  const season = ((sim.t / CFG.YEAR) % 1 + 1) % 1;
+  const autumn = season > 0.45 && season < 0.75 ? Math.sin((season - 0.45) / 0.3 * Math.PI) : 0;
+  const put = (kind, x, y, z, sx, sy, sz, rx, ry, rz, color) => {
+    const m = plantMeshes[kind], i = cnt[kind]; if (i >= m.instanceMatrix.count) return;
+    pv.set(x, y, z); qv.setFromEuler(new THREE.Euler(rx, ry, rz)); sv.set(sx, sy, sz);
+    m4.compose(pv, qv, sv); m.setMatrixAt(i, m4); m.setColorAt(i, color); cnt[kind]++;
+  };
+  const base = new THREE.Color(), c2 = new THREE.Color(), brown = new THREE.Color('#8a7448'), snow = new THREE.Color('#e9eef0'), orange = new THREE.Color('#c9772f');
+  for (const p of sim.plants) {
+    const sp = p.sp, s = p.size, f = Math.max(0.05, p.energy / p.maxE);
+    const T = cl.temp - 0.55 * Math.max(0, p.y - cl.baseWater);
+    base.set(PCOL[sp.name]).lerp(brown, (1 - f) * 0.7);
+    if (T < 0) base.lerp(snow, Math.min(0.6, -T / 10));
+    let rnd = p.shapeSeed * 997;
+    const r = () => { rnd = (rnd * 16807) % 2147483647 || 1; return (rnd % 10000) / 10000; };
+    const x = p.x, z = p.z, y = p.y;
+    switch (sp.name) {
+      case '草': {
+        const h = (0.25 + 0.55 * f) * s;
+        for (let k = 0; k < 4; k++) { const a = r() * 6.28, d = r() * 0.8 * s; put('blade', x + Math.cos(a) * d, y, z + Math.sin(a) * d, s, h * (0.7 + r() * 0.6), s, (r() - 0.5) * 0.6, 0, (r() - 0.5) * 0.6, base); }
+        break;
+      }
+      case '花': {
+        const h = (0.3 + 0.4 * f) * s;
+        for (let k = 0; k < 3; k++) {
+          const a = r() * 6.28, d = r() * 0.45 * s, xx = x + Math.cos(a) * d, zz = z + Math.sin(a) * d, hh = h * (0.7 + r() * 0.5);
+          put('stem', xx, y, zz, 0.025, hh, 0.025, 0, 0, 0, base);
+          if (f > 0.35 && T > 6) put('ball', xx, y + hh, zz, 0.11 * s, 0.07 * s, 0.11 * s, 0, 0, 0, c2.set(BLOOM[Math.floor(p.shapeSeed * 4)]));
+        }
+        break;
+      }
+      case '葦': {
+        for (let k = 0; k < 5; k++) { const a = r() * 6.28, d = r() * 0.5 * s; put('stem', x + Math.cos(a) * d, y - 0.2, z + Math.sin(a) * d, 0.03, (1.0 + f) * s * (0.7 + r() * 0.5), 0.03, (r() - 0.5) * 0.25, 0, (r() - 0.5) * 0.25, base); }
+        break;
+      }
+      case '苔': {
+        put('disc', x, y + 0.02, z, 0.55 * s * (0.5 + 0.5 * f), 1, 0.55 * s * (0.5 + 0.5 * f), 0, p.rot, 0, base);
+        break;
+      }
+      case '低木': {
+        const g = 0.55 + 0.45 * f;
+        for (let k = 0; k < 3; k++) { const a = r() * 6.28; put('ball', x + Math.cos(a) * 0.3 * s, y + 0.35 * s * g, z + Math.sin(a) * 0.3 * s, 0.5 * s * g, 0.42 * s * g, 0.5 * s * g, 0, 0, 0, base); }
+        break;
+      }
+      case '広葉樹': {
+        const g = 0.6 + 0.4 * f, th = 2.4 * s;
+        put('stem', x, y, z, 0.2 * s, th, 0.2 * s, 0, 0, 0, c2.set('#5b4632'));
+        const leaf = base.clone().lerp(orange, autumn * 0.8);
+        if (T < 3) leaf.lerp(brown, 0.6);
+        put('ball', x, y + th + 0.4 * s, z, 1.4 * s * g, 1.1 * s * g, 1.4 * s * g, 0, p.rot, 0, leaf);
+        put('ball', x + 0.6 * s, y + th - 0.1, z + 0.3 * s, 0.9 * s * g, 0.8 * s * g, 0.9 * s * g, 0, 0, 0, leaf);
+        break;
+      }
+      case '針葉樹': {
+        const g = 0.6 + 0.4 * f;
+        put('stem', x, y, z, 0.16 * s, 1.2 * s, 0.16 * s, 0, 0, 0, c2.set('#4e3a2a'));
+        for (let k = 0; k < 3; k++) put('cone', x, y + (0.8 + k * 0.9) * s, z, (1.2 - k * 0.3) * s * g, 1.5 * s, (1.2 - k * 0.3) * s * g, 0, 0, 0, base);
+        break;
+      }
+      case 'サボテン': {
+        const h = (1.2 + 0.6 * f) * s;
+        put('stem', x, y, z, 0.3 * s, h, 0.3 * s, 0, 0, 0, base);
+        put('stem', x + 0.3 * s, y + h * 0.45, z, 0.15 * s, 0.6 * s, 0.15 * s, 0, 0, -0.9, base);
+        if (r() > 0.4) put('stem', x - 0.3 * s, y + h * 0.55, z, 0.13 * s, 0.5 * s, 0.13 * s, 0, 0, 0.9, base);
+        break;
+      }
+    }
+  }
+  for (const k in plantMeshes) {
+    const m = plantMeshes[k]; m.count = cnt[k]; m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true;
+  }
+}
+
+// ---------- 空 ----------
+const skyClear = new THREE.Color('#9cc4da'), skyRain = new THREE.Color('#7f8b93'), skyDry = new THREE.Color('#d6c69e'), skyCold = new THREE.Color('#c9d6de');
+function updateSky() {
+  const cl = sim.climate;
+  tmp.copy(skyClear);
+  if (cl.weather === 'drought') tmp.lerp(skyDry, 0.6);
+  tmp.lerp(skyRain, cl.rainVis * 0.8);
+  if (cl.temp < 2) tmp.lerp(skyCold, Math.min(0.7, (2 - cl.temp) / 10));
+  scene.background = tmp.clone();
+  scene.fog.color.copy(tmp);
+  waterMesh.position.y = cl.water;
+  const frozen = cl.temp < -3;
+  waterMesh.material.color.set(frozen ? '#d4e6ec' : '#3f7fa0');
+  waterMesh.material.opacity = frozen ? 0.95 : 0.78;
+}
+function updateRain(dt) {
+  const cl = sim.climate;
+  rain.visible = cl.rainVis > 0.05;
+  if (!rain.visible) return;
+  const snow = cl.temp < 1;
+  rain.material.size = snow ? 0.35 : 0.22;
+  rain.material.color.set(snow ? '#ffffff' : '#bcd3df');
+  rain.material.opacity = 0.75 * cl.rainVis;
+  const p = rain.geometry.attributes.position.array, vy = snow ? 3 : 22;
+  for (let i = 1; i < p.length; i += 3) { p[i] -= vy * dt; if (p[i] < 0) p[i] += 40; }
+  rain.geometry.attributes.position.needsUpdate = true;
+  rain.position.set(controls.target.x, controls.target.y - 5, controls.target.z);
+}
+
+// ---------- ループ ----------
+let speed = 1, acc = 0, lastT = performance.now(), uiTimer = 0;
+function loop(now) {
+  const dtr = Math.min(0.1, (now - lastT) / 1000); lastT = now;
+  if (sim) {
+    const budget = performance.now() + (speed > 100 ? 30 : 22);
+    if (speed > 100) { while (performance.now() < budget) sim.step(); }
+    else if (speed > 0) {
+      acc += dtr * speed;
+      while (acc >= CFG.DT && performance.now() < budget) { sim.step(); acc -= CFG.DT; }
+      if (acc > 0.5) acc = 0; // 追いつけない分は捨てる
+    }
+    if (sim.terrainVersion !== lastTerrainV) updateTerrainGeometry();
+    if (now - lastColorUpdate > 4000) { updateTerrainColors(); lastColorUpdate = now; }
+    if (now - lastPlantRebuild > 1500) { rebuildPlants(); lastPlantRebuild = now; }
+    updateCreatures();
+    updateSky();
+    updateRain(dtr);
+    if (follow && selected && selected.alive && selected.bodies[0]) {
+      const t = selected.bodies[0].translation();
+      const dx = t.x - controls.target.x, dy = t.y - controls.target.y, dz = t.z - controls.target.z;
+      const k = Math.min(1, dtr * 3);
+      controls.target.x += dx * k; controls.target.y += dy * k; controls.target.z += dz * k;
+      camera.position.x += dx * k; camera.position.y += dy * k; camera.position.z += dz * k;
+    }
+    uiTimer += dtr;
+    if (uiTimer > 0.5) { uiTimer = 0; updateUI(); }
+  }
+  controls.update();
+  renderer.render(scene, camera);
+  requestAnimationFrame(loop);
+}
+
+// ---------- UI ----------
+const WEATHER = { clear: '晴れ', rain: '雨', drought: '干ばつ' };
+function updateUI() {
+  const cl = sim.climate;
+  $('r-year').textContent = sim.year.toFixed(1);
+  $('r-season').textContent = sim.seasonName();
+  $('r-temp').textContent = cl.temp.toFixed(1);
+  $('r-water').textContent = (cl.water - cl.baseWater >= 0 ? '+' : '') + (cl.water - cl.baseWater).toFixed(2);
+  const w = $('r-weather');
+  let wl = WEATHER[cl.weather]; let wc = cl.weather;
+  if (cl.weather === 'rain' && cl.temp < 1) wl = '雪';
+  if (cl.iceTarget < 0 || cl.ice < -3) { wl += '・氷河期'; wc = 'ice'; }
+  w.textContent = wl; w.className = 'chip ' + wc;
+  const live = sim.creatures.filter(c => c.alive && !c.dead);
+  $('r-pop').textContent = live.length;
+  $('r-sp').textContent = new Set(live.map(c => c.species.id)).size;
+  $('r-gen').textContent = live.reduce((m, c) => Math.max(m, c.gen), 0);
+  const active = document.querySelector('.tabs [aria-selected="true"]').dataset.p;
+  if (active === 'p-stats') drawStats();
+  if (active === 'p-ind') drawInspector();
+  if (active === 'p-tree') drawTree();
+  if (active === 'p-log') drawLog();
+}
+
+function prepCanvas(cv, h) {
+  const dpr = Math.min(2, devicePixelRatio), w = cv.clientWidth;
+  if (h) cv.style.height = h + 'px';
+  const hh = cv.clientHeight;
+  if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(hh * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(hh * dpr); }
+  const ctx = cv.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, w, hh);
+  return { ctx, w, h: hh };
+}
+function lineChart(cv, series) {
+  const { ctx, w, h } = prepCanvas(cv);
+  const st = sim.stats; if (st.length < 2) { ctx.fillStyle = COL.muted; ctx.font = '11px sans-serif'; ctx.fillText('データを集計中…', 8, 20); return; }
+  const L = 30, R = 30, T = 8, B = 16;
+  const t0 = st[0].t, t1 = st[st.length - 1].t;
+  const X = (t) => L + (t - t0) / Math.max(1e-6, t1 - t0) * (w - L - R);
+  ctx.font = '10px "IBM Plex Mono", monospace';
+  // 時間軸（年）
+  ctx.strokeStyle = COL.line; ctx.fillStyle = COL.muted; ctx.lineWidth = 1;
+  const y0 = t0 / CFG.YEAR, y1 = t1 / CFG.YEAR;
+  const step = y1 - y0 > 20 ? 5 : y1 - y0 > 6 ? 2 : y1 - y0 > 2 ? 1 : 0.5;
+  ctx.textAlign = 'center';
+  for (let y = Math.ceil(y0 / step) * step; y <= y1; y += step) {
+    const x = X(y * CFG.YEAR); ctx.beginPath(); ctx.moveTo(x, T); ctx.lineTo(x, h - B); ctx.stroke();
+    ctx.fillText(y + '年', x, h - 4);
+  }
+  series.forEach((s, si) => {
+    let mn = s.min ?? Infinity, mx = s.max ?? -Infinity;
+    if (s.min === undefined || s.max === undefined) for (const p of st) { const v = s.get(p); if (s.min === undefined) mn = Math.min(mn, v); if (s.max === undefined) mx = Math.max(mx, v); }
+    const span = s.span ?? 1;
+    if (mx - mn < span) { const m = (mx + mn) / 2; if (s.min === undefined) mn = m - span / 2; if (s.max === undefined) mx = mn + span; else mn = mx - span; }
+    if (s.min !== undefined && mn > s.min) mn = s.min;
+    const Y = (v) => h - B - (v - mn) / (mx - mn) * (h - B - T);
+    // 目盛（左右）
+    ctx.fillStyle = s.color; ctx.textAlign = si === 0 ? 'right' : 'left';
+    ctx.fillText(fmt(mx), si === 0 ? L - 4 : w - R + 4, T + 8);
+    ctx.fillText(fmt(mn), si === 0 ? L - 4 : w - R + 4, h - B);
+    if (si === 0) {
+      ctx.beginPath(); ctx.moveTo(X(st[0].t), h - B);
+      for (const p of st) ctx.lineTo(X(p.t), Y(s.get(p)));
+      ctx.lineTo(X(t1), h - B); ctx.closePath();
+      ctx.globalAlpha = 0.12; ctx.fill(); ctx.globalAlpha = 1;
+    }
+    ctx.strokeStyle = s.color; ctx.lineWidth = 1.5; ctx.beginPath();
+    st.forEach((p, i) => { const x = X(p.t), y = Y(s.get(p)); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+    ctx.stroke();
+    const lp = st[st.length - 1]; ctx.beginPath(); ctx.arc(X(lp.t), Y(s.get(lp)), 2.5, 0, 6.3); ctx.fill();
+  });
+}
+const fmt = (v) => Math.abs(v) >= 100 ? v.toFixed(0) : v.toFixed(1);
+function drawStats() {
+  lineChart($('c-pop'), [{ get: p => p.pop, color: COL.accent, min: 0 }, { get: p => p.species, color: COL.water, min: 0 }]);
+  lineChart($('c-body'), [{ get: p => p.parts, color: COL.accent, min: 1 }, { get: p => p.vol * 10, color: COL.leaf, min: 0 }]);
+  lineChart($('c-clim'), [{ get: p => p.temp, color: COL.danger, span: 10 }, { get: p => p.water, color: COL.water, span: 2 }]);
+  const C = sim.counters, L = sim.litters || [];
+  const avgL = L.length ? L.reduce((a, b) => a + b, 0) / L.length : 0;
+  const splits = [...sim.species.values()].filter(s => s.parent !== null).length;
+  const rows = [
+    ['交配の回数', C.matings], ['生まれた子', C.births],
+    ['1回の平均出産数', L.length ? avgL.toFixed(2) + ' 体' : '—'],
+    ['育たなかった雑種', C.stillborn], ['相手を見分けて断った', C.rejected],
+    ['種分化', splits + ' 回'],
+  ];
+  const dl = $('repro'); dl.innerHTML = '';
+  for (const [k, v] of rows) { const dt = document.createElement('dt'); dt.textContent = k; const dd = document.createElement('dd'); dd.textContent = v; dl.append(dt, dd); }
+  const last = sim.stats[sim.stats.length - 1]; if (!last) return;
+  const tot = last.plantCounts.reduce((a, b) => a + b, 0) || 1;
+  const bar = $('plantbar'), leg = $('plantlegend');
+  if (!bar.children.length) {
+    PLANT_SPECIES.forEach(sp => { const d = document.createElement('div'); d.style.background = PCOL[sp.name]; bar.appendChild(d);
+      const l = document.createElement('span'); l.innerHTML = `<i style="background:${PCOL[sp.name]}"></i>${sp.name} <b>0</b>`; leg.appendChild(l); });
+  }
+  last.plantCounts.forEach((n, i) => { bar.children[i].style.width = (n / tot * 100) + '%'; leg.children[i].querySelector('b').textContent = n; });
+}
+
+function drawInspector() {
+  const c = selected;
+  $('ind-empty').hidden = !!c; $('ind').hidden = !c;
+  if (!c) return;
+  const sp = c.species;
+  $('i-dot').style.background = c.dead ? '#6b5b4b' : `hsl(${sp.hue * 360} 55% 55%)`;
+  $('i-species').textContent = sp.name + (c.dead ? '（死骸）' : '');
+  $('i-sub').textContent = `個体 #${c.id} · 第${c.gen}世代 · ${c.nParts}パーツ`;
+  const e = c.dead ? c.corpseE : c.energy;
+  $('i-ebar').style.width = Math.max(0, Math.min(100, e / c.maxE * 100)) + '%';
+  $('i-etext').textContent = `${e.toFixed(0)} / ${c.maxE.toFixed(0)}` + (c.dead ? '（死骸の残り）' : '');
+  $('c-base').textContent = c.cost.base.toFixed(2); $('c-move').textContent = c.cost.move.toFixed(2);
+  $('c-clim2').textContent = c.cost.climate.toFixed(2); $('c-wet').textContent = c.cost.water.toFixed(2);
+  const rows = [
+    ['年齢', c.age.toFixed(0) + ' 秒'], ['体積', c.vol.toFixed(2) + ' m³'], ['関節', c.joints.length || c.nParts - 1],
+    ['子の数', c.children], ['捕食した数', c.kills], ['獲得エネルギー', c.eaten.toFixed(0)],
+    ['振動数', c.genome.freq.toFixed(2) + ' Hz'], ['親', c.parents ? '#' + c.parents.join(', #') : '祖先／移入'],
+    ['同時に生まれた数', c.litter ? c.litter + ' 体' : '—'],
+    ['選り好みの強さ', (c.genome.pick * 100).toFixed(0) + ' %'],
+    ['交配できる相手', mateInfo(c)],
+    ['誕生時の変異', c.mutations.length ? c.mutations.join('、') : 'なし'],
+  ];
+  if (c.dead) rows.unshift(['死因', c.cause]);
+  const dl = $('i-dl'); dl.innerHTML = '';
+  for (const [k, v] of rows) { const dt = document.createElement('dt'); dt.textContent = k; const dd = document.createElement('dd'); dd.textContent = v; dl.append(dt, dd); }
+  $('btn-follow').setAttribute('aria-pressed', String(follow));
+  $('btn-follow').textContent = follow ? '追跡中' : '追跡する';
+  drawBody2d(c);
+}
+// 子を残せる相手（雑種の生存力が半分以上）が今いくついるか
+let mateCache = { id: -1, t: -1, text: '' };
+function mateInfo(c) {
+  if (c.dead) return '—';
+  if (mateCache.id === c.id && sim.t - mateCache.t < 2) return mateCache.text;
+  let same = 0, other = 0;
+  for (const o of sim.creatures) {
+    if (o === c || !o.alive || o.dead) continue;
+    if (sim.interfertile(c.genome, o.genome)) o.species === c.species ? same++ : other++;
+  }
+  const text = `同種 ${same} 体` + (other ? `・他種 ${other} 体` : '');
+  mateCache = { id: c.id, t: sim.t, text };
+  return text;
+}
+function drawBody2d(c) {
+  const { ctx, w, h } = prepCanvas($('body2d'));
+  if (!c.bodies.length) return;
+  const pts = c.bodies.map((b, i) => {
+    const t = b.translation(), r = b.rotation();
+    const q = new THREE.Quaternion(r.x, r.y, r.z, r.w), ax = new THREE.Vector3(0, c.genome.parts[i].len / 2, 0).applyQuaternion(q);
+    return { x: t.x, z: t.z, ax: ax.x, az: ax.z, r: c.genome.parts[i].r };
+  });
+  let cx = 0, cz = 0; pts.forEach(p => { cx += p.x; cz += p.z; }); cx /= pts.length; cz /= pts.length;
+  let ext = 0.5; pts.forEach(p => { ext = Math.max(ext, Math.abs(p.x - cx) + Math.abs(p.ax) + p.r, Math.abs(p.z - cz) + Math.abs(p.az) + p.r); });
+  const sc = Math.min(w, h) / 2.3 / ext;
+  ctx.lineCap = 'round';
+  const col = c.dead ? '#6b5b4b' : `hsl(${c.species.hue * 360} 55% 55%)`;
+  pts.forEach((p, i) => {
+    ctx.strokeStyle = col; ctx.globalAlpha = i === 0 ? 1 : 0.85; ctx.lineWidth = Math.max(2, p.r * 2 * sc);
+    ctx.beginPath(); ctx.moveTo(w / 2 + (p.x - cx - p.ax) * sc, h / 2 + (p.z - cz - p.az) * sc); ctx.lineTo(w / 2 + (p.x - cx + p.ax) * sc, h / 2 + (p.z - cz + p.az) * sc); ctx.stroke();
+  });
+  ctx.globalAlpha = 1; ctx.fillStyle = COL.muted; ctx.font = '10px "IBM Plex Mono", monospace';
+  ctx.fillText(`1m = ${sc.toFixed(0)}px`, 8, h - 8);
+}
+
+function drawTree() {
+  const cv = $('tree');
+  const all = [...sim.species.values()];
+  const show = all.filter(s => s.extinct === null || s.peak >= 2 || s.total >= 3);
+  const keep = new Set(show.map(s => s.id));
+  // 表示する種の祖先も残す
+  for (const s of show) { let p = s.parent; while (p && !keep.has(p)) { keep.add(p); p = sim.species.get(p)?.parent; } }
+  const list = all.filter(s => keep.has(s.id));
+  const kids = new Map(); const roots = [];
+  for (const s of list) { if (s.parent && keep.has(s.parent)) (kids.get(s.parent) || kids.set(s.parent, []).get(s.parent)).push(s); else roots.push(s); }
+  const order = [];
+  const dfs = (s) => { order.push(s); (kids.get(s.id) || []).sort((a, b) => a.born - b.born).forEach(dfs); };
+  roots.sort((a, b) => a.born - b.born).forEach(dfs);
+  const rowH = 16, L = 8, R = 92;
+  const H = Math.max(140, order.length * rowH + 28);
+  cv.style.height = H + 'px';
+  const { ctx, w } = prepCanvas(cv);
+  const tEnd = Math.max(sim.t, 1);
+  const X = (t) => L + t / tEnd * (w - L - R);
+  const rowOf = new Map(); order.forEach((s, i) => rowOf.set(s.id, 14 + i * rowH));
+  ctx.font = '10px "IBM Plex Mono", monospace'; ctx.fillStyle = COL.muted; ctx.strokeStyle = COL.line;
+  const yrs = tEnd / CFG.YEAR, step = yrs > 20 ? 5 : yrs > 6 ? 2 : 1;
+  for (let y = 0; y <= yrs; y += step) { const x = X(y * CFG.YEAR); ctx.beginPath(); ctx.moveTo(x, 4); ctx.lineTo(x, H - 14); ctx.stroke(); ctx.fillText(y + '年', x + 2, H - 4); }
+  for (const s of order) {
+    const y = rowOf.get(s.id), x0 = X(s.born), x1 = X(s.extinct ?? sim.t);
+    const alive = s.extinct === null;
+    const col = `hsl(${s.hue * 360} 55% ${alive ? 60 : 42}%)`;
+    if (s.parent && rowOf.has(s.parent)) {
+      ctx.strokeStyle = col; ctx.globalAlpha = 0.6; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(x0, rowOf.get(s.parent)); ctx.lineTo(x0, y); ctx.stroke(); ctx.globalAlpha = 1;
+    }
+    ctx.strokeStyle = col; ctx.lineWidth = alive ? 4 : 2;
+    ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(Math.max(x1, x0 + 2), y); ctx.stroke();
+    if (alive) {
+      ctx.fillStyle = COL.fg; ctx.font = '11px "Zen Kaku Gothic New", sans-serif';
+      ctx.fillText(`${s.name} ${s.count}`, Math.max(x1, x0 + 2) + 5, y + 4);
+    } else if (s.extinct !== null) { ctx.fillStyle = COL.danger; ctx.fillRect(x1 - 1, y - 3, 2, 6); }
+  }
+}
+let lastLogLen = -1, lastLogTop = null;
+function drawLog() {
+  const top = sim.events[0];
+  if (top === lastLogTop && sim.events.length === lastLogLen) return;
+  lastLogTop = top; lastLogLen = sim.events.length;
+  const ul = $('log'); ul.innerHTML = '';
+  for (const e of sim.events) {
+    const li = document.createElement('li'); li.className = e.kind;
+    const t = document.createElement('time'); t.textContent = (e.t / CFG.YEAR).toFixed(2) + '年';
+    const s = document.createElement('span'); s.textContent = e.msg;
+    li.append(t, s); ul.appendChild(li);
+  }
+  if (!sim.events.length) ul.innerHTML = '<li><span class="note">まだ出来事はありません。</span></li>';
+}
+
+// タブ
+document.querySelectorAll('.tabs button').forEach(b => b.addEventListener('click', () => selectTab(b)));
+function selectTab(b) {
+  document.querySelectorAll('.tabs button').forEach(x => x.setAttribute('aria-selected', String(x === b)));
+  document.querySelectorAll('.pane').forEach(p => p.hidden = p.id !== b.dataset.p);
+  if (sim) updateUI();
+}
+// 速度
+document.querySelectorAll('#speeds button').forEach(b => b.addEventListener('click', () => setSpeed(+b.dataset.s)));
+function setSpeed(s) {
+  speed = s; acc = 0;
+  document.querySelectorAll('#speeds button').forEach(x => x.setAttribute('aria-pressed', String(+x.dataset.s === s)));
+}
+let prevSpeed = 1;
+addEventListener('keydown', (e) => { if (e.code === 'Space' && e.target === document.body) { e.preventDefault(); if (speed) { prevSpeed = speed; setSpeed(0); } else setSpeed(prevSpeed); } });
+document.querySelectorAll('[data-w]').forEach(b => b.addEventListener('click', () => { if (sim) { sim.forceWeather(b.dataset.w); drawLog(); } }));
+$('btn-reset').addEventListener('click', () => start(Math.floor(Math.random() * 1e9)));
+$('btn-follow').addEventListener('click', () => { follow = !follow; drawInspector(); });
+$('btn-clear').addEventListener('click', () => { selected = null; follow = false; drawInspector(); });
+$('btn-random').addEventListener('click', () => {
+  const live = sim.creatures.filter(c => c.alive && !c.dead);
+  if (live.length) { selected = live[Math.floor(Math.random() * live.length)]; follow = true; drawInspector(); }
+});
+
+// クリックで生物を選ぶ
+const ray = new THREE.Raycaster(), mouse = new THREE.Vector2();
+let downAt = null;
+renderer.domElement.addEventListener('pointerdown', (e) => { downAt = [e.clientX, e.clientY]; });
+renderer.domElement.addEventListener('pointerup', (e) => {
+  if (!downAt || Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 5 || !sim) return;
+  const r = renderer.domElement.getBoundingClientRect();
+  mouse.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+  ray.setFromCamera(mouse, camera);
+  creatureMesh.computeBoundingSphere();
+  const hit = ray.intersectObject(creatureMesh, false)[0];
+  if (hit && hit.instanceId !== undefined) {
+    selected = instToCreature[hit.instanceId];
+    selectTab($('tab-ind'));
+  }
+});
+
+// ---------- 起動 ----------
+let rapierReady = false;
+async function start(seed) {
+  $('loading').hidden = false;
+  $('loading-msg').textContent = rapierReady ? '地形と植生をつくっています…' : '物理エンジンを読み込んでいます…';
+  await nextFrame();
+  if (!rapierReady) { await RAPIER.init(); rapierReady = true; $('loading-msg').textContent = '地形と植生をつくり、最初の生物を試走させています…'; await nextFrame(); }
+  if (sim) sim.world.free();
+  selected = null; follow = false;
+  sim = new Sim(RAPIER, seed);
+  window.__sim = sim;
+  buildTerrain(); buildWater(); buildCreatureMesh(); buildPlantMeshes();
+  if (!rain) buildRain();
+  rebuildPlants(); updateSky();
+  controls.target.set(0, 4, 0); camera.position.set(0, 62, 82);
+  $('plantbar').innerHTML = ''; $('plantlegend').innerHTML = '';
+  lastLogLen = -1;
+  $('loading').hidden = true;
+  updateUI();
+}
+resize();
+start(20261007).catch(err => { $('loading-msg').textContent = '読み込みに失敗しました: ' + err.message; console.error(err); });
+requestAnimationFrame(loop);
+</script>
+
+</body></html>
