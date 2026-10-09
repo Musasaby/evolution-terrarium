@@ -3,7 +3,7 @@
 import { CFG } from './config.js';
 import { qRot } from './math.js';
 import { randomGenome, cloneGenome, mutate, genomeStats } from './genetics.js';
-import { buildBody, readJointAngles, driveMotors, clampVel, travelDir } from './body.js';
+import { buildBody, readPose, readJointAngles, driveMotors, clampVel, travelDir } from './body.js';
 import { think } from './brain.js';
 import { makeCreatureState } from './creatures.js';
 
@@ -21,6 +21,7 @@ function trialCreature(sim, w, genome, yaw) {
   return c;
 }
 function tick(c, w) {
+  readPose(c);
   readJointAngles(c);
   think(c, CFG.DT);
   driveMotors(c);

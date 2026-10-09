@@ -5,7 +5,7 @@
 import { CFG, SCHEDULE, EDGE, MAXJ, NMEM, NI, NH, NO } from './config.js';
 import { clamp, qRot } from './math.js';
 import { cloneGenome, mutate, newAllele, genomeStats, compatibility, NMARK } from './genetics.js';
-import { buildBody, readJointAngles, driveMotors, travelDir } from './body.js';
+import { buildBody, readPose, readJointAngles, driveMotors, travelDir } from './body.js';
 import { think } from './brain.js';
 import { speciesName } from './naming.js';
 import { PLANT_CELL } from './flora.js';
@@ -37,6 +37,7 @@ export function spawnCreature(sim, genome, x, z, opts = {}) {
   const yaw = opts.yaw ?? sim.rng() * Math.PI * 2;
   const body = buildBody(sim.R, sim.world, genome, x, z, (a, b) => sim.heightAt(a, b), yaw, opts.lift || 0);
   Object.assign(c, body);
+  readPose(c);
   body.cols.forEach((col, i) => sim.colliderOwner.set(col.handle, { kind: 'c', obj: c, part: i }));
   if (c.species) { c.species.count++; c.species.total++; c.species.peak = Math.max(c.species.peak, c.species.count); }
   sim.creatures.push(c);
@@ -100,7 +101,7 @@ export function removeCreature(sim, c) {
   c.bodies = []; c.cols = []; c.joints = [];
 }
 
-export const center = (c) => c.bodies[0].translation();
+export const center = (c) => c.pos[0];
 export const isLiving = (c) => c.alive && !c.dead;
 
 export function livingCount(sim) { let n = 0; for (const c of sim.creatures) if (isLiving(c)) n++; return n; }
@@ -111,7 +112,7 @@ export function creatureGrid(sim) {
   const G = new Map();
   for (const o of sim.creatures) {
     if (!o.alive || !o.bodies[0]) continue;
-    const t = o.bodies[0].translation();
+    const t = o.pos[0];
     const k = creatureKey(Math.floor((t.x + 100) / CREATURE_CELL), Math.floor((t.z + 100) / CREATURE_CELL));
     (G.get(k) || G.set(k, []).get(k)).push({ c: o, x: t.x, z: t.z });
   }
@@ -122,7 +123,7 @@ export function creatureGrid(sim) {
 // 感覚：最寄りの食べ物・最寄りの生物・前方の地形・気温・姿勢
 export function sense(sim, c) {
   const pos = center(c), R = CFG.SENSE_R;
-  const q = c.bodies[0].rotation();
+  const q = c.rot[0];
   const f = travelDir(c, q);
   // 最寄りの植物
   let bp = null, bd = R * R;
@@ -170,6 +171,11 @@ function decayCorpse(sim, c, dt) {
   if (!c.frozen && sim.t - c.deadAt > 3) { c.frozen = true; for (const b of c.bodies) b.setBodyType(sim.R.RigidBodyType.Fixed, false); }
 }
 
+// 物理ステップ直後に、動きうる個体の姿勢を写す（固定物になった死骸は動かないので前の写しのまま）
+export function readPoses(sim) {
+  for (const c of sim.creatures) if (c.alive && !c.frozen) readPose(c);
+}
+
 // 物理ステップ前の、各個体の制御とエネルギー収支
 export function updateCreatures(sim, dt) {
   const sc = sim.stepCount, wl = sim.climate.water, T = sim.climate.temp, baseWater = sim.climate.baseWater;
@@ -188,15 +194,15 @@ export function updateCreatures(sim, dt) {
     const base = 0.1 + 0.65 * c.vol + 0.055 * c.nParts + 0.03 * c.joints.length;
     const mv = move * 0.0006;
     let clim = 0;
-    const pos = c.bodies[0].translation();
+    const pos = c.pos[0];
     const lt = T - 0.55 * Math.max(0, sim.heightAt(pos.x, pos.z) - baseWater);
     if (lt < 5) clim = (5 - lt) * 0.03 * c.area;
     else if (lt > 29) clim = (lt - 29) * 0.12 * c.vol;
     let wet = 0, sub = 0;
-    for (const b of c.bodies) if (b.translation().y < wl) sub++;
+    for (const P of c.pos) if (P.y < wl) sub++;
     if (sub) {
       wet = (2.0 + 8 * c.vol) * sub / c.bodies.length;
-      for (const b of c.bodies) b.setLinearDamping(b.translation().y < wl ? 2.5 : 0.1);
+      for (let i = 0; i < c.bodies.length; i++) c.bodies[i].setLinearDamping(c.pos[i].y < wl ? 2.5 : 0.1);
     } else if (c.wasWet) for (const b of c.bodies) b.setLinearDamping(0.1);
     c.wasWet = sub > 0;
     c.cost.base = base; c.cost.move = mv; c.cost.climate = clim; c.cost.water = wet;
