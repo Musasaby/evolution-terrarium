@@ -8,5 +8,5 @@ export { qRot } from './math.js';
 export { SectionProfiler, NULL_PROFILER } from './profiler.js';
 export {
   NMARK, randomGenome, cloneGenome, recombine, mutate,
-  markerDivergence, morphDistance, geneDistance, compatibility, recognizes, genomeStats,
+  markerDivergence, morphDistance, geneDistance, compatibility, recognizes, genomeStats, capsuleHalf,
 } from './genetics.js';
