@@ -58,10 +58,29 @@ export function buildBody(R, world, genome, x, z, groundFn, yaw, lift = 0) {
   return { bodies, cols, joints };
 }
 
-// 関節 ji の現在角
+// ---- 剛体の姿勢の写し ----
+// 剛体の位置・回転・角速度は、読むたびに WASM から JS へのコピーとオブジェクト生成が起きる。
+// 物理ステップの直後に1回だけ読んで c.pos / c.rot / c.angv に写しておき、次の物理ステップまではこれを使う。
+// （物理ステップの外では剛体の姿勢は変わらないので、読み直しても同じ値になる）
+export function readPose(c) {
+  const bs = c.bodies, n = bs.length;
+  if (!c.pos || c.pos.length !== n) {
+    c.pos = []; c.rot = []; c.angv = [];
+    for (let i = 0; i < n; i++) { c.pos.push({ x: 0, y: 0, z: 0 }); c.rot.push({ x: 0, y: 0, z: 0, w: 1 }); c.angv.push({ x: 0, y: 0, z: 0 }); }
+  }
+  for (let i = 0; i < n; i++) {
+    const b = bs[i], t = b.translation(), r = b.rotation(), w = b.angvel();
+    const P = c.pos[i], Q = c.rot[i], W = c.angv[i];
+    P.x = t.x; P.y = t.y; P.z = t.z;
+    Q.x = r.x; Q.y = r.y; Q.z = r.z; Q.w = r.w;
+    W.x = w.x; W.y = w.y; W.z = w.z;
+  }
+}
+
+// 関節 ji の現在角（readPose で写した回転を使う）
 export function jointAngle(c, ji) {
   const p = c.genome.parts[ji + 1];
-  const qp = c.bodies[p.parent].rotation(), qc = c.bodies[ji + 1].rotation();
+  const qp = c.rot[p.parent], qc = c.rot[ji + 1];
   const q = qMul(qConj(qp), qc), ax = c.joints[ji].ax;
   return 2 * Math.atan2(q.x * ax.x + q.y * ax.y + q.z * ax.z, q.w);
 }
@@ -79,7 +98,7 @@ export function clampVel(c) {
   }
 }
 
-// 神経の出力と内部リズムから関節モーターの目標を決める。戻り値は運動量（エネルギー消費の計算に使う）
+// 神経の出力と内部リズムから関節モーターの目標を決める（readPose で写した角速度を使う）。戻り値は運動量（エネルギー消費の計算に使う）
 export function driveMotors(c) {
   const parts = c.genome.parts;
   let move = 0;
@@ -95,7 +114,7 @@ export function driveMotors(c) {
     const amp = (p.amp ?? 1) * (0.55 + 0.45 * go) * Math.max(0, 1 + 0.9 * turn * (jt.side ?? 0));
     const tgt = p.a0 + p.range * Math.tanh(c.out[j] * 0.6 + amp * Math.sin(ph) + (p.tw ?? 0) * turn * Math.cos(ph));
     jt.configureMotorPosition(tgt, jt.stiff * tired, jt.damp);
-    const b1 = c.bodies[p.parent].angvel(), b2 = c.bodies[j + 1].angvel();
+    const b1 = c.angv[p.parent], b2 = c.angv[j + 1];
     const w = Math.abs((b2.x - b1.x) * jt.ax.x + (b2.y - b1.y) * jt.ax.y + (b2.z - b1.z) * jt.ax.z);
     move += jt.stiff * tired * Math.abs(tgt - c.angles[j]) * Math.min(w, 8);
   }

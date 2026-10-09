@@ -14,7 +14,7 @@ import { Climate } from './climate.js';
 import { Terrain } from './terrain.js';
 import { Flora } from './flora.js';
 import { tempAt, meanTempAt, isWater, suitability } from './environment.js';
-import { spawnFounderGroup, updateCreatures, housekeeping, livingCount } from './creatures.js';
+import { spawnFounderGroup, updateCreatures, readPoses, housekeeping, livingCount } from './creatures.js';
 import { processContacts } from './interactions.js';
 import { interfertile, updateSpecies } from './speciation.js';
 import { recordStats } from './stats.js';
@@ -150,6 +150,7 @@ export class Sim {
     P.begin('物理');
     this.world.step(this.eventQueue, this.hooks);
     if (sc % 2 === 0) for (const c of this.creatures) if (c.alive) clampVel(c);
+    readPoses(this);
     P.end('物理');
 
     P.begin('接触');
