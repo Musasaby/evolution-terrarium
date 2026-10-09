@@ -1,5 +1,5 @@
 // ===== 生物の描画（円柱のインスタンス描画）と、クリックでの選択 =====
-// sim から読むもの: creatures（体の剛体・ゲノム・種）
+// sim から読むもの: creatures（体節の姿勢の写し pos/rot・ゲノム・種）
 import * as THREE from 'three';
 import { speciesColor, CORPSE_COLOR } from './palette.js';
 
@@ -32,7 +32,7 @@ export class CreatureView {
       if (!cr.alive) continue;
       const parts = cr.genome.parts;
       for (let i = 0; i < cr.bodies.length && k < MAX_INST; i++) {
-        const b = cr.bodies[i], t = b.translation(), r = b.rotation();
+        const t = cr.pos[i], r = cr.rot[i];   // 物理ステップ直後に sim が写した姿勢
         p.set(t.x, t.y, t.z); q.set(r.x, r.y, r.z, r.w); s.set(parts[i].r, parts[i].len, parts[i].r);
         m4.compose(p, q, s);
         mesh.setMatrixAt(k, m4);
@@ -48,7 +48,7 @@ export class CreatureView {
     mesh.instanceMatrix.needsUpdate = true;
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
     if (selected && selected.alive && selected.bodies[0]) {
-      const t = selected.bodies[0].translation();
+      const t = selected.pos[0];
       this.marker.visible = true;
       this.marker.position.set(t.x, t.y + 1.6 + Math.sin(now / 300) * 0.15, t.z);
     } else this.marker.visible = false;
