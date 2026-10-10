@@ -4,7 +4,7 @@ import { CFG, MAXJ, NI, NH, NO, NW1, NW2, NWB } from './config.js';
 import { clamp, circDiff } from './math.js';
 
 // ゲノムの構成
-//  ・体節（円柱パーツ）: 各パーツの形・付け根・関節の動き。パーツとその関節を動かす神経は同じ連鎖ブロックで遺伝する
+//  ・体節（カプセル形のパーツ）: 各パーツの形・付け根・関節の動き。パーツとその関節を動かす神経は同じ連鎖ブロックで遺伝する
 //  ・神経: 隠れニューロン単位の連鎖ブロック
 //  ・中立マーカー: 適応に関係しない座位。突然変異だけが溜まる「分子時計」で、系統の離れ具合を表す
 //  ・体色と選り好み: 配偶者を見分ける信号と、その許容幅
@@ -211,8 +211,15 @@ export function recognizes(chooser, other) {
   const dn = Math.abs(chooser.parts.length - other.parts.length);
   return Math.exp(-((dh / (0.04 + 0.3 * k)) ** 2) - ((ds / (0.15 + 0.6 * k)) ** 2) - dn * (0.3 + 1.5 * chooser.pick));
 }
+// 体節はカプセル（両端が半球の円柱）。端から端までの長さが len、半径が r。
+// len < 2r のときは半径 r の球になる（胴の部分がなくなる）
+export const capsuleHalf = (p) => Math.max(0, p.len / 2 - p.r);
 export function genomeStats(g) {
   let vol = 0, area = 0;
-  for (const p of g.parts) { vol += Math.PI * p.r * p.r * p.len; area += 2 * Math.PI * p.r * (p.len + p.r); }
+  for (const p of g.parts) {
+    const body = 2 * capsuleHalf(p), r = p.r;
+    vol += Math.PI * r * r * body + (4 / 3) * Math.PI * r * r * r;
+    area += 2 * Math.PI * r * body + 4 * Math.PI * r * r;
+  }
   return { vol, area, n: g.parts.length };
 }
