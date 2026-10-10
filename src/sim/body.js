@@ -2,6 +2,13 @@
 // 物理エンジン RAPIER と、体を置く world を引数で受け取る。シミュレーション本体には依存しない。
 import { CFG, O_TURN, O_GO } from './config.js';
 import { clamp, qMul, qAxis, qRot, qConj } from './math.js';
+import { capsuleHalf } from './genetics.js';
+
+// 体節の当たり判定：カプセル（円柱より接触計算がずっと軽い）。胴がなくなるほど短い体節は球
+function partShape(R, p) {
+  const h = capsuleHalf(p);
+  return h > 0.005 ? R.ColliderDesc.capsule(h, p.r) : R.ColliderDesc.ball(p.r);
+}
 
 // ゲノムから剛体・関節を組み立てる。groundFn(x,z) で地面高さを与える
 export function buildBody(R, world, genome, x, z, groundFn, yaw, lift = 0) {
@@ -30,7 +37,7 @@ export function buildBody(R, world, genome, x, z, groundFn, yaw, lift = 0) {
     const p = parts[i];
     const b = world.createRigidBody(R.RigidBodyDesc.dynamic().setTranslation(x + tf[i].p.x, tf[i].p.y + dy, z + tf[i].p.z)
       .setRotation(tf[i].q).setCanSleep(false).setLinearDamping(0.1).setAngularDamping(0.3));
-    const col = world.createCollider(R.ColliderDesc.cylinder(p.len / 2, p.r).setDensity(CFG.DENSITY).setFriction(1.0)
+    const col = world.createCollider(partShape(R, p).setDensity(CFG.DENSITY).setFriction(1.0)
       .setActiveEvents(R.ActiveEvents.CONTACT_FORCE_EVENTS | R.ActiveEvents.COLLISION_EVENTS).setContactForceEventThreshold(0)
       .setActiveHooks(R.ActiveHooks.FILTER_CONTACT_PAIRS), b);
     bodies.push(b); cols.push(col);
@@ -49,7 +56,7 @@ export function buildBody(R, world, genome, x, z, groundFn, yaw, lift = 0) {
     j.stiff = p.str * (sub[i] + total * 0.3) * (p.len + 0.3) * 60 + 2;
     j.damp = j.stiff * 0.01;
     j.ax = ax;
-    // 体の左右どちら側にある体節か（根の円柱から見た横方向の位置）。曲がるときは片側の動きを強める
+    // 体の左右どちら側にある体節か（根の体節から見た横方向の位置）。曲がるときは片側の動きを強める
     const loc = qRot(qConj(q0), tf[i].p);
     j.side = clamp(loc.z / 0.6, -1, 1);
     j.configureMotorPosition(p.a0, j.stiff, j.damp);
@@ -121,7 +128,7 @@ export function driveMotors(c) {
   return move;
 }
 
-// 根の円柱の長軸（転がっても変わらない）を水平に射影した向き
+// 根の体節の長軸（転がっても変わらない）を水平に射影した向き
 export function heading(q) {
   let f = qRot(q, { x: 0, y: 1, z: 0 });
   let l = Math.hypot(f.x, f.z);
