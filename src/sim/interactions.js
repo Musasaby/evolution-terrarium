@@ -46,7 +46,7 @@ function graze(sim, dt) {
     if (dmg <= 0) continue;
     p.energy -= dmg;
     if (p.energy <= floor + 0.01) p.dormant = sim.t + sim.rng.range(...CFG.RECOVER);
-    feed(cr, dmg * 0.85 * CFG.FOOD_GAIN);
+    feed(cr, dmg * 0.85 * CFG.FOOD_GAIN * cr.eff.soft);
   }
 }
 
@@ -83,7 +83,7 @@ function browse(sim, c, p, F, dt) {
   const dmg = Math.min(p.energy, (high ? 5.0 + eff * 0.02 : eff * 0.015) * dt);
   if (dmg <= 0) return;
   p.energy -= dmg;
-  feed(cr, dmg * 0.85 * CFG.FOOD_GAIN);
+  feed(cr, dmg * 0.85 * CFG.FOOD_GAIN * cr.eff.hard);
   if (p.energy <= 0.01) sim.flora.remove(p);
 }
 
@@ -92,12 +92,12 @@ function applyHit(sim, att, tgt, dmg) {
   if (tgt.dead) {
     const d = Math.min(tgt.corpseE, dmg * 1.5);
     tgt.corpseE -= d;
-    feed(att, d * 0.8 * CFG.FOOD_GAIN);
+    feed(att, d * 0.8 * CFG.FOOD_GAIN * att.eff.meat);
     return;
   }
   const d = Math.min(tgt.energy, dmg);
   tgt.energy -= d; tgt.hurt = 0.5;
-  feed(att, d * 0.7 * CFG.FOOD_GAIN);
+  feed(att, d * 0.7 * CFG.FOOD_GAIN * att.eff.meat);
   if (tgt.energy <= 0) { kill(sim, tgt, `捕食（${att.species?.name || '?'}）`); att.kills++; sim.counters.predations++; }
 }
 

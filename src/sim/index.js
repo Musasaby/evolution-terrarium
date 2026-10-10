@@ -9,4 +9,5 @@ export { SectionProfiler, NULL_PROFILER } from './profiler.js';
 export {
   NMARK, randomGenome, cloneGenome, recombine, mutate,
   markerDivergence, morphDistance, geneDistance, compatibility, recognizes, genomeStats, capsuleHalf,
+  nicheDistance, dietEfficiency, dietName,
 } from './genetics.js';
