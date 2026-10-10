@@ -69,6 +69,12 @@
         <div class="legend"><span><i style="background:var(--accent)"></i>個体数</span><span><i style="background:var(--water)"></i>種数</span></div>
       </div>
       <div>
+        <h2>多様性</h2>
+        <canvas class="chart" id="c-div"></canvas>
+        <div class="legend"><span><i style="background:var(--accent)"></i>有効種数（e<sup>H</sup>）</span><span><i style="background:var(--danger)"></i>最大の種の割合 %</span></div>
+        <dl id="diversity"></dl>
+      </div>
+      <div>
         <h2>繁殖</h2>
         <dl id="repro"></dl>
       </div>
@@ -104,7 +110,7 @@
         <div style="margin-top:12px">
           <h2>消費の内訳（毎秒）</h2>
           <div class="costs">
-            <div>基礎<b id="c-base">0</b></div><div>運動<b id="c-move">0</b></div><div>寒暖<b id="c-clim2">0</b></div><div>水中<b id="c-wet">0</b></div>
+            <div>基礎<b id="c-base">0</b></div><div>運動<b id="c-move">0</b></div><div>寒暖<b id="c-clim2">0</b></div><div>水中<b id="c-wet">0</b></div><div>密集・疫病<b id="c-crowd">0</b></div>
           </div>
         </div>
         <div style="margin-top:12px">

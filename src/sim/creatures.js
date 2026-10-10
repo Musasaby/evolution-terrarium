@@ -4,7 +4,7 @@
 //                    heightAt / isWater / tempAt / log
 import { CFG, SCHEDULE, EDGE, MAXJ, NMEM, NI, NH, NO } from './config.js';
 import { clamp, qRot } from './math.js';
-import { cloneGenome, mutate, newAllele, genomeStats, compatibility, NMARK } from './genetics.js';
+import { cloneGenome, mutate, newAllele, genomeStats, compatibility, dietEfficiency, NMARK } from './genetics.js';
 import { buildBody, readPose, readJointAngles, driveMotors, travelDir } from './body.js';
 import { think } from './brain.js';
 import { speciesName } from './naming.js';
@@ -26,7 +26,8 @@ export function makeCreatureState(sim, genome, opts) {
     hidden: new Float32Array(NH), out: new Float32Array(NO), inp: new Float32Array(NI),
     angles: new Float32Array(MAXJ),
     lastMate: sim.t, hurt: 0, ate: 0, sense: null, mutations: opts.mutations || [],
-    cost: { base: 0, move: 0, climate: 0, water: 0 },
+    eff: dietEfficiency(genome), topt: genome.topt ?? 17, crowd: 0,
+    cost: { base: 0, move: 0, climate: 0, water: 0, crowd: 0 },
   };
 }
 
@@ -46,7 +47,7 @@ export function spawnCreature(sim, genome, x, z, opts = {}) {
 
 export function newSpecies(sim, genome, parentSp, quiet = false) {
   const id = sim.nextSpeciesId++;
-  const sp = { id, parent: parentSp ? parentSp.id : null, rep: cloneGenome(genome), born: sim.t, extinct: null, count: 0, peak: 0, total: 0, hue: genome.hue, name: speciesName(sim.rng), depth: parentSp ? parentSp.depth + 1 : 0 };
+  const sp = { id, parent: parentSp ? parentSp.id : null, rep: cloneGenome(genome), born: sim.t, extinct: null, count: 0, peak: 0, total: 0, hue: genome.hue, name: speciesName(sim.rng), depth: parentSp ? parentSp.depth + 1 : 0, plagueUntil: 0, immuneUntil: 0 };
   sim.species.set(id, sp);
   if (parentSp && !quiet) sim.log(`新種「${sp.name}」が「${parentSp.name}」から分岐した`, 'species');
   return sp;
@@ -60,6 +61,8 @@ export function spawnFounderGroup(sim, n) {
   for (let tries = 0; tries < 40; tries++) {
     const x = rng.range(-EDGE + 10, EDGE - 10), z = rng.range(-EDGE + 10, EDGE - 10);
     if (sim.isWater(x, z) || sim.heightAt(x, z) > 12) continue;
+    // 移入してきた群れは、たどり着いた土地の気温にある程度なじんでいる
+    g.topt = sim.meanTempAt(x, z) + 2 + rng.gauss() * 2.5;
     let first = null;
     for (let k = 0; k < n; k++) {
       // 創始集団にも少しの遺伝的多様性がある
@@ -129,26 +132,30 @@ export function sense(sim, c) {
   let bp = null, bd = R * R;
   const k0 = Math.floor((pos.x + 100) / PLANT_CELL), k1 = Math.floor((pos.z + 100) / PLANT_CELL), rr = Math.ceil(R / PLANT_CELL);
   const pgrid = sim.flora.grid;
+  const soft = c.eff.soft < CFG.DIET_SENSE, hard = c.eff.hard < CFG.DIET_SENSE; // true = 感じ取らない
   for (let a = -rr; a <= rr; a++) for (let b = -rr; b <= rr; b++) {
     const arr = pgrid.get(((k0 + a) << 8) | (k1 + b)); if (!arr) continue;
     for (const p of arr) {
-      // 食べられる状態の植物だけを感じ取る（食べ尽くされて回復待ちの草は無視）
-      if (p.sp.soft ? (p.dormant > sim.t || p.energy < p.maxE * (CFG.GRAZE_FLOOR + 0.15)) : p.energy < 1) continue;
+      // 食べられる状態の植物だけを感じ取る（食べ尽くされて回復待ちの草や、食性に合わない植物は無視）
+      if (p.sp.soft ? (soft || p.dormant > sim.t || p.energy < p.maxE * (CFG.GRAZE_FLOOR + 0.15)) : (hard || p.energy < 1)) continue;
       const d = (p.x - pos.x) ** 2 + (p.z - pos.z) ** 2; if (d < bd) { bd = d; bp = p; }
     }
   }
-  // 最寄りの生物（死骸含む）
-  let bc = null, cd = R * R, bcx = 0, bcz = 0;
+  // 最寄りの生物（死骸含む）。同じ走査で、近くにいる同種の数（密集度）も数える
+  let bc = null, cd = R * R, bcx = 0, bcz = 0, crowd = 0;
+  const cr2 = CFG.CROWD_R * CFG.CROWD_R;
   const G = creatureGrid(sim), gx = Math.floor((pos.x + 100) / CREATURE_CELL), gz = Math.floor((pos.z + 100) / CREATURE_CELL), gr = Math.ceil(R / CREATURE_CELL);
   for (let a = -gr; a <= gr; a++) for (let b = -gr; b <= gr; b++) {
     const arr = G.get(creatureKey(gx + a, gz + b)); if (!arr) continue;
     for (const o of arr) {
       if (o.c === c || !o.c.alive) continue;
       const d = (o.x - pos.x) ** 2 + (o.z - pos.z) ** 2;
+      if (d < cr2 && o.c.species === c.species && !o.c.dead) crowd++;
       if (d < cd) { cd = d; bc = o.c; bcx = o.x; bcz = o.z; }
     }
   }
   const rel = (tx, tz) => { const dx = tx - pos.x, dz = tz - pos.z, l = Math.hypot(dx, dz) || 1; const ux = dx / l, uz = dz / l; return [f.x * uz - f.z * ux, f.x * ux + f.z * uz]; };
+  c.crowd = crowd;
   const s = c.sense || (c.sense = {});
   s.plant = bp; s.other = bc;
   if (bp) { [s.ps, s.pc] = rel(bp.x, bp.z); s.pp = 1 - Math.sqrt(bd) / R; } else { s.ps = 0; s.pc = 0; s.pp = 0; }
@@ -196,8 +203,13 @@ export function updateCreatures(sim, dt) {
     let clim = 0;
     const pos = c.pos[0];
     const lt = T - 0.55 * Math.max(0, sim.heightAt(pos.x, pos.z) - baseWater);
-    if (lt < 5) clim = (5 - lt) * 0.03 * c.area;
-    else if (lt > 29) clim = (lt - 29) * 0.12 * c.vol;
+    const lo = c.topt - CFG.COMFORT, hi = c.topt + CFG.COMFORT;
+    if (lt < lo) clim = (lo - lt) * 0.03 * c.area;
+    else if (lt > hi) clim = (lt - hi) * 0.12 * c.vol;
+    // 同種の密集（縄張り争い・資源の取り合い）と疫病による消耗
+    const sp = c.species, plague = sp && sp.plagueUntil > sim.t;
+    let crowd = base * CFG.CROWD_K * Math.max(0, c.crowd - CFG.CROWD_FREE);
+    if (plague) crowd += base * CFG.PLAGUE_K * (1 + c.crowd * 0.5);
     let wet = 0, sub = 0;
     for (const P of c.pos) if (P.y < wl) sub++;
     if (sub) {
@@ -205,9 +217,9 @@ export function updateCreatures(sim, dt) {
       for (let i = 0; i < c.bodies.length; i++) c.bodies[i].setLinearDamping(c.pos[i].y < wl ? 2.5 : 0.1);
     } else if (c.wasWet) for (const b of c.bodies) b.setLinearDamping(0.1);
     c.wasWet = sub > 0;
-    c.cost.base = base; c.cost.move = mv; c.cost.climate = clim; c.cost.water = wet;
-    c.energy -= (base + mv + clim + wet) * dt;
-    if (c.energy <= 0) { kill(sim, c, '飢餓'); continue; }
+    c.cost.base = base; c.cost.move = mv; c.cost.climate = clim; c.cost.water = wet; c.cost.crowd = crowd;
+    c.energy -= (base + mv + clim + wet + crowd) * dt;
+    if (c.energy <= 0) { kill(sim, c, plague ? '疫病' : '飢餓'); continue; }
     if (pos.y < -20) { kill(sim, c, '転落'); continue; }
     if (c.age > 600 + c.vol * 400) { kill(sim, c, '寿命'); continue; }
   }
@@ -217,9 +229,29 @@ export function updateCreatures(sim, dt) {
 export function housekeeping(sim) {
   sim.creatures = sim.creatures.filter(c => c.alive);
   const n = livingCount(sim);
+  updatePlague(sim, n);
   if (n < CFG.MIN_POP && sim.autoImmigrate !== false && sim.t - (sim.lastImmig || -99) > 20) {
     sim.lastImmig = sim.t;
     const c = spawnFounderGroup(sim, CFG.GROUP);
     if (c) sim.log(`個体数が減り、未知の新種「${c.species.name}」の群れが移入した`, 'info');
+  }
+}
+
+// 疫病：数が増えすぎた種ほど流行しやすい（多数派ほど不利になる、負の頻度依存）
+function updatePlague(sim, n) {
+  if (n < 20) return;
+  const counts = new Map();
+  for (const c of sim.creatures) if (isLiving(c)) counts.set(c.species, (counts.get(c.species) || 0) + 1);
+  for (const [sp, k] of counts) {
+    if (sp.plagueUntil > sim.t) continue;
+    if (sp.plagueUntil > 0 && !sp.plagueEnded) { sp.plagueEnded = true; sim.log(`「${sp.name}」の疫病が収まった`, 'info'); }
+    const share = k / n;
+    if (share <= CFG.PLAGUE_SHARE || sp.immuneUntil > sim.t) continue;
+    if (sim.rng() < (share - CFG.PLAGUE_SHARE) * CFG.PLAGUE_P) {
+      sp.plagueUntil = sim.t + CFG.PLAGUE_DUR;
+      sp.immuneUntil = sp.plagueUntil + CFG.PLAGUE_IMMUNE;
+      sp.plagueEnded = false;
+      sim.log(`増えすぎた「${sp.name}」（全体の${Math.round(share * 100)}%）で疫病が流行し始めた`, 'extinct');
+    }
   }
 }

@@ -12,6 +12,8 @@ export class StatsPanel {
   render(sim) {
     const COL = this.colors, st = sim.stats;
     lineChart($('c-pop'), st, [{ get: p => p.pop, color: COL.accent, min: 0 }, { get: p => p.species, color: COL.water, min: 0 }], COL);
+    lineChart($('c-div'), st, [{ get: p => p.effSpecies ?? 0, color: COL.accent, min: 0, span: 2 }, { get: p => (p.dominance ?? 0) * 100, color: COL.danger, min: 0, max: 100 }], COL);
+    this.renderDiversity(sim, st[st.length - 1]);
     lineChart($('c-body'), st, [{ get: p => p.parts, color: COL.accent, min: 1 }, { get: p => p.vol * 10, color: COL.leaf, min: 0 }], COL);
     lineChart($('c-clim'), st, [{ get: p => p.temp, color: COL.danger, span: 10 }, { get: p => p.water, color: COL.water, span: 2 }], COL);
     const C = sim.counters, L = sim.litters;
@@ -24,6 +26,22 @@ export class StatsPanel {
       ['種分化', splits + ' 回'],
     ]);
     this.renderVegetation(st[st.length - 1]);
+  }
+
+  renderDiversity(sim, last) {
+    // 最大の種と流行中の疫病は今の個体から数える（統計は数秒おきなので）
+    const cnt = new Map(); let n = 0;
+    for (const c of sim.creatures) if (c.alive && !c.dead) { n++; cnt.set(c.species, (cnt.get(c.species) || 0) + 1); }
+    let topSp = null, topN = 0;
+    for (const [sp, k] of cnt) if (k > topN) { topN = k; topSp = sp; }
+    const plague = [...cnt.keys()].filter(sp => sp.plagueUntil > sim.t).map(sp => sp.name);
+    fillDl($('diversity'), [
+      ['生存している種', cnt.size + ' 種'],
+      ['有効種数', last ? last.effSpecies.toFixed(1) + ' 種' : '—'],
+      ['シャノン多様度 H', last ? last.shannon.toFixed(2) : '—'],
+      ['最も多い種', topSp ? `${topSp.name}（${Math.round(topN / n * 100)}%）` : '—'],
+      ['疫病が流行中', plague.length ? plague.join('、') : 'なし'],
+    ]);
   }
 
   renderVegetation(last) {
