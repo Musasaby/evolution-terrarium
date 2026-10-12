@@ -1,1 +1,14 @@
 node_modules/
+
+# Agent link (agents-md-setup skillで再作成する)
+.claude
+# 個人設定
+.agents/settings.local.json
+# CLI 設定・キャッシュ (コミットしない)
+.agents/workflow/.config/
+# 実行単位の生成物(プロンプト・ログ・完了マーカー・報告。コミットしない)
+.agents/workflow/runs/
+# 一巡した過去サイクルの退避先(コミットしない)
+.agents/workflow/archive/
+# Claude Code 本体のランタイムファイル(コミット対象外)
+.agents/scheduled_tasks.lock
