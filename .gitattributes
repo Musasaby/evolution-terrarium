@@ -1,0 +1,3 @@
+# ワークフローのスクリプトは CRLF だと bash / python で実行できないため LF に固定する
+.agents/workflow/scripts/*.sh text eol=lf
+.agents/workflow/scripts/*.py text eol=lf
