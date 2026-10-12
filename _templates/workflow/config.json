@@ -1,0 +1,26 @@
+{
+  "child_agent": {
+    "command_template": "opencode run \"{prompt}\"",
+    "timeout_seconds": 1800,
+    "isolate_xdg": false
+  },
+  "test_command": "",
+  "verify_before_commit": false,
+  "quality_gate": {
+    "steps": [
+      { "name": "typecheck", "command": "", "blocking": true },
+      { "name": "test", "command": "", "blocking": true },
+      { "name": "lint", "command": "", "blocking": false }
+    ],
+    "child_dispatch_command": ""
+  },
+  "max_fix_retries": 2,
+  "comprehension_check": {
+    "enabled": false,
+    "questions_per_task": 3
+  },
+  "upstream": {
+    "url": "https://github.com/Musasaby/multi-ai-agents-workflow.git",
+    "branch": "main"
+  }
+}
