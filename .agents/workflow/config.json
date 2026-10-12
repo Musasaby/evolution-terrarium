@@ -1,6 +1,6 @@
 {
   "child_agent": {
-    "command_template": "opencode run \"{prompt}\"",
+    "command_template": "opencode run -m opencode/glm-5.3-flash \"{prompt}\"",
     "timeout_seconds": 1800,
     "isolate_xdg": false
   },
