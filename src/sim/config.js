@@ -24,6 +24,23 @@ export const CFG = {
   CANOPY: 1.1,         // 木の葉に届く高さ（地面からの m）
   SENSE_R: 14,
   FERTILE: 0.5,        // 雑種の生存力がこれ以上なら「同じ種」とみなす
+  // 食性（遺伝子 diet: 0=草, 0.5=木の葉, 1=肉）。得意な食べ物ほど多くのエネルギーを得る
+  DIET_FLOOR: 0.7,     // 苦手な食べ物から得られる効率
+  DIET_PEAK: 0.6,      // 得意な食べ物で上乗せされる効率
+  DIET_WIDTH: 0.35,    // 得意の幅
+  DIET_SENSE: 0.8,     // これより効率の低い植物は「食べ物」として感じ取らない
+  // 適温（遺伝子 topt）。topt ± COMFORT の外で寒さ・暑さのコストがかかる
+  COMFORT: 12,
+  // 密集：半径 CROWD_R 内の同種が CROWD_FREE 体を超えると、1体ごとに基礎代謝が CROWD_K 倍ずつ増える
+  CROWD_R: 6,
+  CROWD_FREE: 6,
+  CROWD_K: 0.06,
+  // 疫病：全個体に占める割合が PLAGUE_SHARE を超えた種で流行しうる
+  PLAGUE_SHARE: 0.3,
+  PLAGUE_P: 0.15,      // 判定1回あたりの発生確率＝(割合−PLAGUE_SHARE)×これ
+  PLAGUE_DUR: 45,      // 流行の長さ（シム秒）
+  PLAGUE_IMMUNE: 150,  // 流行後、再流行しない期間
+  PLAGUE_K: 0.35,      // 流行中の消耗（基礎代謝に対する倍率。密集しているほど増える）
 };
 
 // 処理の間隔（ステップ数）。step() のスケジュールはここで決まる

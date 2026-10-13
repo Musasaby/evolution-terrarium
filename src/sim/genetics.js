@@ -8,6 +8,7 @@ import { clamp, circDiff } from './math.js';
 //  ・神経: 隠れニューロン単位の連鎖ブロック
 //  ・中立マーカー: 適応に関係しない座位。突然変異だけが溜まる「分子時計」で、系統の離れ具合を表す
 //  ・体色と選り好み: 配偶者を見分ける信号と、その許容幅
+//  ・食性 diet（0=草, 0.5=木の葉, 1=肉）と適温 topt（℃）: 生き方の違い（ニッチ）
 export const NMARK = 48;
 const MU = {
   quant: 0.05,   // 量的形質1つあたりの突然変異率（世代あたり）
@@ -32,7 +33,7 @@ export function randomGenome(rng) {
   for (let i = 1; i < n; i++) parts.push(randPart(rng, rng.int(0, i - 1)));
   const marks = new Int32Array(NMARK);
   for (let i = 0; i < NMARK; i++) marks[i] = newAllele();
-  return { parts, freq: rng.range(0.4, 1.6), hue: rng(), pick: rng.range(0.25, 0.5), taxis: rng.range(-2.5, 2.5), seek: rng.range(0, 1.5), brain: randBrain(rng), marks };
+  return { parts, freq: rng.range(0.4, 1.6), hue: rng(), pick: rng.range(0.25, 0.5), taxis: rng.range(-2.5, 2.5), seek: rng.range(0, 1.5), diet: rng.range(0, 0.8), topt: rng.range(8, 24), brain: randBrain(rng), marks };
 }
 function randPart(rng, parent) {
   return {
@@ -46,7 +47,7 @@ const PART_LIM = { r: [0.06, 0.55], len: [0.15, 2.4], t: [-1, 1], a0: [-2.6, 2.6
 const PART_SIG = { r: 0.03, len: 0.1, t: 0.15, az: 0.25, a0: 0.2, range: 0.1, str: 0.2, amp: 0.2, ph: 0.4, tw: 0.25 };
 
 export function cloneGenome(g) {
-  return { parts: g.parts.map(p => ({ ...p })), freq: g.freq, hue: g.hue, pick: g.pick, taxis: g.taxis ?? 0, seek: g.seek ?? 0, brain: new Float32Array(g.brain), marks: new Int32Array(g.marks) };
+  return { parts: g.parts.map(p => ({ ...p })), freq: g.freq, hue: g.hue, pick: g.pick, taxis: g.taxis ?? 0, seek: g.seek ?? 0, diet: g.diet ?? 0.25, topt: g.topt ?? 17, brain: new Float32Array(g.brain), marks: new Int32Array(g.marks) };
 }
 // 関節スロット j の神経結合（入力行・出力列）
 function slotIdx(j) {
@@ -113,6 +114,8 @@ export function recombine(a, b, rng) {
     pick: clamp(mid(a.pick, b.pick, 0), 0, 1),
     taxis: clamp(mid(a.taxis ?? 0, b.taxis ?? 0, 0), -4, 4),
     seek: clamp(mid(a.seek ?? 0, b.seek ?? 0, 0), -2, 3),
+    diet: clamp(mid(a.diet ?? 0.25, b.diet ?? 0.25, 0), 0, 1),
+    topt: clamp(mid(a.topt ?? 17, b.topt ?? 17, 0), -10, 40),
   };
 }
 // 突然変異：ほとんどは小さな効果、まれに大きな効果。体節は重複・欠失で数が変わる
@@ -133,6 +136,8 @@ export function mutate(g, rng, rate = 1) {
   if (rng() < MU.quant * rate) { g.pick = clamp(g.pick + rng.gauss() * 0.08, 0, 1); point++; }
   if (rng() < MU.quant * rate) { g.taxis = clamp((g.taxis ?? 0) + rng.gauss() * 0.4, -4, 4); point++; }
   if (rng() < MU.quant * rate) { g.seek = clamp((g.seek ?? 0) + rng.gauss() * 0.3, -2, 3); point++; }
+  if (rng() < MU.quant * rate) { g.diet = clamp((g.diet ?? 0.25) + rng.gauss() * 0.06, 0, 1); point++; }
+  if (rng() < MU.quant * rate) { g.topt = clamp((g.topt ?? 17) + rng.gauss() * 1.0, -10, 40); point++; }
   if (rng() < 0.3 * rate) g.hue = (g.hue + rng.gauss() * 0.012 + 1) % 1;
   for (let i = 0; i < NWB; i++) if (rng() < MU.brain * rate) { g.brain[i] += rng.gauss() * 0.3; point++; }
   let neutral = 0;
@@ -194,7 +199,21 @@ export function morphDistance(a, b) {
   return pd / Math.max(1, n) * 0.5;
 }
 export function geneDistance(a, b) {
-  return 0.7 * markerDivergence(a, b) + 0.3 * morphDistance(a, b) + 0.2 * Math.abs(a.parts.length - b.parts.length);
+  return 0.7 * markerDivergence(a, b) + 0.3 * morphDistance(a, b) + 0.2 * Math.abs(a.parts.length - b.parts.length) + nicheDistance(a, b);
+}
+// 生き方（食性・適温）の違い。生き方が分かれた集団ほど雑種がうまく育たない（生態的種分化）
+export function nicheDistance(a, b) {
+  return 0.5 * Math.abs((a.diet ?? 0.25) - (b.diet ?? 0.25)) + Math.abs((a.topt ?? 17) - (b.topt ?? 17)) / 25;
+}
+// 食性から、各食べ物の効率を求める（草・木の葉・肉）
+export function dietEfficiency(g) {
+  const d = g.diet ?? 0.25;
+  const e = (c) => CFG.DIET_FLOOR + CFG.DIET_PEAK * Math.exp(-(((d - c) / CFG.DIET_WIDTH) ** 2));
+  return { soft: e(0), hard: e(0.5), meat: e(1) };
+}
+export function dietName(g) {
+  const d = g.diet ?? 0.25;
+  return d < 0.2 ? '草食' : d < 0.35 ? '草・木の葉' : d < 0.65 ? '木の葉食' : d < 0.8 ? '木の葉・肉' : '肉食';
 }
 // 雑種の生存力（0〜1）。系統が離れるほど、別々に生じた遺伝子どうしが噛み合わなくなる（ドブジャンスキー＝マラー不和合）
 export function compatibility(a, b) {
