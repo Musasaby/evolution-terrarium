@@ -5,7 +5,8 @@
   "description": "円柱生物の進化箱庭（静的サイト。npm は動作確認ツール用）",
   "scripts": {
     "serve": "python3 -m http.server 8000",
-    "check:sim": "node tools/sim-check.mjs"
+    "check:sim": "node tools/sim-check.mjs",
+    "check:diversity": "node tools/diversity-check.mjs"
   },
   "devDependencies": {
     "@dimforge/rapier3d-compat": "0.21.0"

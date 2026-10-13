@@ -5,8 +5,10 @@ export { CFG, SCHEDULE, NI, NH, NO } from './config.js';
 export { PLANT_SPECIES } from './plant-species.js';
 export { makeRng } from './random.js';
 export { qRot } from './math.js';
+export { computeDiversity } from './diversity.js';
 export { SectionProfiler, NULL_PROFILER } from './profiler.js';
 export {
   NMARK, randomGenome, cloneGenome, recombine, mutate,
   markerDivergence, morphDistance, geneDistance, compatibility, recognizes, genomeStats, capsuleHalf,
+  nicheDistance, dietEfficiency, dietName,
 } from './genetics.js';

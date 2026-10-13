@@ -1,6 +1,6 @@
 // ===== 個体パネル：選んだ個体の遺伝子・エネルギー・系譜 =====
 // 選択状態はストア（selected / follow）から読み、ボタン操作もストアへ書くだけ。
-import { qRot } from '../../sim/index.js';
+import { qRot, CFG, dietName } from '../../sim/index.js';
 import { speciesCss, CORPSE_COLOR } from '../../render/palette.js';
 import { $, fillDl, prepCanvas } from '../dom.js';
 
@@ -33,12 +33,16 @@ export class InspectorPanel {
     $('i-etext').textContent = `${e.toFixed(0)} / ${c.maxE.toFixed(0)}` + (c.dead ? '（死骸の残り）' : '');
     $('c-base').textContent = c.cost.base.toFixed(2); $('c-move').textContent = c.cost.move.toFixed(2);
     $('c-clim2').textContent = c.cost.climate.toFixed(2); $('c-wet').textContent = c.cost.water.toFixed(2);
+    $('c-crowd').textContent = (c.cost.crowd ?? 0).toFixed(2);
     const rows = [
       ['年齢', c.age.toFixed(0) + ' 秒'], ['体積', c.vol.toFixed(2) + ' m³'], ['関節', c.joints.length || c.nParts - 1],
       ['子の数', c.children], ['捕食した数', c.kills], ['獲得エネルギー', c.eaten.toFixed(0)],
       ['振動数', c.genome.freq.toFixed(2) + ' Hz'], ['親', c.parents ? '#' + c.parents.join(', #') : '祖先／移入'],
       ['同時に生まれた数', c.litter ? c.litter + ' 体' : '—'],
       ['選り好みの強さ', (c.genome.pick * 100).toFixed(0) + ' %'],
+      ['食性', `${dietName(c.genome)}（草 ×${c.eff.soft.toFixed(2)} · 木の葉 ×${c.eff.hard.toFixed(2)} · 肉 ×${c.eff.meat.toFixed(2)}）`],
+      ['適温', `${(c.topt - CFG.COMFORT).toFixed(0)}〜${(c.topt + CFG.COMFORT).toFixed(0)} ℃`],
+      ['近くの同種', c.dead ? '—' : c.crowd + ' 体' + (sp.plagueUntil > sim.t ? '（疫病が流行中）' : '')],
       ['交配できる相手', this.mateInfo(sim, c)],
       ['誕生時の変異', c.mutations.length ? c.mutations.join('、') : 'なし'],
     ];
