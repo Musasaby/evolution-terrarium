@@ -1,5 +1,6 @@
 // ===== 統計の記録（グラフ用の時系列） =====
 import { isLiving } from './creatures.js';
+import { computeDiversity } from './diversity.js';
 
 const MAX_SAMPLES = 3000;
 
@@ -8,16 +9,13 @@ export function recordStats(sim) {
   const n = live.length;
   let parts = 0, vol = 0, maxParts = 0;
   for (const c of live) { parts += c.nParts; vol += c.vol; maxParts = Math.max(maxParts, c.nParts); }
-  // 多様性：シャノン多様度 H と有効種数 e^H（全種が同数なら種数に一致、1種が独占するほど1に近づく）
-  const bySp = new Map();
-  for (const c of live) bySp.set(c.species, (bySp.get(c.species) || 0) + 1);
-  const spAlive = bySp.size;
-  let H = 0, top = 0;
-  for (const k of bySp.values()) { const p = k / n; H -= p * Math.log(p); top = Math.max(top, p); }
+  // 多様性の計算は純粋関数に切り出し（diversity.js）
+  const div = computeDiversity(sim);
   const L = sim.litters;
   sim.stats.push({
-    t: sim.t, pop: n, plants: sim.plants.length, species: spAlive,
-    shannon: H, effSpecies: n ? Math.exp(H) : 0, dominance: top,
+    t: sim.t, pop: div.living, plants: sim.plants.length, species: div.species,
+    shannon: div.shannon, effSpecies: div.effSpecies, dominance: div.dominance,
+    effDiet: div.effDiet, traitSd: div.traitSd,
     parts: n ? parts / n : 0, vol: n ? vol / n : 0, maxParts,
     temp: sim.climate.temp, water: sim.climate.water, plantCounts: sim.flora.countBySpecies(),
     births: sim.counters.births, deaths: sim.counters.deaths,
