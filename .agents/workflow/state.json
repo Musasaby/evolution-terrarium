@@ -1,7 +1,7 @@
 {
   "source": "docs/plans/biodiversity.md",
   "branch": "develop/biodiversity",
-  "updated_at": "2026-10-13T13:07:28+09:00",
+  "updated_at": "2026-10-13T13:10:35+09:00",
   "tasks": [
     {
       "id": "T1",
@@ -13,9 +13,9 @@
     {
       "id": "T2",
       "title": "多様性指標を diversity.js へ切り出して拡張",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "e46b81a"
     },
     {
       "id": "T3",
