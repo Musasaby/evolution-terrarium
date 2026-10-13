@@ -1,14 +1,14 @@
 {
   "source": "docs/plans/biodiversity.md",
   "branch": "develop/biodiversity",
-  "updated_at": "2026-10-13T12:25:41+09:00",
+  "updated_at": "2026-10-13T13:07:28+09:00",
   "tasks": [
     {
       "id": "T1",
       "title": "feature 取り込み後のベースライン取り直し",
-      "status": "pending",
-      "retries": 0,
-      "commit": null
+      "status": "done",
+      "retries": 1,
+      "commit": "c19597c"
     },
     {
       "id": "T2",
