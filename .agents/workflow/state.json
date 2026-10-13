@@ -1,0 +1,105 @@
+{
+  "source": "docs/plans/biodiversity.md",
+  "branch": "develop/biodiversity",
+  "updated_at": "2026-10-13T13:22:07+09:00",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "feature 取り込み後のベースライン取り直し",
+      "status": "done",
+      "retries": 1,
+      "commit": "c19597c"
+    },
+    {
+      "id": "T2",
+      "title": "多様性指標を diversity.js へ切り出して拡張",
+      "status": "done",
+      "retries": 0,
+      "commit": "e46b81a"
+    },
+    {
+      "id": "T3",
+      "title": "長時間・複数シードの多様性計測ツール",
+      "status": "done",
+      "retries": 0,
+      "commit": "630809c"
+    },
+    {
+      "id": "T4",
+      "title": "山と湖の数をシードで変える",
+      "status": "pending",
+      "retries": 0,
+      "commit": null
+    },
+    {
+      "id": "T5",
+      "title": "土壌の場と植物の土壌適性",
+      "status": "pending",
+      "retries": 0,
+      "commit": null
+    },
+    {
+      "id": "T6",
+      "title": "川(任意機能)",
+      "status": "pending",
+      "retries": 0,
+      "commit": null
+    },
+    {
+      "id": "T7",
+      "title": "耐温幅 tTol と気温の感覚入力",
+      "status": "pending",
+      "retries": 0,
+      "commit": null
+    },
+    {
+      "id": "T8",
+      "title": "水棲適応 aqua",
+      "status": "pending",
+      "retries": 0,
+      "commit": null
+    },
+    {
+      "id": "T9",
+      "title": "肉食の祖先",
+      "status": "pending",
+      "retries": 0,
+      "commit": null
+    },
+    {
+      "id": "T10",
+      "title": "生態的種分化と係数の調整",
+      "status": "pending",
+      "retries": 0,
+      "commit": null
+    },
+    {
+      "id": "T11",
+      "title": "ヘッダーと操作ヒントの簡素化",
+      "status": "pending",
+      "retries": 0,
+      "commit": null
+    },
+    {
+      "id": "T12",
+      "title": "右パネルの縮小と折りたたみ・統計タブの整理",
+      "status": "pending",
+      "retries": 0,
+      "commit": null
+    },
+    {
+      "id": "T13",
+      "title": "個体タブ・系統樹タブの整理",
+      "status": "pending",
+      "retries": 0,
+      "commit": null
+    },
+    {
+      "id": "T14",
+      "title": "構成メモの更新",
+      "status": "pending",
+      "retries": 0,
+      "commit": null
+    }
+  ]
+}

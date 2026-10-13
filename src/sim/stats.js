@@ -1,5 +1,6 @@
 // ===== 統計の記録（グラフ用の時系列） =====
 import { isLiving } from './creatures.js';
+import { computeDiversity } from './diversity.js';
 
 const MAX_SAMPLES = 3000;
 
@@ -8,10 +9,13 @@ export function recordStats(sim) {
   const n = live.length;
   let parts = 0, vol = 0, maxParts = 0;
   for (const c of live) { parts += c.nParts; vol += c.vol; maxParts = Math.max(maxParts, c.nParts); }
-  const spAlive = new Set(live.map(c => c.species.id)).size;
+  // 多様性の計算は純粋関数に切り出し（diversity.js）
+  const div = computeDiversity(sim);
   const L = sim.litters;
   sim.stats.push({
-    t: sim.t, pop: n, plants: sim.plants.length, species: spAlive,
+    t: sim.t, pop: div.living, plants: sim.plants.length, species: div.species,
+    shannon: div.shannon, effSpecies: div.effSpecies, dominance: div.dominance,
+    effDiet: div.effDiet, traitSd: div.traitSd,
     parts: n ? parts / n : 0, vol: n ? vol / n : 0, maxParts,
     temp: sim.climate.temp, water: sim.climate.water, plantCounts: sim.flora.countBySpecies(),
     births: sim.counters.births, deaths: sim.counters.deaths,
