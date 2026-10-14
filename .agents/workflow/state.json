@@ -1,7 +1,7 @@
 {
   "source": "docs/plans/biodiversity.md",
   "branch": "develop/biodiversity-B",
-  "updated_at": "2026-10-14T14:28:18+09:00",
+  "updated_at": "2026-10-14T14:52:20+09:00",
   "group": "B",
   "tasks": [
     {
@@ -28,9 +28,9 @@
     {
       "id": "T4",
       "title": "山と湖の数をシードで変える",
-      "status": "pending",
-      "retries": 0,
-      "commit": null
+      "status": "done",
+      "retries": 1,
+      "commit": "a97c672"
     },
     {
       "id": "T5",
