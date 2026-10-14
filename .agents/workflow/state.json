@@ -1,7 +1,7 @@
 {
   "source": "docs/plans/biodiversity.md",
   "branch": "develop/biodiversity-B",
-  "updated_at": "2026-10-14T14:52:20+09:00",
+  "updated_at": "2026-10-14T15:12:40+09:00",
   "group": "B",
   "tasks": [
     {
@@ -35,9 +35,9 @@
     {
       "id": "T5",
       "title": "土壌の場と植物の土壌適性",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "c9bffc2"
     },
     {
       "id": "T6",
