@@ -16,7 +16,7 @@ export class Flora {
     this.version = 0;        // 植物が増減するたびに進む（描画側の更新判定用）
   }
 
-  suitability(sp, x, z, mean = true) { return suitability(this.terrain, this.climate, sp, x, z, mean); }
+  suitability(sp, x, z, mean = true, soil) { return suitability(this.terrain, this.climate, sp, x, z, mean, soil); }
 
   populate() {
     for (let k = 0; k < 8000 && this.plants.length < 1400; k++) {
@@ -84,8 +84,10 @@ export class Flora {
     for (const p of this.plants) {
       if (!p.alive) continue;
       p.age += dt;
-      const sNow = this.suitability(p.sp, p.x, p.z, false);
-      const sMean = this.suitability(p.sp, p.x, p.z, true);
+      // 土壌は植物の更新ごとに 1 回だけ引き、その値を sNow / sMean の両方で使う
+      const soil = this.terrain.soilAt(p.x, p.z);
+      const sNow = this.suitability(p.sp, p.x, p.z, false, soil);
+      const sMean = this.suitability(p.sp, p.x, p.z, true, soil);
       // 地形変化で地面の高さが変わったら追従
       const ny = this.terrain.heightAt(p.x, p.z);
       if (Math.abs(ny - p.y) > 0.05) { p.y = ny; const hh = p.sp.hh * p.size; p.col.setTranslation({ x: p.x, y: ny + hh - 0.05, z: p.z }); }

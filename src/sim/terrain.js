@@ -11,6 +11,7 @@ export class Terrain {
   constructor(rng, noise) {
     this.rng = rng;
     this.H = new Float32Array(W * W);
+    this.soil = new Uint8Array(W * W);   // 土壌の種類(0=岩場, 1=砂地, 2=肥沃, 3=泥炭)
     this.distWater = new Float32Array(W * W);
     this.hotspots = [];
     this.generate(noise);
@@ -83,6 +84,27 @@ export class Terrain {
       }
       this.H[i * W + j] = h;
     }
+    this.generateSoil(nz);
+  }
+
+  // 土壌(0=岩場, 1=砂地, 2=肥沃, 3=泥炭)。生成時に決める静的な格子(自己の侵食では変わらない)。
+  // ノイズの場の分位数で陸地を 4 分するので、どの土壌も陸地の約 25% を占める
+  generateSoil(nz) {
+    const W1 = W, rng = this.rng;
+    const score = new Float32Array(W * W);
+    const land = [];
+    for (let i = 0; i <= N; i++) for (let j = 0; j <= N; j++) {
+      const id = i * W1 + j, x = -S / 2 + i * S / N, z = -S / 2 + j * S / N;
+      score[id] = nz(x * 0.06 + 91, z * 0.06 - 53, 3) + 0.5 * nz(x * 0.21, z * 0.21, 2) + rng() * 0.12;
+      if (this.H[id] >= BASE_WATER) land.push(id);
+    }
+    const s = land.map(id => score[id]).sort((a, b) => a - b);
+    const q = n => s[Math.min(s.length - 1, Math.floor(s.length * n))];
+    const t0 = q(0.25), t1 = q(0.5), t2 = q(0.75);
+    for (let id = 0; id < W * W; id++) {
+      const v = score[id];
+      this.soil[id] = v < t0 ? 0 : v < t1 ? 1 : v < t2 ? 2 : 3;
+    }
   }
 
   heightAt(x, z) {
@@ -90,6 +112,12 @@ export class Terrain {
     const i = Math.floor(fx), j = Math.floor(fz), u = fx - i, v = fz - j, H = this.H;
     // 三角形分割に合わせず双線形で近似
     return (H[i * W + j] * (1 - u) + H[(i + 1) * W + j] * u) * (1 - v) + (H[i * W + j + 1] * (1 - u) + H[(i + 1) * W + j + 1] * u) * v;
+  }
+
+  // 土壌の種類(0=岩場, 1=砂地, 2=肥沃, 3=泥炭)。静的な格子を引くだけ
+  soilAt(x, z) {
+    const i = clamp(Math.round((x + S / 2) / S * N), 0, N), j = clamp(Math.round((z + S / 2) / S * N), 0, N);
+    return this.soil[i * W + j];
   }
 
   // 隆起と侵食（数秒ごと）。高さが変わったら true を返す
