@@ -1,7 +1,7 @@
 {
   "source": "docs/plans/biodiversity.md",
   "branch": "develop/biodiversity-B",
-  "updated_at": "2026-10-14T15:12:40+09:00",
+  "updated_at": "2026-10-14T15:41:39+09:00",
   "group": "B",
   "tasks": [
     {
@@ -42,9 +42,9 @@
     {
       "id": "T6",
       "title": "川(任意機能)",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "716a3bd"
     },
     {
       "id": "T7",
