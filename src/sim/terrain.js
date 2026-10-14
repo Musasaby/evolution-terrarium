@@ -14,6 +14,7 @@ export class Terrain {
     this.soil = new Uint8Array(W * W);   // 土壌の種類(0=岩場, 1=砂地, 2=肥沃, 3=泥炭)
     this.distWater = new Float32Array(W * W);
     this.hotspots = [];
+    this.rivers = [];    // 川の線分（湖の中心どうしをつなぐ。{ x1, z1, x2, z2 }）
     this.generate(noise);
   }
 
@@ -84,7 +85,37 @@ export class Terrain {
       }
       this.H[i * W + j] = h;
     }
+    // 川（任意機能。CFG.RIVER が有効で湖が 2 つ以上のとき、湖どうしをつなぐ細い水路を掘る）
+    if (CFG.RIVER) this.generateRivers();
     this.generateSoil(nz);
+  }
+
+  // 湖どうしをつなぐ水路。幅 1〜2 格子・底を湖面より 2 低くする
+  // （隆起と侵食の 1 年あたりの合計の上限は ±0.04 × 1 年分の更新 45 回 = 1.8 なので、埋まり切らない）
+  generateRivers() {
+    if (this.lakes.length < 2) return;
+    const W1 = W, halfW = (S / N) * 0.98, bottom = BASE_WATER - 2;
+    // 全部の湖が 1 本につながるように、湖ごとに既に置いた湖で最も近いものへ線を引く
+    for (let k = 1; k < this.lakes.length; k++) {
+      let near = 0, nd = Infinity;
+      for (let l = 0; l < k; l++) {
+        const d = Math.hypot(this.lakes[k].x - this.lakes[l].x, this.lakes[k].z - this.lakes[l].z);
+        if (d < nd) { nd = d; near = l; }
+      }
+      const a = this.lakes[k], b = this.lakes[near];
+      this.rivers.push({ x1: a.x, z1: a.z, x2: b.x, z2: b.z });
+      const dx = b.x - a.x, dz = b.z - a.z, len2 = dx * dx + dz * dz;
+      for (let i = 0; i <= N; i++) for (let j = 0; j <= N; j++) {
+        const x = -S / 2 + i * S / N, z = -S / 2 + j * S / N;
+        // 線分の区間内だけを掘る（延長線上の湖の外は掘らない）
+        const tt = clamp(((x - a.x) * dx + (z - a.z) * dz) / len2, 0, 1);
+        const px = x - (a.x + dx * tt), pz = z - (a.z + dz * tt);
+        if (px * px + pz * pz <= halfW * halfW) {
+          const id = i * W1 + j;
+          this.H[id] = Math.min(this.H[id], bottom);
+        }
+      }
+    }
   }
 
   // 土壌(0=岩場, 1=砂地, 2=肥沃, 3=泥炭)。生成時に決める静的な格子(自己の侵食では変わらない)。
