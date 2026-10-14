@@ -4,31 +4,137 @@ import { CFG, EDGE } from './config.js';
 import { clamp, sat } from './math.js';
 
 const N = CFG.GRID, W = N + 1, S = CFG.WORLD;
+const BASE_WATER = 1.2;  // 初期の湖面（climate.js の baseWater と同じ値）
+const LAKE_FRAC = 0.15;  // 湖の面積合計の、世界の面積に対する割合（格子の解像度によらない）
 
 export class Terrain {
   constructor(rng, noise) {
     this.rng = rng;
     this.H = new Float32Array(W * W);
+    this.soil = new Uint8Array(W * W);   // 土壌の種類(0=岩場, 1=砂地, 2=肥沃, 3=泥炭)
     this.distWater = new Float32Array(W * W);
     this.hotspots = [];
+    this.rivers = [];    // 川の線分（湖の中心どうしをつなぐ。{ x1, z1, x2, z2 }）
     this.generate(noise);
+  }
+
+  // 湖がない場合の高さ（湖の深さの決定に使う）
+  baseHeight(x, z, nz) {
+    let h = 3 + nz(x * 0.027, z * 0.027, 4) * 5;
+    for (const mtn of this.mtns) {
+      const dm = Math.hypot(x - mtn.x, z - mtn.z);
+      const ridge = 1 - Math.abs(nz(x * 0.04 + 50, z * 0.04, 3)) * 2;
+      h += mtn.height * Math.exp(-(dm * dm) / (mtn.radius * mtn.radius)) * (0.55 + 0.55 * ridge);
+    }
+    const edge = Math.max(Math.abs(x), Math.abs(z)) / (S / 2);
+    return h + Math.max(0, edge - 0.85) * 40;
   }
 
   generate(nz) {
     const rng = this.rng;
-    this.mtn = { x: rng.range(18, 34) * (rng() < 0.5 ? -1 : 1), z: rng.range(18, 34) * (rng() < 0.5 ? -1 : 1) };
-    this.lake = { x: -this.mtn.x * 0.7 + rng.range(-10, 10), z: -this.mtn.z * 0.4 + rng.range(-10, 10) };
+    // 山（1〜3 個）：高さと裾野の広さも世界ごとにばらつく
+    this.mtns = [];
+    const nm = 1 + Math.floor(rng() * 3);
+    for (let k = 0; k < nm; k++) {
+      this.mtns.push({
+        x: rng.range(18, 34) * (rng() < 0.5 ? -1 : 1),
+        z: rng.range(18, 34) * (rng() < 0.5 ? -1 : 1),
+        height: rng.range(14, 26),
+        radius: rng.range(18, 30),
+      });
+    }
+    // 湖（1〜3 個）：標高の低い平地に置き、底の平らな甕状の深い窪みで必要な面積を保証する
+    this.lakes = [];
+    const nl = 1 + Math.floor(rng() * 3);
+    for (let k = 0; k < nl; k++) {
+      // 候補から標高の最も低い平地を選ぶ（既に置いた湖が半径に入る場所は避ける）
+      // 面積は世界の面積（S*S）に対する割合で決める（格子の解像度によらない）
+      const rExp = Math.sqrt((LAKE_FRAC / nl) * S * S / Math.PI) / 0.85;
+      let bx = 0, bz = 0, bb = Infinity, fb = Infinity, fx = 0, fz = 0;
+      for (let tryK = 0; tryK < 10; tryK++) {
+        const x = rng.range(-28, 28), z = rng.range(-28, 28);
+        let far = true;
+        for (const lk of this.lakes) {
+          if (Math.hypot(x - lk.x, z - lk.z) < (lk.radius + rExp) * 0.8) far = false;
+        }
+        const base = this.baseHeight(x, z, nz);
+        if (base < fb) { fb = base; fx = x; fz = z; }
+        if (!far) continue;
+        if (base < bb) { bb = base; bx = x; bz = z; }
+      }
+      if (!isFinite(bb)) { bb = fb; bx = fx; bz = fz; }
+      // 底の深さは湖の縁の最高地点より十分深くして、斜面でも面積を保つ
+      let rimMax = bb;
+      const water = (LAKE_FRAC / nl) * S * S * rng.range(0.9, 1.1);
+      const radius = Math.sqrt(water / Math.PI) / 0.85;
+      for (let pv = 0; pv < 8; pv++) {
+        const a = (pv / 8) * Math.PI * 2;
+        rimMax = Math.max(rimMax, this.baseHeight(bx + radius * 0.8 * Math.cos(a), bz + radius * 0.8 * Math.sin(a), nz));
+      }
+      // 縁の高さが湖面（BASE_WATER）を下回る地点があると深さが負になるため、正の下限を設ける
+      const depth = Math.max(rimMax - BASE_WATER, 2) * rng.range(2.2, 3.0);
+      this.lakes.push({ x: bx, z: bz, depth, radius });
+    }
     for (let i = 0; i <= N; i++) for (let j = 0; j <= N; j++) {
       const x = -S / 2 + i * S / N, z = -S / 2 + j * S / N;
-      let h = 3 + nz(x * 0.027, z * 0.027, 4) * 5;
-      const dm = Math.hypot(x - this.mtn.x, z - this.mtn.z);
-      const ridge = 1 - Math.abs(nz(x * 0.04 + 50, z * 0.04, 3)) * 2;
-      h += 22 * Math.exp(-(dm * dm) / (25 * 25)) * (0.55 + 0.55 * ridge);
-      const dl = Math.hypot(x - this.lake.x, z - this.lake.z);
-      h -= 8 * Math.exp(-(dl * dl) / (16 * 16));
-      const edge = Math.max(Math.abs(x), Math.abs(z)) / (S / 2);
-      h += Math.max(0, edge - 0.85) * 40;
+      // 基本土高（山・ノイズ・端の盛り上がり）から湖の窪みを引く。式は baseHeight にまとめる
+      let h = this.baseHeight(x, z, nz);
+      for (const lk of this.lakes) {
+        const dl = Math.hypot(x - lk.x, z - lk.z);
+        h -= lk.depth * Math.exp(-(dl * dl * dl) / (lk.radius * lk.radius * lk.radius));
+      }
       this.H[i * W + j] = h;
+    }
+    // 川（任意機能。CFG.RIVER が有効で湖が 2 つ以上のとき、湖どうしをつなぐ細い水路を掘る）
+    if (CFG.RIVER) this.generateRivers();
+    this.generateSoil(nz);
+  }
+
+  // 湖どうしをつなぐ水路。幅 1〜2 格子・底を湖面より 2 低くする
+  // （隆起と侵食の 1 年あたりの合計の上限は ±0.04 × 1 年分の更新 45 回 = 1.8 なので、埋まり切らない）
+  generateRivers() {
+    if (this.lakes.length < 2) return;
+    const W1 = W, halfW = (S / N) * 0.98, bottom = BASE_WATER - 2;
+    // 全部の湖が 1 本につながるように、湖ごとに既に置いた湖で最も近いものへ線を引く
+    for (let k = 1; k < this.lakes.length; k++) {
+      let near = 0, nd = Infinity;
+      for (let l = 0; l < k; l++) {
+        const d = Math.hypot(this.lakes[k].x - this.lakes[l].x, this.lakes[k].z - this.lakes[l].z);
+        if (d < nd) { nd = d; near = l; }
+      }
+      const a = this.lakes[k], b = this.lakes[near];
+      this.rivers.push({ x1: a.x, z1: a.z, x2: b.x, z2: b.z });
+      const dx = b.x - a.x, dz = b.z - a.z, len2 = dx * dx + dz * dz;
+      for (let i = 0; i <= N; i++) for (let j = 0; j <= N; j++) {
+        const x = -S / 2 + i * S / N, z = -S / 2 + j * S / N;
+        // 線分の区間内だけを掘る（延長線上の湖の外は掘らない）
+        const tt = clamp(((x - a.x) * dx + (z - a.z) * dz) / len2, 0, 1);
+        const px = x - (a.x + dx * tt), pz = z - (a.z + dz * tt);
+        if (px * px + pz * pz <= halfW * halfW) {
+          const id = i * W1 + j;
+          this.H[id] = Math.min(this.H[id], bottom);
+        }
+      }
+    }
+  }
+
+  // 土壌(0=岩場, 1=砂地, 2=肥沃, 3=泥炭)。生成時に決める静的な格子(自己の侵食では変わらない)。
+  // ノイズの場の分位数で陸地を 4 分するので、どの土壌も陸地の約 25% を占める
+  generateSoil(nz) {
+    const W1 = W, rng = this.rng;
+    const score = new Float32Array(W * W);
+    const land = [];
+    for (let i = 0; i <= N; i++) for (let j = 0; j <= N; j++) {
+      const id = i * W1 + j, x = -S / 2 + i * S / N, z = -S / 2 + j * S / N;
+      score[id] = nz(x * 0.06 + 91, z * 0.06 - 53, 3) + 0.5 * nz(x * 0.21, z * 0.21, 2) + rng() * 0.12;
+      if (this.H[id] >= BASE_WATER) land.push(id);
+    }
+    const s = land.map(id => score[id]).sort((a, b) => a - b);
+    const q = n => s[Math.min(s.length - 1, Math.floor(s.length * n))];
+    const t0 = q(0.25), t1 = q(0.5), t2 = q(0.75);
+    for (let id = 0; id < W * W; id++) {
+      const v = score[id];
+      this.soil[id] = v < t0 ? 0 : v < t1 ? 1 : v < t2 ? 2 : 3;
     }
   }
 
@@ -37,6 +143,12 @@ export class Terrain {
     const i = Math.floor(fx), j = Math.floor(fz), u = fx - i, v = fz - j, H = this.H;
     // 三角形分割に合わせず双線形で近似
     return (H[i * W + j] * (1 - u) + H[(i + 1) * W + j] * u) * (1 - v) + (H[i * W + j + 1] * (1 - u) + H[(i + 1) * W + j + 1] * u) * v;
+  }
+
+  // 土壌の種類(0=岩場, 1=砂地, 2=肥沃, 3=泥炭)。静的な格子を引くだけ
+  soilAt(x, z) {
+    const i = clamp(Math.round((x + S / 2) / S * N), 0, N), j = clamp(Math.round((z + S / 2) / S * N), 0, N);
+    return this.soil[i * W + j];
   }
 
   // 隆起と侵食（数秒ごと）。高さが変わったら true を返す
