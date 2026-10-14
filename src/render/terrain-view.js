@@ -1,5 +1,5 @@
 // ===== 地形の描画 =====
-// sim から読むもの: H（高さ）, distWater, climate, terrainVersion
+// sim から読むもの: H（高さ）, distWater, soil, climate, terrainVersion
 import * as THREE from 'three';
 import { CFG } from '../sim/index.js';
 
@@ -7,6 +7,9 @@ const COLOR_INTERVAL_MS = 4000; // 季節・湿り気による色の塗り直し
 
 const cSand = new THREE.Color('#c8b78a'), cDry = new THREE.Color('#a99a5c'), cLush = new THREE.Color('#4d7a37'),
   cRock = new THREE.Color('#7a7268'), cSnow = new THREE.Color('#eef3f5'), cMud = new THREE.Color('#5e5640');
+// 土壌の種類(0=岩場, 1=砂地, 2=肥沃, 3=泥炭)ごとのわずかな色寄せ
+const cSoil = [new THREE.Color('#8f8a84'), new THREE.Color('#c2b280'), new THREE.Color('#4f6b33'), new THREE.Color('#5a4a30')];
+const SOIL_TINT = 0.18;
 
 export class TerrainView {
   constructor(scene) {
@@ -68,6 +71,8 @@ export class TerrainView {
         tmp.copy(cDry).lerp(cLush, moist);
         const rock = Math.min(1, Math.max(0, (0.86 - ny) * 4) + Math.max(0, (h - 15) / 8));
         tmp.lerp(cRock, rock);
+        // 土壌の種類をわずかに反映する
+        tmp.lerp(cSoil[sim.soil[id]], SOIL_TINT);
       }
       const T = cl.tempAtHeight(h);
       if (T < 1 && h >= cl.water) tmp.lerp(cSnow, Math.min(1, (1 - T) / 5));

@@ -1,8 +1,8 @@
 {
   "source": "docs/plans/biodiversity.md",
-  "branch": "develop/biodiversity",
-  "updated_at": "2026-10-14T14:22:09+09:00",
-  "group": "A",
+  "branch": "develop/biodiversity-B",
+  "updated_at": "2026-10-14T15:41:39+09:00",
+  "group": "B",
   "tasks": [
     {
       "id": "T1",
@@ -28,23 +28,23 @@
     {
       "id": "T4",
       "title": "山と湖の数をシードで変える",
-      "status": "pending",
-      "retries": 0,
-      "commit": null
+      "status": "done",
+      "retries": 1,
+      "commit": "a97c672"
     },
     {
       "id": "T5",
       "title": "土壌の場と植物の土壌適性",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "c9bffc2"
     },
     {
       "id": "T6",
       "title": "川(任意機能)",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "716a3bd"
     },
     {
       "id": "T7",
