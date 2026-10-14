@@ -112,6 +112,7 @@ export class Sim {
   seasonName() { return Climate.seasonName(this.t); }
   get H() { return this.terrain.H; }
   get distWater() { return this.terrain.distWater; }
+  get soil() { return this.terrain.soil; }
   get plants() { return this.flora.plants; }
   get plantVersion() { return this.flora.version; }
   heightAt(x, z) { return this.terrain.heightAt(x, z); }
@@ -119,7 +120,9 @@ export class Sim {
   tempAt(x, z) { return tempAt(this.terrain, this.climate, x, z); }
   meanTempAt(x, z) { return meanTempAt(this.terrain, this.climate, x, z); }
   moistureAt(x, z) { return this.terrain.moistureAt(x, z, this.climate); }
-  suitability(sp, x, z, mean = true) { return suitability(this.terrain, this.climate, sp, x, z, mean); }
+  // 土壌の種類(0=岩場, 1=砂地, 2=肥沃, 3=泥炭)
+  soilAt(x, z) { return this.terrain.soilAt(x, z); }
+  suitability(sp, x, z, mean = true, soil) { return suitability(this.terrain, this.climate, sp, x, z, mean, soil); }
   interfertile(a, b) { return interfertile(a, b); }
   livingCount() { return livingCount(this); }
   // 'rain' | 'drought' | 'clear' | 'ice'
