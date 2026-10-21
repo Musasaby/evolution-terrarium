@@ -1,7 +1,7 @@
 {
   "source": "docs/plans/biodiversity.md",
   "branch": "develop/biodiversity-C",
-  "updated_at": "2026-10-22T08:29:47+09:00",
+  "updated_at": "2026-10-22T08:38:15+09:00",
   "group": "C",
   "tasks": [
     {
@@ -140,9 +140,9 @@
     {
       "id": "T20",
       "title": "木の葉が食べられない原因を調べる",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "556147cae0114987f449963f66e9baf48ace5eeb"
     },
     {
       "id": "T21",
