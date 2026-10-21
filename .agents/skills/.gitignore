@@ -1,9 +1,0 @@
-# Agent link (agents-md-setup skillで再作成する)
-.claude
-# 個人設定
-.agents/settings.local.json
-# 本リポジトリでは .agents/ はローカル実行状態のため未追跡
-.agents/
-# 直下の CLAUDE.md(@AGENTS.md)は開発用で未追跡
-# (直下の AGENTS.md は本リポジトリの開発用ルールとして追跡する。どちらも npx skills では配られない)
-/CLAUDE.md
