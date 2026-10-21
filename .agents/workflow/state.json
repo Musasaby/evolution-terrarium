@@ -1,7 +1,7 @@
 {
   "source": "docs/plans/biodiversity.md",
   "branch": "develop/biodiversity-C",
-  "updated_at": "2026-10-21T23:31:17+09:00",
+  "updated_at": "2026-10-21T23:37:22+09:00",
   "group": "C",
   "tasks": [
     {
@@ -49,9 +49,9 @@
     {
       "id": "T7",
       "title": "耐温幅 tTol と気温の感覚入力",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "800698d0b16935e3335364030adb9201a175de7b"
     },
     {
       "id": "T8",
