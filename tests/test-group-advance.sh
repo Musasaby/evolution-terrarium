@@ -1,39 +1,21 @@
 #!/bin/bash
 # T3: group-advance(グループ完了後の PR 状態判定とブランチ切替, POSIX版)。
-# gh は PATH 先頭に置いたスタブで差し替え、PR 状態(NO_PR / OPEN / CLOSED / MERGED)ごとの
+# gh は lib.sh が PATH 先頭に置くスタブで差し替え、PR 状態(NO_PR / OPEN / CLOSED / MERGED)ごとの
 # exit code と、MERGED 時のブランチ作成・切替・state.json 更新を検証する。
 source "$(dirname "$0")/lib.sh"
 
-# --- gh スタブ(PATH 先頭に置き、環境変数で挙動を切り替える) ---
-GH_STUB_DIR="$(mktemp -d)"
-cat > "$GH_STUB_DIR/gh" <<'EOF'
-#!/bin/bash
-[ -n "${GH_STUB_LOG:-}" ] && printf '%s\n' "$*" >> "$GH_STUB_LOG"
-[ -n "${GH_STUB_STDOUT:-}" ] && printf '%s\n' "$GH_STUB_STDOUT"
-[ -n "${GH_STUB_STDERR:-}" ] && printf '%s\n' "$GH_STUB_STDERR" >&2
-exit "${GH_STUB_CODE:-0}"
-EOF
-chmod +x "$GH_STUB_DIR/gh"
-export PATH="$GH_STUB_DIR:$PATH"
-
+# --- gh スタブ(lib.sh が PATH 先頭に置く。シナリオごとに gh_stub_set で挙動を設定する) ---
 # gh_stub <NO_PR|OPEN|CLOSED|MERGED|FAIL> [url] [code]
 gh_stub() {
-    GH_STUB_LOG="$GH_STUB_DIR/log"
-    rm -f "$GH_STUB_LOG"
-    export GH_STUB_LOG GH_STUB_CODE GH_STUB_STDOUT GH_STUB_STDERR
-    GH_STUB_CODE=0
-    GH_STUB_STDOUT=''
-    GH_STUB_STDERR=''
     case "$1" in
         NO_PR)
             # 実 gh と同じ「PR が見つからない」メッセージと exit 1 を再現する
-            GH_STUB_CODE=1
-            GH_STUB_STDERR='no pull requests found for branch "develop/g1"'
+            gh_stub_set 1 '' 'no pull requests found for branch "develop/g1"'
             ;;
-        OPEN)   GH_STUB_STDOUT="{\"state\":\"OPEN\",\"url\":\"$2\"}" ;;
-        CLOSED) GH_STUB_STDOUT="{\"state\":\"CLOSED\",\"url\":\"$2\"}" ;;
-        MERGED) GH_STUB_STDOUT="{\"state\":\"MERGED\",\"url\":\"$2\"}" ;;
-        FAIL)   GH_STUB_CODE="$3"; GH_STUB_STDERR='gh stub failure' ;;
+        OPEN)   gh_stub_set 0 "{\"state\":\"OPEN\",\"url\":\"$2\"}" '' ;;
+        CLOSED) gh_stub_set 0 "{\"state\":\"CLOSED\",\"url\":\"$2\"}" '' ;;
+        MERGED) gh_stub_set 0 "{\"state\":\"MERGED\",\"url\":\"$2\"}" '' ;;
+        FAIL)   gh_stub_set "$3" '' 'gh stub failure' ;;
     esac
 }
 
@@ -61,7 +43,7 @@ EOF
 # origin(bare)付きのリポジトリに develop/g1 ブランチを用意し、
 # state.json を「作業グループ P が完了・ブランチ develop/g1」に揃える
 setup_advance() {
-    new_project
+    # テストケースが作ったダミープロジェクト($PROJ)をそのまま使う(作り直さない)
     (
         cd "$PROJ"
         git init -q --bare -b main .agents/remote.git
@@ -70,6 +52,7 @@ setup_advance() {
         git push -q -u origin main
         git checkout -q -b develop/g1
         printf 'b\n' > b.txt; git add b.txt; git commit -q -m "feat: g1"
+        git push -q -u origin develop/g1
     )
     p_a_tasks
     write_state "T1:done" "T2:pending" "T3:pending"
@@ -98,15 +81,14 @@ with open(sys.argv[1], encoding='utf-8') as f:
 " "$(py_path "$PROJ/.agents/workflow/state.json")"
 }
 
-stub_log() { cat "${GH_STUB_LOG:-/dev/null}"; }
-
 t_advance_no_pr() {
     setup_advance
     gh_stub NO_PR
     run_script group-advance.sh
     assert_eq 7 "$CODE" "exit code: $ERR"
-    assert_eq "NO_PR" "$OUT" "stdout"
-    assert_contains "$(stub_log)" "view develop/g1" "gh called with the state branch"
+    assert_eq "NO_PR" "${OUT%%$'\n'*}" "stdout"
+    assert_eq "Next: create-pr" "${OUT##*$'\n'}" "stdout last line"
+    assert_contains "$(gh_stub_log)" "view develop/g1" "gh called with the state branch"
     assert_eq "develop/g1" "$(state_branch)" "state.json unchanged"
     assert_eq "P" "$(state_group)" "group unchanged"
 }
@@ -116,8 +98,31 @@ t_advance_open() {
     gh_stub OPEN "https://example.com/pr/1"
     run_script group-advance.sh
     assert_eq 8 "$CODE" "exit code: $ERR"
-    assert_eq "OPEN https://example.com/pr/1" "$OUT" "stdout has the PR URL"
+    assert_eq "OPEN https://example.com/pr/1" "${OUT%%$'\n'*}" "stdout has the PR URL"
+    assert_eq "Next: wait-merge" "${OUT##*$'\n'}" "stdout last line"
     assert_eq "P" "$(state_group)" "group unchanged"
+}
+
+t_advance_open_unpushed() {
+    setup_advance
+    (cd "$PROJ" && printf 'c\n' > c.txt && git add c.txt && git commit -q -m "fix: review")
+    gh_stub OPEN "https://example.com/pr/1"
+    run_script group-advance.sh
+    assert_eq 10 "$CODE" "exit code: $ERR"
+    assert_eq "OPEN https://example.com/pr/1" "${OUT%%$'\n'*}" "stdout has the PR URL"
+    assert_eq "Next: update-pr" "${OUT##*$'\n'}" "stdout last line"
+    assert_contains "$ERR" "1 commit(s)" "stderr reports the unpushed commits"
+    assert_eq "P" "$(state_group)" "group unchanged"
+}
+
+t_advance_open_no_remote_branch() {
+    setup_advance
+    (cd "$PROJ" && git update-ref -d refs/remotes/origin/develop/g1)
+    gh_stub OPEN "https://example.com/pr/1"
+    run_script group-advance.sh
+    assert_eq 10 "$CODE" "exit code: $ERR"
+    assert_eq "Next: update-pr" "${OUT##*$'\n'}" "stdout last line"
+    assert_contains "$ERR" "not found" "stderr says the remote branch is missing"
 }
 
 t_advance_closed() {
@@ -126,6 +131,7 @@ t_advance_closed() {
     run_script group-advance.sh
     assert_eq 9 "$CODE" "exit code: $ERR"
     assert_contains "$ERR" "CLOSED" "stderr explains the closed PR"
+    assert_eq "Next: escalate reason=pr-closed" "${OUT##*$'\n'}" "stdout last line"
     assert_eq "P" "$(state_group)" "state.json unchanged"
 }
 
@@ -134,10 +140,41 @@ t_advance_merged() {
     gh_stub MERGED "https://example.com/pr/1"
     run_script group-advance.sh --branch develop/g2
     assert_eq 0 "$CODE" "exit code: $ERR"
-    assert_eq "ADVANCED develop/g2 A" "$OUT" "stdout shows the new branch and group"
+    assert_eq "ADVANCED develop/g2 A" "${OUT%%$'\n'*}" "stdout shows the new branch and group"
+    assert_eq "Next: continue" "${OUT##*$'\n'}" "stdout last line"
     assert_eq "develop/g2" "$(cd "$PROJ" && git branch --show-current)" "switched to the new branch"
     assert_eq "develop/g2" "$(state_branch)" "state.json branch updated"
     assert_eq "A" "$(state_group)" "state.json group updated to the next group"
+}
+
+t_advance_merged_commits_state() {
+    setup_advance
+    (
+        cd "$PROJ"
+        printf '.agents/remote.git/\n.agents/other-clone/\n.agents/workflow/scripts/\n.agents/workflow/config.json\n.agents/workflow/runs/\n' > .gitignore
+        git add .gitignore .agents/workflow/state.json .agents/workflow/tasks.md
+        git commit -q -m "track state"
+        # PR マージ後の main を模す(切替後も state.json が main 側に存在するようにする)
+        git checkout -q main
+        git merge -q --ff-only develop/g1
+        git push -q origin main
+        git checkout -q develop/g1
+    )
+    gh_stub MERGED "https://example.com/pr/1"
+    run_script group-advance.sh --branch develop/g2
+    assert_eq 0 "$CODE" "exit code: $ERR"
+    assert_contains "$OUT" "State commit: " "stdout has the state commit line"
+    assert_eq "chore: A グループの作業を開始" "$(cd "$PROJ" && git log -1 --format=%s)" "latest commit on the new branch"
+    assert_eq "develop/g2" "$(cd "$PROJ" && git branch --show-current)" "on the new branch"
+    assert_eq "" "$(cd "$PROJ" && git status --porcelain)" "working tree is clean"
+}
+
+t_advance_merged_untracked_state_no_commit() {
+    setup_advance
+    gh_stub MERGED "https://example.com/pr/1"
+    run_script group-advance.sh --branch develop/g2
+    assert_eq 0 "$CODE" "exit code: $ERR"
+    assert_contains "$OUT" "State commit: none" "no state commit"
 }
 
 t_advance_merged_pulls_main() {
@@ -243,8 +280,12 @@ t_advance_all_done_rejected() {
 echo "test-group-advance.sh"
 test_case "advance: PR なしは exit 7" t_advance_no_pr
 test_case "advance: OPEN は exit 8" t_advance_open
+test_case "advance: OPEN で未 push のコミットがあれば exit 10" t_advance_open_unpushed
+test_case "advance: OPEN でリモートのブランチが無ければ exit 10" t_advance_open_no_remote_branch
 test_case "advance: CLOSED は exit 9" t_advance_closed
 test_case "advance: MERGED はブランチ作成と state 更新" t_advance_merged
+test_case "advance: 状態ファイルを追跡するリポジトリでは切替後に state.json をコミットする" t_advance_merged_commits_state
+test_case "advance: .agents を追跡しないリポジトリでは state.json をコミットしない" t_advance_merged_untracked_state_no_commit
 test_case "advance: MERGED は main を origin/main まで進める" t_advance_merged_pulls_main
 test_case "advance: MERGED で --branch 無しは exit 1" t_advance_merged_requires_branch
 test_case "advance: develop/ 以外の --branch は exit 1" t_advance_branch_prefix_rejected
@@ -253,5 +294,4 @@ test_case "advance: 作業グループ未完了は exit 1" t_advance_group_incom
 test_case "advance: 未知のグループ名は exit 1" t_advance_unknown_group_rejected
 test_case "advance: gh 失敗は exit code を返す" t_advance_gh_failure_propagated
 test_case "advance: 全タスク完了で切替先が無ければ exit 1" t_advance_all_done_rejected
-rm -rf "$GH_STUB_DIR"
 summary

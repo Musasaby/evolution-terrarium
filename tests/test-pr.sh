@@ -65,7 +65,9 @@ t_pr_generates() {
     assert_contains "$prompt" "--base main" "base branch"
     assert_contains "$prompt" "日本語" "japanese title/body instruction"
     assert_contains "$prompt" "git push -u" "push instruction"
-    assert_not_contains "$prompt" "{" "all placeholders replaced"
+    assert_contains "$prompt" 'gh api -X PATCH "repos/{owner}/{repo}/pulls/' "update existing PR via gh api"
+    assert_contains "$prompt" "-F body=@.agents/workflow/runs/pr-1-1/pr-body.md" "body file for update"
+    assert_not_contains "${prompt//\{owner\}\/\{repo\}/}" "{" "all placeholders replaced except {owner}/{repo}"
 }
 
 t_pr_increments() {
@@ -91,6 +93,11 @@ t_pr_no_tasks_rejected() {
     assert_eq 1 "$CODE" "exit code"
 }
 
+t_task_id_omitted() {
+    run_script dispatch-prompt-gen.sh
+    assert_eq 1 "$CODE" "exit code"
+}
+
 t_pr_no_origin_rejected() {
     setup_branch
     (cd "$PROJ" && git remote remove origin)
@@ -98,10 +105,54 @@ t_pr_no_origin_rejected() {
     assert_eq 1 "$CODE" "no origin -> exit 1"
 }
 
+t_pr_requirements() {
+    setup_branch
+    write_tasks <<'EOF'
+## 要件
+- R1: 要望1
+- R2: 要望2
+
+## T1: ブランチ上のタスク
+- **要件**: R1
+- **依存**: なし
+
+## T2: マージ済みのタスク
+- **要件**: R2
+- **依存**: なし
+
+## T3: 未着手のタスク
+- **要件**: R1
+- **依存**: なし
+
+## T4: 別PRでマージ済みのタスク
+- **要件**: なし
+- **依存**: なし
+EOF
+    run_script dispatch-prompt-gen.sh --pr
+    assert_eq 0 "$CODE" "exit code: $ERR"
+    local prompt
+    prompt="$(cat "$PROJ/.agents/workflow/runs/pr-1-1/prompt.md")"
+    assert_contains "$prompt" "- R1: 要望1(この PR: T1 / 他の PR: T3)" "requirement line"
+    assert_not_contains "$prompt" "- R2:" "requirement of merged task excluded"
+}
+
+t_pr_no_requirements() {
+    setup_branch
+    run_script dispatch-prompt-gen.sh --pr
+    assert_eq 0 "$CODE" "exit code: $ERR"
+    local prompt
+    prompt="$(cat "$PROJ/.agents/workflow/runs/pr-1-1/prompt.md")"
+    assert_contains "$prompt" "- なし(tasks.md に要件の節が無い、またはこの PR のタスクに対応する要件が無い)" "none text"
+    assert_not_contains "$prompt" "{requirement_list}" "placeholder replaced"
+}
+
 echo "test-pr.sh"
 test_case "pr: プロンプト生成" t_pr_generates
 test_case "pr: 連番" t_pr_increments
 test_case "pr: main上はexit 1" t_pr_on_main_rejected
 test_case "pr: 対象タスクなしはexit 1" t_pr_no_tasks_rejected
+test_case "TaskId省略はexit 1" t_task_id_omitted
 test_case "pr: origin が無ければexit 1" t_pr_no_origin_rejected
+test_case "pr: 要件の対応をプロンプトに載せる" t_pr_requirements
+test_case "pr: 要件の節が無ければなしと書く" t_pr_no_requirements
 summary
