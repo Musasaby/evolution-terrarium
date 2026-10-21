@@ -2,8 +2,8 @@
 import RAPIER from '@dimforge/rapier3d-compat';
 import { Sim, CFG, computeDiversity } from '../src/sim/index.js';
 
-// 0.5 年ごとの区間（ステップ数）。既定 18000 ステップ = 2 年 = 4 区間
-const INTERVAL_STEPS = Math.round((CFG.YEAR / 2) / CFG.DT);
+// 0.25 年ごとの区間（ステップ数）。既定 27000 ステップ = 3 年 = 12 区間
+const INTERVAL_STEPS = Math.round((CFG.YEAR / 4) / CFG.DT);
 const DIET_EDGE = [0.25, 0.75]; // diversity.js と同じ分類：<0.25=草, <0.75=葉, 以上=肉
 
 export async function runSeed(steps, seed) {
@@ -31,8 +31,10 @@ export async function runSeed(steps, seed) {
     }
     intervalMs = performance.now() - t1;
     t1 = performance.now();
+    let plantSoft = 0, plantHard = 0;
+    for (const p of sim.plants) { if (p.sp.soft) plantSoft++; else plantHard++; }
     rows.push({
-      year, pop: div.living, species: div.species,
+      year, pop: div.living, species: div.species, plantSoft, plantHard,
       effSpecies: div.effSpecies, effDiet: div.effDiet, diet,
       invasions, plagues,
       msPerStep: intervalMs / n,
