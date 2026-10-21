@@ -1,7 +1,7 @@
 {
   "source": "docs/plans/biodiversity.md",
   "branch": "develop/biodiversity-C",
-  "updated_at": "2026-10-21T23:37:22+09:00",
+  "updated_at": "2026-10-21T23:47:53+09:00",
   "group": "C",
   "tasks": [
     {
@@ -56,9 +56,9 @@
     {
       "id": "T8",
       "title": "水棲適応 aqua",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "ebbb0fa8577c6d5854fa91f1a3ffd54f5bf7907a"
     },
     {
       "id": "T9",
