@@ -95,23 +95,39 @@ if [ "$PR_MODE" = true ]; then
     mkdir -p "$PR_RUN_DIR"
     python3 - "$STATE_PATH_PY" "$(to_py_path "$SCRIPT_DIR/dispatch-pr-prompt-template.md")" \
         "$(to_py_path "$PR_RUN_DIR/prompt.md")" "$BRANCH" "$BASE_BRANCH" "$BASE_REF" \
-        ".agents/workflow/runs/pr-${PR_N}-1" "$COMMITS" <<'PY' || { rmdir "$PR_RUN_DIR" 2>/dev/null; exit 1; }
-import json, sys
-state_path, template_path, prompt_path, branch, base, base_ref, run_dir, commits = sys.argv[1:9]
+        ".agents/workflow/runs/pr-${PR_N}-1" "$COMMITS" "$(to_py_path "$TASKS_PATH")" \
+        "$(to_py_path "$SCRIPT_DIR")" <<'PY' || { rmdir "$PR_RUN_DIR" 2>/dev/null; exit 1; }
+import json, os, sys
+state_path, template_path, prompt_path, branch, base, base_ref, run_dir, commits, tasks_path, script_dir = sys.argv[1:11]
+sys.path.insert(0, script_dir)
+import tasklib
 commits = [c for c in commits.split() if c]
 with open(state_path, encoding='utf-8') as f:
     tasks = json.load(f)['tasks']
 selected = []
+selected_ids = []
 for t in tasks:
     c = t.get('commit')
     if t.get('status') == 'done' and c and any(h.startswith(c) for h in commits):
         selected.append('- ' + t['id'] + ': ' + t['title'] + ' (commit ' + c + ')')
+        selected_ids.append(t['id'])
 if not selected:
     print('No done tasks whose commit is in ' + base_ref + '..HEAD (nothing to include in the PR)', file=sys.stderr)
     sys.exit(1)
+req_lines = []
+if os.path.isfile(tasks_path):
+    with open(tasks_path, encoding='utf-8', newline='') as f:
+        content = f.read()
+    try:
+        req_lines = tasklib.pr_requirement_lines(tasklib.parse_tasks(content), content, selected_ids)
+    except tasklib.TaskFileError as e:
+        print(str(e), file=sys.stderr)
+        sys.exit(1)
+requirement_list = '\n'.join(req_lines) if req_lines else \
+    '- なし(tasks.md に要件の節が無い、またはこの PR のタスクに対応する要件が無い)'
 with open(template_path, encoding='utf-8') as f:
     text = f.read()
-for key, value in (('{task_list}', '\n'.join(selected)), ('{branch}', branch),
+for key, value in (('{task_list}', '\n'.join(selected)), ('{requirement_list}', requirement_list), ('{branch}', branch),
                    ('{base_branch}', base), ('{base_ref}', base_ref), ('{run_dir}', run_dir)):
     text = text.replace(key, value)
 with open(prompt_path, 'w', encoding='utf-8', newline='\n') as f:
@@ -191,6 +207,134 @@ if unknown:
 print(','.join(deps))
 PY
 ) || exit 1
+
+# --- 作業量のしきい値(config.json の task_sizing。値が無ければ既定値、不正値は警告して既定値) ---
+SIZING=$(python3 - "$CONFIG_PATH_PY" <<'PY' | tr -d '\r'
+import json, sys
+defaults = [('max_acceptance_criteria', 5), ('max_changed_files', 3), ('max_reference_files', 5)]
+try:
+    with open(sys.argv[1], encoding='utf-8') as f:
+        ts = json.load(f).get('task_sizing') or {}
+except Exception:
+    ts = {}
+if not isinstance(ts, dict):
+    ts = {}
+vals = []
+for key, d in defaults:
+    v = ts.get(key)
+    if v is not None and (isinstance(v, bool) or not isinstance(v, int) or v < 1):
+        print('WARN: config task_sizing.' + key + ' is not a positive integer (using ' + str(d) + ')', file=sys.stderr)
+        v = None
+    vals.append(d if v is None else v)
+print(' '.join(str(v) for v in vals))
+PY
+)
+read -r MAX_AC MAX_CHANGED MAX_REFS <<< "$SIZING"
+
+# --- 参照ファイル欄の検証 ---
+# `- **参照ファイル**:` の下の箇条書き(`` - `<パス>` `` + 任意の説明。`<パス>:10-40` のような
+# 行範囲は可)を、子が最初に読むファイルとして扱う。存在しないパスはエラー、欄が無い・
+# しきい値(max_reference_files)を超える場合は警告のみ。値に `なし` と書いた場合は検証しない。
+python3 - "$TASK_ID" "$TASK_SECTION" "$MAX_REFS" <<'PY' || exit 1
+import os, re, sys
+task_id, section = sys.argv[1:3]
+max_refs = int(sys.argv[3])
+lines = section.split('\n')
+field_re = re.compile(r'^(\s*)-\s+\*\*参照ファイル\*\*:\s*(.*?)\s*$')
+start = None
+for i, line in enumerate(lines):
+    m = field_re.match(line)
+    if m:
+        start, indent, inline = i, len(m.group(1)), m.group(2)
+        break
+if start is None:
+    print('WARN: ' + task_id + ": no '- **参照ファイル**:' field (the child may read many files before starting)", file=sys.stderr)
+    sys.exit(0)
+if inline == 'なし':
+    sys.exit(0)
+# 同じ行に書かれたパス(`- **参照ファイル**: `a.txt`, `b.sh``)も受け付ける
+paths = [re.sub(r':\d+(-\d+)?$', '', p) for p in re.findall(r'`([^`]+)`', inline)]
+for line in lines[start + 1:]:
+    if not line.strip():
+        continue
+    if len(line) - len(line.lstrip()) <= indent:
+        break
+    m = re.match(r'^\s*-\s+`([^`]+)`', line)
+    if m:
+        paths.append(re.sub(r':\d+(-\d+)?$', '', m.group(1)))
+if not paths:
+    print(task_id + ": '- **参照ファイル**:' has no items (write '- `<path>`' items below the field or `<path>` on the same line, or 'なし')", file=sys.stderr)
+    sys.exit(1)
+missing = [p for p in paths if not os.path.exists(p)]
+if missing:
+    print(task_id + ': reference file(s) not found: ' + ', '.join(missing), file=sys.stderr)
+    sys.exit(1)
+if len(paths) > max_refs:
+    print('WARN: ' + task_id + ': ' + str(len(paths)) + ' reference files (keep it to a few)', file=sys.stderr)
+PY
+
+# --- 作業量の警告(タスクが1応答で処理しきれなそうなら計画の段階で気付けるようにする) ---
+# 1) 受け入れ基準がしきい値(max_acceptance_criteria)を超える、2) (変更対象)の参照ファイルが
+# しきい値(max_changed_files)を超える。どちらも警告のみで生成は続ける。
+python3 - "$TASK_ID" "$TASK_SECTION" "$MAX_AC" "$MAX_CHANGED" <<'PY' || exit 1
+import re, sys
+task_id, section = sys.argv[1:3]
+max_ac, max_changed = int(sys.argv[3]), int(sys.argv[4])
+lines = section.split('\n')
+
+def field_start(field):
+    field_re = re.compile(r'^(\s*)-\s+\*\*' + re.escape(field) + r'\*\*:\s*(.*?)\s*$')
+    for i, line in enumerate(lines):
+        m = field_re.match(line)
+        if m:
+            return i, len(m.group(1)), m.group(2)
+    return None
+
+# 受け入れ基準の件数
+fs = field_start('受け入れ基準')
+if fs is not None:
+    start_i, indent, inline = fs
+    count = 0
+    for line in lines[start_i + 1:]:
+        if not line.strip():
+            continue
+        if len(line) - len(line.lstrip()) <= indent:
+            break
+        if re.match(r'^\s*-\s+\[[ xX]\]', line):
+            count += 1
+    if count > max_ac:
+        print('WARN: ' + task_id + ': ' + str(count) + ' acceptance criteria (more than ' + str(max_ac) + '; consider splitting the task)', file=sys.stderr)
+
+def field_body(field):
+    fs = field_start(field)
+    if fs is None:
+        return
+    start_i, indent, inline = fs
+    yield inline
+    for line in lines[start_i + 1:]:
+        if not line.strip():
+            continue
+        if len(line) - len(line.lstrip()) <= indent:
+            break
+        yield line
+
+count = 0
+for line in field_body('参照ファイル'):
+    count += len(re.findall(r'[(（]変更対象', line))
+if count > max_changed:
+    print('WARN: ' + task_id + ': ' + str(count) + ' reference files marked 変更対象 (more than ' + str(max_changed) + '; consider splitting the task)', file=sys.stderr)
+PY
+
+# --- AGENTS.md が @ 参照だけのファイルなら警告する(プロファイルの agents_md_imports が false の子CLIは @ を展開しないため、子にルールが届かない) ---
+if [ -f AGENTS.md ] && ! awk '/[^[:space:]]/ && !/^[[:space:]]*@/ { found = 1; exit } END { exit !found }' AGENTS.md; then
+    # 解決に失敗しても prompt-gen は止めず、展開しない(false)とみなす
+    PROFILE_OUT=$(python3 "$(to_py_path "$SCRIPT_DIR/childprofile.py")" . 2>/dev/null | tr -d '\r') || PROFILE_OUT=""
+    PROFILE_NAME=$(printf '%s\n' "$PROFILE_OUT" | sed -n '1p')
+    PROFILE_IMPORTS=$(printf '%s\n' "$PROFILE_OUT" | sed -n '7p')
+    if [ "$PROFILE_IMPORTS" != "true" ]; then
+        echo "WARN: AGENTS.md only contains '@' references; the child CLI (profile: ${PROFILE_NAME:-unknown}) does not expand them, so the child cannot read the rules" >&2
+    fi
+fi
 
 # --- Handoff guard ---
 if [ -n "$DEPS" ]; then
@@ -304,17 +448,21 @@ import json, sys
 with open(sys.argv[1], encoding='utf-8') as f:
     cfg = json.load(f)
 lines = []
+cmds = []
 qg = cfg.get('quality_gate') or {}
 cdc = (qg.get('child_dispatch_command') or '').strip()
 if cdc:
     lines.append('- ' + cdc)
+    cmds.append(cdc)
 else:
     for step in qg.get('steps') or []:
         cmd = (step.get('command') or '').strip()
         if step.get('blocking') and cmd:
             lines.append('- ' + step.get('name', 'check') + ': ' + cmd)
+            cmds.append(cmd)
+# 同じコマンドを2回載せない(子が別物と誤解して迷わないように)
 tc = (cfg.get('test_command') or '').strip()
-if tc:
+if tc and tc not in cmds:
     lines.append('- ' + tc)
 print('\n'.join(lines))
 PY

@@ -9,14 +9,19 @@ set -uo pipefail
 #   - git status --porcelain が空であること
 # gh pr view <state.json の branch> --json state,url の結果で分岐する:
 #   - PR なし(gh が「no pull requests found」で失敗)→ stdout "NO_PR"、exit 7(親は PR 作成へ)
-#   - OPEN   → stdout "OPEN <PR URL>"、exit 8(マージ待ち。親は報告して停止)
+#   - OPEN   → stdout "OPEN <PR URL>"、exit 8(マージ待ち。親は報告して停止)。
+#              ただしローカルのブランチに origin/<branch> へ未 push のコミットがある、または
+#              origin/<branch> が無い場合は exit 10(PR の更新へ。fetch はしない)
 #   - CLOSED → PR がマージされずに閉じている。stderr に説明、exit 9(エスカレーション)
 #   - MERGED → main を最新化(git switch main + git pull --ff-only)し、--branch で指定した
 #              名前(develop/ 始まり。必須)のブランチを作成・切替。state.json の branch を
 #              新ブランチ名、group を次のグループ(未完了タスクを含む最初のグループ)に更新
 #              して exit 0。stdout に "ADVANCED <新ブランチ名> <新グループ名>"
-# exit: 0=切替完了 / 1=使い方・前提不備 / 7=PR 未作成 / 8=マージ待ち / 9=PR 閉鎖(未マージ)
+# exit: 0=切替完了 / 1=使い方・前提不備 / 7=PR 未作成 / 8=マージ待ち / 9=PR 閉鎖(未マージ) /
+#       10=PR 更新が必要(OPEN で未 push のコミットがある、または origin/<branch> が無い)
 #       git / gh の失敗時は何も書き換えず、その exit code を返す
+# stdout の最後の行は次アクションを示す "Next:" 行(0=continue / 7=create-pr / 8=wait-merge /
+# 9=escalate reason=pr-closed / 10=update-pr)。1 と git / gh の失敗をそのまま返す exit では出力しない
 
 export PYTHONUTF8=1
 export PYTHONIOENCODING=utf-8
@@ -173,6 +178,7 @@ if [ "$GH_CODE" -ne 0 ]; then
     GH_ERR="$(cat "$GH_ERR_FILE")"
     if printf '%s' "$GH_ERR" | grep -qi 'no pull request'; then
         echo "NO_PR"
+        echo "Next: create-pr"
         exit 7
     fi
     echo "gh pr view failed (exit $GH_CODE): $GH_ERR" >&2
@@ -193,13 +199,34 @@ PR_URL="${PR_INFO#* }"
 
 case "$PR_STATE" in
     OPEN)
+        # 未 push のコミットがあれば既存 PR の更新を促す(fetch はせず、リモート追跡ブランチと比べる)
+        REMOTE_REF="refs/remotes/origin/$STATE_BRANCH"
+        if ! git rev-parse --verify --quiet "$REMOTE_REF" > /dev/null; then
+            echo "OPEN $PR_URL"
+            echo "'origin/$STATE_BRANCH' not found (the branch is not pushed from this clone; push it and update the PR)" >&2
+            echo "Next: update-pr"
+            exit 10
+        fi
+        UNPUSHED="$(git rev-list --count "$REMOTE_REF..refs/heads/$STATE_BRANCH" 2>&1)"
+        GIT_CODE=$?
+        if [ "$GIT_CODE" -ne 0 ]; then
+            echo "git rev-list failed (exit $GIT_CODE): $UNPUSHED" >&2
+            exit "$GIT_CODE"
+        fi
         echo "OPEN $PR_URL"
+        if [ "$UNPUSHED" -gt 0 ]; then
+            echo "$UNPUSHED commit(s) on '$STATE_BRANCH' are not pushed to 'origin/$STATE_BRANCH' (push them and update the PR)" >&2
+            echo "Next: update-pr"
+            exit 10
+        fi
+        echo "Next: wait-merge"
         exit 8
         ;;
     MERGED)
         ;;  # 後続の切替処理に進む
     CLOSED)
         echo "PR for '$STATE_BRANCH' is CLOSED without merging (escalate: check why it was closed, then reopen or recreate the PR)" >&2
+        echo "Next: escalate reason=pr-closed"
         exit 9
         ;;
     *)
@@ -260,4 +287,31 @@ then
     exit 1
 fi
 
+STATE_REL=".agents/workflow/state.json"
+STATE_COMMIT="none"
+if ! git check-ignore -q "$STATE_REL"; then
+    if [ -n "$NEXT_GROUP" ]; then
+        COMMIT_MSG="chore: $NEXT_GROUP グループの作業を開始"
+    else
+        COMMIT_MSG="chore: 既定グループの作業を開始"
+    fi
+    git add -- "$STATE_REL" 2> "$GIT_ERR_FILE"
+    GIT_CODE=$?
+    if [ "$GIT_CODE" -ne 0 ]; then
+        echo "git add '$STATE_REL' failed (exit $GIT_CODE): $(cat "$GIT_ERR_FILE")" >&2
+        exit 1
+    fi
+    if ! git diff --cached --quiet -- "$STATE_REL"; then
+        git commit -q -m "$COMMIT_MSG" > /dev/null 2> "$GIT_ERR_FILE"
+        GIT_CODE=$?
+        if [ "$GIT_CODE" -ne 0 ]; then
+            echo "git commit failed (exit $GIT_CODE): $(cat "$GIT_ERR_FILE")" >&2
+            exit 1
+        fi
+        STATE_COMMIT="$(git rev-parse --short=7 HEAD)"
+    fi
+fi
+
 echo "ADVANCED $NEW_BRANCH $NEXT_GROUP"
+echo "State commit: $STATE_COMMIT"
+echo "Next: continue"

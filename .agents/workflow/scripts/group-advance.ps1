@@ -6,14 +6,19 @@
 #   - git status --porcelain が空であること
 # gh pr view <state.json の branch> --json state,url の結果で分岐する:
 #   - PR なし(gh が「no pull requests found」で失敗)→ stdout "NO_PR"、exit 7(親は PR 作成へ)
-#   - OPEN   → stdout "OPEN <PR URL>"、exit 8(マージ待ち。親は報告して停止)
+#   - OPEN   → stdout "OPEN <PR URL>"、exit 8(マージ待ち。親は報告して停止)。ただしローカルの
+#              ブランチに origin/<branch> へ未 push のコミットがある、または origin/<branch> が
+#              無ければ exit 10(Next: update-pr)
 #   - CLOSED → PR がマージされずに閉じている。stderr に説明、exit 9(エスカレーション)
 #   - MERGED → main を最新化(git switch main + git pull --ff-only)し、-Branch で指定した
 #              名前(develop/ 始まり。必須)のブランチを作成・切替。state.json の branch を
 #              新ブランチ名、group を次のグループ(未完了タスクを含む最初のグループ)に更新
 #              して exit 0。stdout に "ADVANCED <新ブランチ名> <新グループ名>"
-# exit: 0=切替完了 / 1=使い方・前提不備 / 7=PR 未作成 / 8=マージ待ち / 9=PR 閉鎖(未マージ)
+# exit: 0=切替完了 / 1=使い方・前提不備 / 7=PR 未作成 / 8=マージ待ち / 9=PR 閉鎖(未マージ) /
+#       10=OPEN の PR に未 push のコミットあり(またはリモートのブランチ無し)
 #       git / gh の失敗時は何も書き換えず、その exit code を返す
+# stdout の最後の行は次アクションを示す "Next:" 行(0=continue / 7=create-pr / 8=wait-merge /
+# 9=escalate reason=pr-closed / 10=update-pr)。1 と git / gh の失敗をそのまま返す exit では出力しない
 param([string]$Branch)
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $OutputEncoding = [System.Text.Encoding]::UTF8
@@ -46,7 +51,7 @@ foreach ($p in @($tasksPath, $statePath)) {
 . "$PSScriptRoot/tasklib.ps1"
 
 # --- 前提チェック: 作業グループの完了判定(next-task と同じグループ判定) ---
-$lines = @(Split-TaskLines ([System.IO.File]::ReadAllText($tasksPath, [System.Text.Encoding]::UTF8)))
+$lines = @(Split-TaskLines ([System.IO.File]::ReadAllText((Join-Path (Get-Location) $tasksPath), [System.Text.Encoding]::UTF8)))
 $tasks = @(Read-TaskList $lines)
 try {
     [void](Resolve-TaskDeps $tasks -CheckCycles)
@@ -134,6 +139,7 @@ try {
         $ghErr = [System.IO.File]::ReadAllText($errFile)
         if ($ghErr -match '(?i)no pull request') {
             Write-Output 'NO_PR'
+            Write-Output 'Next: create-pr'
             exit 7
         }
         Fail "gh pr view failed (exit $ghCode): $ghErr" $ghCode
@@ -148,10 +154,29 @@ try {
     $prUrl = "$($pr.url)"
 
     if ($prState -ceq 'OPEN') {
+        # 未 push のコミットがあれば既存 PR の更新を促す(fetch はせず、リモート追跡ブランチと比べる)
+        $remoteRef = "refs/remotes/origin/$stateBranch"
+        & git rev-parse --verify --quiet $remoteRef *> $null
+        if ($LASTEXITCODE -ne 0) {
+            Write-Output "OPEN $prUrl"
+            [Console]::Error.WriteLine("'origin/$stateBranch' not found (the branch is not pushed from this clone; push it and update the PR)")
+            Write-Output 'Next: update-pr'
+            exit 10
+        }
+        $unpushed = (@(& git rev-list --count "$remoteRef..refs/heads/$stateBranch" 2>&1 | ForEach-Object { "$_" }) -join "`n").Trim()
+        $gitCode = $LASTEXITCODE
+        if ($gitCode -ne 0) { Fail "git rev-list failed (exit $gitCode): $unpushed" $gitCode }
         Write-Output "OPEN $prUrl"
+        if ([int]$unpushed -gt 0) {
+            [Console]::Error.WriteLine("$unpushed commit(s) on '$stateBranch' are not pushed to 'origin/$stateBranch' (push them and update the PR)")
+            Write-Output 'Next: update-pr'
+            exit 10
+        }
+        Write-Output 'Next: wait-merge'
         exit 8
     }
     if ($prState -ceq 'CLOSED') {
+        Write-Output 'Next: escalate reason=pr-closed'
         Fail "PR for '$stateBranch' is CLOSED without merging (escalate: check why it was closed, then reopen or recreate the PR)" 9
     }
     if ($prState -cne 'MERGED') {
@@ -183,8 +208,31 @@ try {
     Set-StateField $state 'updated_at' (Get-Date).ToString('yyyy-MM-ddTHH:mm:sszzz')
     [System.IO.File]::WriteAllText((Join-Path (Get-Location) $statePath), ($state | ConvertTo-Json -Depth 10) + "`n", [System.Text.UTF8Encoding]::new($false))
 
+    $stateRel = '.agents/workflow/state.json'
+    $stateCommit = 'none'
+    & git check-ignore -q $stateRel 1> $null 2> $null
+    if ($LASTEXITCODE -ne 0) {
+        if ($nextGroup) {
+            $commitMsg = "chore: $nextGroup グループの作業を開始"
+        } else {
+            $commitMsg = 'chore: 既定グループの作業を開始'
+        }
+        & git add -- $stateRel 1> $null 2> $errFile
+        $gitCode = $LASTEXITCODE
+        if ($gitCode -ne 0) { Fail "git add '$stateRel' failed (exit $gitCode): $([System.IO.File]::ReadAllText($errFile))" 1 }
+        & git diff --cached --quiet -- $stateRel 1> $null 2> $null
+        if ($LASTEXITCODE -ne 0) {
+            & git commit -q -m $commitMsg 1> $null 2> $errFile
+            $gitCode = $LASTEXITCODE
+            if ($gitCode -ne 0) { Fail "git commit failed (exit $gitCode): $([System.IO.File]::ReadAllText($errFile))" 1 }
+            $stateCommit = ("$(git rev-parse --short=7 HEAD)").Trim()
+        }
+    }
+
     Write-Output "ADVANCED $Branch $nextGroup"
-    exit 0
+    Write-Output "State commit: $stateCommit"
+    Write-Output 'Next: continue'
 } finally {
     Remove-Item $errFile -Force -ErrorAction SilentlyContinue
 }
+exit 0

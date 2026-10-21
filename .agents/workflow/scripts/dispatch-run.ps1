@@ -2,6 +2,7 @@
     [Parameter(Mandatory = $true)][string]$TaskId,
     [int]$Attempt = 1
 )
+. "$PSScriptRoot/childprofile.ps1"
 # パスや埋め込みに使うため、タスクIDと試行回数の形式を検証する
 if ($TaskId -cnotmatch '^[A-Za-z0-9_-]+$' -or $Attempt -lt 1) {
     [Console]::Error.WriteLine("Invalid TaskId/Attempt: '$TaskId' '$Attempt'")
@@ -15,8 +16,21 @@ $null = New-Item -ItemType Directory -Force $runDir
 $logPath = "$runDir/output.log"
 $jsonlPath = "$runDir/output.jsonl"
 $donePath = "$runDir/done"
-Remove-Item -Force -ErrorAction SilentlyContinue $donePath
+# ログの無更新監視で子を止めたときに記録するファイル(#53)
+$idlePath = "$runDir/idle-timeout"
+Remove-Item -Force -ErrorAction SilentlyContinue $donePath, $idlePath
 $promptPath = "$runDir/prompt.md"
+# 子が管理ファイルを変更・削除していないかを dispatch-check が確かめられるよう、起動時の
+# SHA-256 を記録する(存在しないファイルは "-")。形式は sha256sum と同じ "<hash>  <path>"
+$guardLines = foreach ($f in @($promptPath, '.agents/workflow/state.json', '.agents/workflow/tasks.md', '.agents/workflow/config.json', '.agents/workflow/child-profiles.json')) {
+    $h = if (Test-Path -LiteralPath $f -PathType Leaf) { (Get-FileHash -LiteralPath $f -Algorithm SHA256).Hash.ToLowerInvariant() } else { '-' }
+    "$h  $f"
+}
+[System.IO.File]::WriteAllText((Join-Path (Get-Location) "$runDir/guard.sha256"), (($guardLines -join "`n") + "`n"), [System.Text.UTF8Encoding]::new($false))
+# 起動時の git 状態(HEAD・ブランチ・参照・設定)を git-state.txt に記録する。dispatch-check が
+# 実行後の状態と比べて、子がリポジトリのどこを変えたかを特定する(失敗しても起動は止めない)
+$gitState = & pwsh -NoProfile -File "$PSScriptRoot/git-state.ps1"
+[System.IO.File]::WriteAllText((Join-Path (Get-Location) "$runDir/git-state.txt"), (($gitState -join "`n") + "`n"), [System.Text.UTF8Encoding]::new($false))
 $prompt = Get-Content $promptPath -Raw
 $config = Get-Content ".agents/workflow/config.json" -Raw | ConvertFrom-Json
 # child_agent.isolate_xdg が true のときだけ、子CLIの設定・データの置き場所をプロジェクト内に切り替える
@@ -46,6 +60,11 @@ function Split-CommandLine {
     return $tokens
 }
 
+# ファイル編集ツールの本文(書き込む内容)は [tool_use] 行から外す。本文に書かれたパスの文字列を
+# dispatch-check が誤検知するため。全文は output.jsonl に残る
+$script:FileEditTools = @('Edit', 'Write', 'MultiEdit', 'NotebookEdit')
+$script:FileEditBodyKeys = @('old_string', 'new_string', 'content', 'edits', 'new_source')
+
 function ConvertTo-HumanLine {
     param($obj)
     switch ($obj.type) {
@@ -55,7 +74,11 @@ function ConvertTo-HumanLine {
                 switch ($block.type) {
                     'text' { $lines += $block.text }
                     'tool_use' {
-                        $inputJson = ($block.input | ConvertTo-Json -Compress -Depth 5)
+                        $toolInput = $block.input
+                        if (($script:FileEditTools -ccontains $block.name) -and ($toolInput -is [System.Management.Automation.PSCustomObject])) {
+                            $toolInput = $toolInput | Select-Object -Property * -ExcludeProperty $script:FileEditBodyKeys
+                        }
+                        $inputJson = ($toolInput | ConvertTo-Json -Compress -Depth 5)
                         if ($inputJson.Length -gt 300) { $inputJson = $inputJson.Substring(0, 300) + "...(truncated)" }
                         $lines += "[tool_use] $($block.name): $inputJson"
                     }
@@ -91,20 +114,71 @@ function ConvertTo-HumanLine {
     }
 }
 
+# 子の一時ファイルをプロジェクト内(runs/<ID>-<試行>/tmp/)に置かせ、そこで実行された git が
+# 本物のリポジトリにたどり着かないようにする(#46)。git は ceiling と同じディレクトリが
+# カレントのときは探索を止めないため、tmp/ の親(runs/<ID>-<試行>/)を上限にする
+$childTmp = Join-Path (Get-Location).Path "$runDir/tmp"
+$null = New-Item -ItemType Directory -Force $childTmp
+$childCeiling = Join-Path (Get-Location).Path $runDir
+# 子の起動中だけ TEMP 系環境変数を差し替えるため、元の値を保存してから設定する
+# 同じプロセス内で & dispatch-run.ps1 と呼ばれたとき(tests/test-exitcode.ps1 等)に呼び出し元に書き換えが
+# 残らないよう、finally で戻す(catch の exit 1 でも実行される)
+$savedEnv = @{}
+foreach ($name in @('TMPDIR', 'TEMP', 'TMP', 'GIT_CEILING_DIRECTORIES')) {
+    $savedEnv[$name] = [System.Environment]::GetEnvironmentVariable($name)
+    $value = if ($name -eq 'GIT_CEILING_DIRECTORIES') { $childCeiling } else { $childTmp }
+    [System.Environment]::SetEnvironmentVariable($name, $value)
+}
+
+$watchdog = $null
 try {
-    $tokens = Split-CommandLine $config.child_agent.command_template
-    $isStreamJson = $config.child_agent.command_template -match 'stream-json'
+    # ログ(output.log)が idle_timeout_seconds 更新されなければ子を止め、idle-timeout ファイルに記録する(#53)。
+    # thread ジョブ内で 1 秒ごとにログの更新時刻を見て、このプロセスの子(CLI)を孫プロセスごと止める(Kill($true))
+    $idleTimeout = [double]($config.child_agent.idle_timeout_seconds)
+    if ($idleTimeout -gt 0) {
+        $watchdog = Start-ThreadJob -ArgumentList $PID, (Join-Path (Get-Location) $logPath), (Join-Path (Get-Location) $idlePath), $idleTimeout -ScriptBlock {
+            param($ParentPid, $LogPath, $MarkerPath, $IdleSeconds)
+            $start = Get-Date
+            while ($true) {
+                Start-Sleep -Seconds 1
+                $last = $start
+                if (Test-Path -LiteralPath $LogPath) {
+                    $t = (Get-Item -LiteralPath $LogPath).LastWriteTime
+                    if ($t -gt $last) { $last = $t }
+                }
+                if (((Get-Date) - $last).TotalSeconds -ge $IdleSeconds) {
+                    Set-Content -LiteralPath $MarkerPath -Value ([int]$IdleSeconds) -Encoding utf8
+                    Get-Process | Where-Object { $_.Parent -and $_.Parent.Id -eq $ParentPid } | ForEach-Object { $_.Kill($true) }
+                    break
+                }
+            }
+        }
+    }
+    try {
+        $childProfile = Get-ChildProfile -Root (Get-Location).Path
+    } catch {
+        [System.IO.File]::WriteAllText((Join-Path (Get-Location) $logPath), "Child profile error: $($_.Exception.Message)`n", [System.Text.UTF8Encoding]::new($false))
+        $endTime = (Get-Date).ToString("o")
+        "EXIT:1`nEND:$endTime" | Out-File -Encoding utf8 $donePath
+        exit 0
+    }
+    $template = [string]$config.child_agent.command_template
+    $tokens = Split-CommandLine $template
+    $isStreamJson = $childProfile.OutputFormat -eq 'claude-stream-json'
+    $promptFile = [System.IO.Path]::GetFullPath((Join-Path (Get-Location).Path $promptPath)).Replace('\', '/')
+    # {prompt_file}・{prompt} のどちらも無いテンプレートは、プロンプトを stdin で渡す
+    $useStdin = -not ($template.Contains('{prompt_file}') -or $template.Contains('{prompt}'))
     $argList = @()
     foreach ($token in $tokens) {
         $arg = $token
         if ($arg.Length -ge 2 -and $arg[0] -eq '"' -and $arg[-1] -eq '"') {
             $arg = $arg.Substring(1, $arg.Length - 2)
         }
-        $arg = $arg.Replace("{prompt}", $prompt)
+        $arg = $arg.Replace("{prompt_file}", $promptFile).Replace("{prompt}", $prompt)
         $argList += $arg
     }
     $exe = $argList[0]
-    $rest = if ($argList.Count -gt 1) { $argList[1..($argList.Count - 1)] } else { @() }
+    $rest = @(if ($argList.Count -gt 1) { $argList[1..($argList.Count - 1)] })
 
     if ($isStreamJson) {
         Remove-Item -Force -ErrorAction SilentlyContinue $jsonlPath, $logPath
@@ -118,6 +192,7 @@ try {
         $psi.UseShellExecute = $false
         $psi.StandardOutputEncoding = [System.Text.Encoding]::UTF8
         $psi.StandardErrorEncoding = [System.Text.Encoding]::UTF8
+        if ($useStdin) { $psi.StandardInputEncoding = [System.Text.UTF8Encoding]::new($false) }
 
         $proc = New-Object System.Diagnostics.Process
         $proc.StartInfo = $psi
@@ -130,10 +205,19 @@ try {
         }
         $errJob = Register-ObjectEvent -InputObject $proc -EventName ErrorDataReceived -Action $errAction -MessageData $logPath
 
+        $stdinJob = $null
         try {
             $proc.Start() | Out-Null
-            $proc.StandardInput.Close()
             $proc.BeginErrorReadLine()
+            if ($useStdin) {
+                # 子が stdin を読み切る前に stderr / stdout へ大量に書いても止まらないよう、別スレッドで書き込む
+                $stdinJob = Start-ThreadJob -ArgumentList $proc.StandardInput, $prompt -ScriptBlock {
+                    param($Writer, $Text)
+                    try { $Writer.Write($Text) } catch { } finally { try { $Writer.Close() } catch { } }
+                }
+            } else {
+                $proc.StandardInput.Close()
+            }
 
             while ($null -ne ($line = $proc.StandardOutput.ReadLine())) {
                 Add-Content -Path $jsonlPath -Value $line -Encoding utf8
@@ -149,17 +233,24 @@ try {
             $proc.WaitForExit()
             $exitCode = $proc.ExitCode
         } finally {
+            if ($stdinJob) {
+                Wait-Job $stdinJob | Out-Null
+                Remove-Job $stdinJob -Force -ErrorAction SilentlyContinue
+            }
             Unregister-Event -SourceIdentifier $errJob.Name -ErrorAction SilentlyContinue
             Remove-Job -Id $errJob.Id -Force -ErrorAction SilentlyContinue
         }
     } else {
+        $stdinText = if ($useStdin) { $prompt } else { $null }
         if ($rest.Count -gt 0) {
-            $null | & $exe @rest *> $logPath
+            $stdinText | & $exe @rest *> $logPath
         } else {
-            $null | & $exe *> $logPath
+            $stdinText | & $exe *> $logPath
         }
         $exitCode = if ($null -ne $LASTEXITCODE) { $LASTEXITCODE } else { 0 }
     }
+    # シグナル死(監視で止めた子は非0で終わる)より idle-timeout を優先する(idle-timeout ファイルは記録として残す)
+    if (Test-Path -LiteralPath $idlePath -PathType Leaf) { $exitCode = 'idle-timeout' }
     $endTime = (Get-Date).ToString("o")
     "EXIT:$exitCode`nEND:$endTime" | Out-File -Encoding utf8 $donePath
 } catch {
@@ -167,6 +258,20 @@ try {
     "EXIT:crashed:$($_.Exception.Message)`nEND:$endTime" | Out-File -Encoding utf8 $donePath
     # ラッパー自体の異常終了(子の終了コードは done マーカーに記録済み)
     exit 1
+} finally {
+    # 子が先に終わったときは監視スレッドジョブを止める
+    if ($watchdog) {
+        Stop-Job $watchdog -ErrorAction SilentlyContinue
+        Remove-Job $watchdog -Force -ErrorAction SilentlyContinue
+    }
+    # 子の起動前に保存した TEMP 系環境変数の値に戻す(元が無ければ変数自体を消す)
+    foreach ($name in $savedEnv.Keys) {
+        if ($null -eq $savedEnv[$name]) {
+            Remove-Item "Env:$name" -ErrorAction SilentlyContinue
+        } else {
+            Set-Item -Path "Env:$name" -Value $savedEnv[$name]
+        }
+    }
 }
 # 子の終了コードは done マーカーに記録する。ラッパー自体は正常に終わったので 0 を返す
 # (exit を呼ばないと、PowerShell セッション内で直接呼んだときに $LASTEXITCODE が更新されない)
