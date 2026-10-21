@@ -29,8 +29,9 @@ export const CFG = {
   DIET_PEAK: 0.6,      // 得意な食べ物で上乗せされる効率
   DIET_WIDTH: 0.35,    // 得意の幅
   DIET_SENSE: 0.8,     // これより効率の低い植物は「食べ物」として感じ取らない
-  // 適温（遺伝子 topt）。topt ± COMFORT の外で寒さ・暑さのコストがかかる
-  COMFORT: 12,
+  // 適温（遺伝子 topt）と耐温幅（遺伝子 tTol）。topt ± tTol の外で寒さ・暑さのコストがかかる
+  COMFORT: 12,         // tTol を持たない古いゲノムの既定値
+  TTOL_COST: 0.012,    // 耐温幅 tTol が 1 広いほど基礎代謝がこの割合だけ増える
   // 密集：半径 CROWD_R 内の同種が CROWD_FREE 体を超えると、1体ごとに基礎代謝が CROWD_K 倍ずつ増える
   CROWD_R: 6,
   CROWD_FREE: 6,
