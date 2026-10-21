@@ -28,5 +28,17 @@
   "upstream": {
     "url": "https://github.com/Musasaby/multi-ai-agents-workflow.git",
     "branch": "main"
+  },
+  "text_refine": {
+    "skill": "yomiyasu",
+    "targets": [
+      "summary",
+      "confirm",
+      "commit",
+      "pr_body",
+      "task_done",
+      "tasks"
+    ],
+    "reader": "informed"
   }
 }

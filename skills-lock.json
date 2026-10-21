@@ -54,6 +54,12 @@
       "sourceType": "github",
       "skillPath": "workflow-update/SKILL.md",
       "computedHash": "0569ea1077a413db7081c8a3430a1cd008e43a820fe7b51c12548a4c4c955dc9"
+    },
+    "yomiyasu": {
+      "source": "nanaism/yomiyasu",
+      "sourceType": "github",
+      "skillPath": "skills/yomiyasu/SKILL.md",
+      "computedHash": "2dc806e9c3e867d99cc78be0483742e09d5c6ceeeed798e3ead868db1544e349"
     }
   }
 }
