@@ -6,7 +6,8 @@ if ! [[ "$TASK_ID" =~ ^[A-Za-z0-9_-]+$ ]] || ! [[ "$ATTEMPT" =~ ^[0-9]+$ ]]; the
   echo "Invalid TaskId/Attempt: '$TASK_ID' '$ATTEMPT'" >&2
   exit 1
 fi
-cd "$(dirname "$0")/../../.."
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$SCRIPT_DIR/../../.."
 # child_agent.isolate_xdg が true のときだけ、子CLIの設定・データの置き場所をプロジェクト内に切り替える
 # (sandbox で ~/.config 等に書けない環境向け)。既定(未指定・false)は呼び出し元の XDG をそのまま使う。
 # 切り替えると ~/.local/share/<CLI>/auth.json 等の認証情報が見えなくなる点に注意。
@@ -22,28 +23,76 @@ if [ "$ISOLATE_XDG" = true ]; then
 fi
 RUN_DIR=".agents/workflow/runs/${TASK_ID}-${ATTEMPT}"
 mkdir -p "$RUN_DIR"
+# 子の一時ファイルをプロジェクト内(runs/<ID>-<試行>/tmp/)に置かせ、そこで実行された git が
+# 本物のリポジトリにたどり着かないようにする(#46)。git は ceiling と同じディレクトリが
+# カレントのときは探索を止めないため、tmp/ の親(runs/<ID>-<試行>/)を上限にする
+CHILD_TMP="$(pwd)/$RUN_DIR/tmp"
+mkdir -p "$CHILD_TMP"
+CHILD_CEILING="$(pwd)/$RUN_DIR"
+# Windows ネイティブの子プロセスは /c/... 形式を解釈できないため C:/... 形式にする
+if command -v cygpath > /dev/null 2>&1; then
+  CHILD_TMP="$(cygpath -m "$CHILD_TMP")"
+  CHILD_CEILING="$(cygpath -m "$CHILD_CEILING")"
+fi
+export TMPDIR="$CHILD_TMP" TEMP="$CHILD_TMP" TMP="$CHILD_TMP" GIT_CEILING_DIRECTORIES="$CHILD_CEILING"
 LOG_PATH="$RUN_DIR/output.log"
 JSONL_PATH="$RUN_DIR/output.jsonl"
 DONE_PATH="$RUN_DIR/done"
 # 子がシグナルで終了した場合に Python ラッパーがシグナル番号を書き出すファイル
 SIGNAL_PATH="$RUN_DIR/exit-signal"
-rm -f "$DONE_PATH" "$SIGNAL_PATH"
+# ログが idle_timeout_seconds 更新されず子を止めたときに記録するファイル(#53)
+IDLE_PATH="$RUN_DIR/idle-timeout"
+rm -f "$DONE_PATH" "$SIGNAL_PATH" "$IDLE_PATH"
 PROMPT_PATH="$RUN_DIR/prompt.md"
+
+# 子が管理ファイルを変更・削除していないかを dispatch-check が確かめられるよう、起動時の
+# SHA-256 を記録する(存在しないファイルは "-")。形式は sha256sum と同じ "<hash>  <path>"
+GUARD_PATH="$RUN_DIR/guard.sha256"
+: > "$GUARD_PATH"
+for f in "$PROMPT_PATH" .agents/workflow/state.json .agents/workflow/tasks.md .agents/workflow/config.json .agents/workflow/child-profiles.json; do
+  if [ ! -f "$f" ]; then
+    h=-
+  elif command -v sha256sum > /dev/null 2>&1; then
+    h=$(sha256sum "$f" | cut -d' ' -f1)
+  else
+    h=$(shasum -a 256 "$f" | cut -d' ' -f1)
+  fi
+  printf '%s  %s\n' "$h" "$f" >> "$GUARD_PATH"
+done
+
+# 起動時の git 状態(HEAD・ブランチ・参照・設定)を git-state.txt に記録する。dispatch-check が
+# 実行後の状態と比べて、子がリポジトリのどこを変えたかを特定する(失敗しても起動は止めない)。
+# 実行権限に頼らず bash で呼ぶ(リポジトリ上のスクリプトは mode 100644 のため)
+bash "$SCRIPT_DIR/git-state.sh" > "$RUN_DIR/git-state.txt"
 
 CMD_TEMPLATE=$(jq -r '.child_agent.command_template' .agents/workflow/config.json 2>/dev/null || \
   python3 -c "import json; print(json.load(open('.agents/workflow/config.json'))['child_agent']['command_template'])" 2>/dev/null || \
   sed -n 's/.*"command_template"[[:space:]]*:[[:space:]]*"\(.*\)"[[:space:]]*,\{0,1\}[[:space:]]*$/\1/p' .agents/workflow/config.json | sed 's/\\"/"/g')
 
+SCRIPT_DIR_PY="$SCRIPT_DIR"
+if command -v cygpath > /dev/null 2>&1; then
+  SCRIPT_DIR_PY="$(cygpath -m "$SCRIPT_DIR")"
+fi
+
 if command -v python3 > /dev/null 2>&1; then
   python3 -c "
-import json, subprocess, sys, shlex
+import json, subprocess, sys, shlex, os, threading, time, signal
+sys.dont_write_bytecode = True
+sys.path.insert(0, '$SCRIPT_DIR_PY')
+import childprofile
 
 with open('.agents/workflow/config.json', encoding='utf-8') as f:
-    tmpl = json.load(f)['child_agent']['command_template']
+    cfg = json.load(f)['child_agent']
+tmpl = cfg['command_template']
+# ログの無更新監視のしきい値。未指定・0 以下は無効(#53)
+idle_timeout = float(cfg.get('idle_timeout_seconds') or 0)
 with open('$PROMPT_PATH', encoding='utf-8') as f:
     prompt = f.read()
+prompt_file = os.path.abspath('$PROMPT_PATH').replace(os.sep, '/')
 tokens = shlex.split(tmpl)
-tokens = [t.replace('{prompt}', prompt) if '{prompt}' in t else t for t in tokens]
+tokens = [t.replace('{prompt_file}', prompt_file).replace('{prompt}', prompt) for t in tokens]
+# {prompt_file}・{prompt} のどちらも無いテンプレートは、プロンプトを stdin で渡す
+use_stdin = '{prompt_file}' not in tmpl and '{prompt}' not in tmpl
 
 log_path = '$LOG_PATH'
 signal_path = '$SIGNAL_PATH'
@@ -57,10 +106,64 @@ def finish(returncode):
         sys.exit(128 - returncode)
     sys.exit(returncode)
 
-is_stream = 'stream-json' in tmpl
+idle_path = '$IDLE_PATH'
+
+def start_watchdog(proc):
+    # ログ(output.log)が idle_timeout 秒更新されなければ子を止め、idle-timeout ファイルに記録する(#53)
+    if idle_timeout <= 0:
+        return
+    start = time.time()
+    def watch():
+        while proc.poll() is None:
+            time.sleep(1)
+            try:
+                last = max(start, os.path.getmtime(log_path))
+            except OSError:
+                last = start
+            if time.time() - last >= idle_timeout and proc.poll() is None:
+                with open(idle_path, 'w', encoding='utf-8') as f:
+                    f.write(str(int(idle_timeout)))
+                if os.name == 'nt':
+                    subprocess.run(['taskkill', '/T', '/F', '/PID', str(proc.pid)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                else:
+                    os.killpg(proc.pid, signal.SIGKILL)
+                return
+    threading.Thread(target=watch, daemon=True).start()
+
+try:
+    prof = childprofile.load_profile('.')
+except childprofile.ProfileError as e:
+    with open(log_path, 'w', encoding='utf-8') as lf:
+        lf.write('Child profile error: ' + str(e) + '\n')
+    finish(1)
+
+is_stream = prof['output_format'] == 'claude-stream-json'
+
+def feed_stdin(proc):
+    # プロンプトを UTF-8 のバイト列で stdin に書いて閉じる(text モードでも buffer 経由で改行変換を避ける)
+    def write():
+        try:
+            stream = getattr(proc.stdin, 'buffer', proc.stdin)
+            stream.write(prompt.encode('utf-8'))
+            stream.flush()
+        except (OSError, ValueError):
+            pass
+        finally:
+            try:
+                proc.stdin.close()
+            except (OSError, ValueError):
+                pass
+    threading.Thread(target=write, daemon=True).start()
+
+stdin_mode = subprocess.PIPE if use_stdin else subprocess.DEVNULL
 
 if is_stream:
     jsonl_path = '$JSONL_PATH'
+
+    # ファイル編集ツールの本文(書き込む内容)は [tool_use] 行から外す。本文に書かれたパスの文字列を
+    # dispatch-check が誤検知するため。全文は output.jsonl に残る
+    FILE_EDIT_TOOLS = ('Edit', 'Write', 'MultiEdit', 'NotebookEdit')
+    FILE_EDIT_BODY_KEYS = ('old_string', 'new_string', 'content', 'edits', 'new_source')
 
     def human_line(obj):
         t = obj.get('type')
@@ -71,7 +174,10 @@ if is_stream:
                 if bt == 'text':
                     lines.append(block.get('text', ''))
                 elif bt == 'tool_use':
-                    inp = json.dumps(block.get('input', {}), ensure_ascii=False)
+                    tool_input = block.get('input', {})
+                    if block.get('name') in FILE_EDIT_TOOLS and isinstance(tool_input, dict):
+                        tool_input = {k: v for k, v in tool_input.items() if k not in FILE_EDIT_BODY_KEYS}
+                    inp = json.dumps(tool_input, ensure_ascii=False)
                     if len(inp) > 300:
                         inp = inp[:300] + '...(truncated)'
                     lines.append('[tool_use] ' + str(block.get('name')) + ': ' + inp)
@@ -99,7 +205,10 @@ if is_stream:
         return '[' + str(t) + '] ' + compact
 
     with open(jsonl_path, 'w', encoding='utf-8') as jf, open(log_path, 'w', encoding='utf-8') as lf:
-        proc = subprocess.Popen(tokens, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding='utf-8', bufsize=1)
+        proc = subprocess.Popen(tokens, stdin=stdin_mode, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding='utf-8', bufsize=1, start_new_session=(os.name != 'nt'))
+        if use_stdin:
+            feed_stdin(proc)
+        start_watchdog(proc)
         for line in proc.stdout:
             line = line.rstrip('\n')
             jf.write(line + '\n')
@@ -116,7 +225,10 @@ if is_stream:
         finish(proc.returncode)
 else:
     with open(log_path, 'w', encoding='utf-8') as lf:
-        proc = subprocess.Popen(tokens, stdin=subprocess.DEVNULL, stdout=lf, stderr=subprocess.STDOUT)
+        proc = subprocess.Popen(tokens, stdin=stdin_mode, stdout=lf, stderr=subprocess.STDOUT, start_new_session=(os.name != 'nt'))
+        if use_stdin:
+            feed_stdin(proc)
+        start_watchdog(proc)
         proc.wait()
         finish(proc.returncode)
   "
@@ -146,6 +258,10 @@ fi
 if [ -f "$SIGNAL_PATH" ]; then
   EXIT_CODE="signal:$(cat "$SIGNAL_PATH")"
   rm -f "$SIGNAL_PATH"
+fi
+# シグナル死より idle-timeout を優先する(idle-timeout ファイルは記録として残す)
+if [ -f "$IDLE_PATH" ]; then
+  EXIT_CODE="idle-timeout"
 fi
 
 END_TIME=$(date -Iseconds)

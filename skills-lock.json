@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "skills": {
+    "agent-branch-guard": {
+      "source": "Musasaby/multi-ai-agents-workflow",
+      "sourceType": "github",
+      "skillPath": "agent-branch-guard/SKILL.md",
+      "computedHash": "42a1eb4544506060731d706a7fc34dffba95f9c83cc64cbfba395ad86d1485c1"
+    },
+    "agent-comprehension-check": {
+      "source": "Musasaby/multi-ai-agents-workflow",
+      "sourceType": "github",
+      "skillPath": "agent-comprehension-check/SKILL.md",
+      "computedHash": "9ab2bb9b2212e822ea8b04d9d6f2632661e6719d6477d84c95dc87b08f56c497"
+    },
+    "agent-dispatch": {
+      "source": "Musasaby/multi-ai-agents-workflow",
+      "sourceType": "github",
+      "skillPath": "agent-dispatch/SKILL.md",
+      "computedHash": "6d6951bfe2290e237fa54acddd4bf40f19dd15223bd7ac07af6b75e035fce0c0"
+    },
+    "agent-quality-gate": {
+      "source": "Musasaby/multi-ai-agents-workflow",
+      "sourceType": "github",
+      "skillPath": "agent-quality-gate/SKILL.md",
+      "computedHash": "eaf5609f3d68243464377b87a11b88f6f9baa69b5b5eb67e4ed08d3ef59f8a8c"
+    },
+    "agent-review-commit": {
+      "source": "Musasaby/multi-ai-agents-workflow",
+      "sourceType": "github",
+      "skillPath": "agent-review-commit/SKILL.md",
+      "computedHash": "a09a7e86910a15c4e0f341bcc316288bb6d05823491d32677b2e605b8ab11357"
+    },
+    "agent-task-plan": {
+      "source": "Musasaby/multi-ai-agents-workflow",
+      "sourceType": "github",
+      "skillPath": "agent-task-plan/SKILL.md",
+      "computedHash": "70347db9e1fb29bdeb33b2a0d85abb972577aad07c230dd0cfec456b60961e0c"
+    },
+    "agent-workflow": {
+      "source": "Musasaby/multi-ai-agents-workflow",
+      "sourceType": "github",
+      "skillPath": "agent-workflow/SKILL.md",
+      "computedHash": "cc38259fa773b1ac68d61ba37bb79a1fec14711b247d0c6813e631721e3b872f"
+    },
+    "agents-md-setup": {
+      "source": "Musasaby/multi-ai-agents-workflow",
+      "sourceType": "github",
+      "skillPath": "agents-md-setup/SKILL.md",
+      "computedHash": "b04062c9d8afdf2ab9542a8ae6456b7283bfa5ef08847739dec80a0e5bb328ef"
+    },
+    "workflow-update": {
+      "source": "Musasaby/multi-ai-agents-workflow",
+      "sourceType": "github",
+      "skillPath": "workflow-update/SKILL.md",
+      "computedHash": "0569ea1077a413db7081c8a3430a1cd008e43a820fe7b51c12548a4c4c955dc9"
+    }
+  }
+}
