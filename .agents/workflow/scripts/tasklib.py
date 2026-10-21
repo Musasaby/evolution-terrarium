@@ -14,6 +14,11 @@ DEP_FORMAT_HINT = "expected 'なし' or comma-separated task IDs like 'T1, T2'"
 GROUP_LINE_RE = re.compile(r'^<!--\s*グループ\s+([^:\s]+)(?:\s*:\s*(.*?))?\s*-->\s*$')
 GROUP_FIELD_RE = re.compile(r'^(\s*-\s+\*\*グループ\*\*:)[ \t]*(.*?)[ \t]*$')
 DEFAULT_GROUP = ''
+REQ_SECTION = '## 要件'
+REQ_LINE_RE = re.compile(r'^- (R\d+):[ \t]*(\S.*?)[ \t]*$')
+REQ_FIELD_RE = re.compile(r'^(\s*-\s+\*\*要件\*\*:)[ \t]*(.*?)[ \t]*$')
+REQ_ID_RE = re.compile(r'^R\d+$')
+REQ_FORMAT_HINT = "expected 'なし' or comma-separated requirement IDs like 'R1, R2'"
 
 
 class TaskFileError(Exception):
@@ -30,7 +35,9 @@ def strip_eol(line):
 
 
 def parse_tasks(content):
-    """tasks.md を解析し、出現順の [{'id','title','dep_raw','dep_line','group','group_raw'}] を返す。
+    """tasks.md を解析し、出現順の [{'id','title','dep_raw','dep_line','group','group_raw','req_raw'}] を返す。
+
+    req_raw は要件欄 '- **要件**: ...' の値(欄が無ければ None)。
 
     dep_raw は依存欄の値(依存行が無ければ None)、dep_line は lines 上の行番号。
     group は所属グループ名: タスク見出しより前にある直近のグループ区切りの名前(区切りが
@@ -59,7 +66,7 @@ def parse_tasks(content):
                 if tid not in tasks:
                     order.append(tid)
                 current = {'id': tid, 'title': m.group(2).strip(), 'dep_raw': None, 'dep_line': None,
-                           'group': current_group, 'group_raw': None}
+                           'group': current_group, 'group_raw': None, 'req_raw': None}
                 tasks[tid] = current
             else:
                 current = None
@@ -74,6 +81,10 @@ def parse_tasks(content):
                 m = GROUP_FIELD_RE.match(line)
                 if m:
                     current['group_raw'] = m.group(2)
+            if current['req_raw'] is None:
+                m = REQ_FIELD_RE.match(line)
+                if m:
+                    current['req_raw'] = m.group(2)
     # グループ欄による上書き(欄の名前が区切りに存在する場合のみ)
     for t in (tasks[tid] for tid in order):
         if t['group_raw'] is not None and t['group_raw'] in declared:
@@ -131,6 +142,155 @@ def check_group_deps(tasks, order):
                               + "'); a task must not depend on a task in a later group")
     if errors:
         raise TaskFileError('\n'.join(errors))
+
+
+def parse_requirements(content):
+    """'## 要件' 節を解析し (節の有無, [{'id','text'}]) を返す。
+
+    形式違反の行・重複ID・要件が0件の節は TaskFileError(エラーはすべて集める)。
+    """
+    has_section = False
+    in_section = False
+    reqs = []
+    seen = set()
+    errors = []
+    for raw in split_lines(content):
+        line = strip_eol(raw).lstrip('﻿').rstrip()
+        if line.startswith('#'):
+            in_section = (line == REQ_SECTION)
+            if in_section:
+                has_section = True
+            continue
+        if not in_section:
+            continue
+        m = REQ_LINE_RE.match(line)
+        if m:
+            if m.group(1) in seen:
+                errors.append('Duplicate requirement ID: ' + m.group(1))
+            else:
+                seen.add(m.group(1))
+                reqs.append({'id': m.group(1), 'text': m.group(2)})
+        elif line.startswith('- '):
+            errors.append("Malformed requirement line: '" + line + "' (expected '- R<n>: <text>')")
+    if has_section and not reqs and not errors:
+        errors.append("'## 要件' section has no requirements")
+    if errors:
+        raise TaskFileError('\n'.join(errors))
+    return has_section, reqs
+
+
+def check_requirements(tasks, content):
+    """要件節とタスクの要件欄を検証し、対応表 [(ラベル, [タスクID...])] を返す。
+
+    ラベルは要件の記述順の 'R<n>'、最後に要件欄が 'なし' のタスクがあれば 'なし'。
+    節も欄も無ければ []。エラーはすべて集めて TaskFileError。
+    """
+    errors = []
+    try:
+        has_section, reqs = parse_requirements(content)
+    except TaskFileError as e:
+        errors.append(str(e))
+        has_section, reqs = True, []
+    ids = [r['id'] for r in reqs]
+    covered = {rid: [] for rid in ids}
+    none_tasks = []
+    for t in tasks:
+        tid = t['id']
+        raw = t['req_raw']
+        if not has_section:
+            if raw is not None:
+                errors.append(tid + ": requirement field is used but tasks.md has no '## 要件' section")
+            continue
+        if raw is None:
+            errors.append(tid + ": requirement line ('- **要件**: ...') is missing")
+            continue
+        if raw == 'なし':
+            none_tasks.append(tid)
+            continue
+        refs = []
+        for token in raw.split(','):
+            token = token.strip()
+            if not REQ_ID_RE.match(token):
+                errors.append("Invalid requirement in " + tid + ": '" + token + "' (" + REQ_FORMAT_HINT + ")")
+            elif token not in ids:
+                if reqs:
+                    errors.append(tid + ": refers to unknown requirement '" + token
+                                  + "' (not found in '## 要件')")
+            elif token not in refs:
+                refs.append(token)
+        for rid in refs:
+            covered[rid].append(tid)
+    for rid in ids:
+        if not covered[rid]:
+            errors.append("Uncovered requirement: " + rid
+                          + " (no task refers to it; assign it to a task or move it to '## 対象外')")
+    if errors:
+        raise TaskFileError('\n'.join(errors))
+    table = [(rid, covered[rid]) for rid in ids]
+    if none_tasks:
+        table.append(('なし', none_tasks))
+    return table
+
+
+def requirement_status_lines(tasks, content, state_tasks):
+    """要件ごとのタスクの状態行を返す。節も欄も無ければ []。不正なら TaskFileError。"""
+    table = check_requirements(tasks, content)
+    if not table:
+        return []
+    _, reqs = parse_requirements(content)
+    texts = {r['id']: r['text'] for r in reqs}
+    by_id = {t['id']: t for t in state_tasks}
+
+    def label(tid):
+        st = by_id.get(tid)
+        if st is None:
+            return tid + '(missing)'
+        if st.get('status') == 'done' and st.get('commit'):
+            return tid + '(done ' + str(st['commit'])[:7] + ')'
+        return tid + '(' + str(st.get('status')) + ')'
+
+    lines = []
+    counts = {'done': 0, 'partial': 0, 'pending': 0}
+    for rid, tids in table:
+        labels = ', '.join(label(t) for t in tids)
+        if rid == 'なし':
+            lines.append('Requirement なし: ' + labels)
+            continue
+        n_done = sum(1 for t in tids if by_id.get(t, {}).get('status') == 'done')
+        if n_done == len(tids):
+            state = 'done'
+        elif n_done > 0:
+            state = 'partial'
+        else:
+            state = 'pending'
+        counts[state] += 1
+        lines.append('Requirement ' + rid + ' [' + state + ']: ' + labels + ' | ' + texts[rid])
+    lines.append('Summary: done=%d partial=%d pending=%d'
+                 % (counts['done'], counts['partial'], counts['pending']))
+    return lines
+
+
+def pr_requirement_lines(tasks, content, pr_task_ids):
+    """PR 本文用の要件一覧の行を返す。PR のタスクを1件以上含む要件だけ、要件の記述順に。"""
+    table = check_requirements(tasks, content)
+    if not table:
+        return []
+    _, reqs = parse_requirements(content)
+    texts = {r['id']: r['text'] for r in reqs}
+    pr_ids = set(pr_task_ids)
+    lines = []
+    for rid, tids in table:
+        if rid == 'なし':
+            continue
+        mine = [t for t in tids if t in pr_ids]
+        if not mine:
+            continue
+        others = [t for t in tids if t not in pr_ids]
+        s = '- ' + rid + ': ' + texts[rid] + '(この PR: ' + ', '.join(mine)
+        if others:
+            s += ' / 他の PR: ' + ', '.join(others)
+        lines.append(s + ')')
+    return lines
 
 
 def parse_deps(task):
