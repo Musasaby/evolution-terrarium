@@ -206,10 +206,12 @@ export function geneDistance(a, b) {
   return 0.7 * markerDivergence(a, b) + 0.3 * morphDistance(a, b) + 0.2 * Math.abs(a.parts.length - b.parts.length) + nicheDistance(a, b);
 }
 // 生き方（食性・適温・耐温幅・水棲適応）の違い。生き方が分かれた集団ほど雑種がうまく育たない（生態的種分化）
+// 重みは CFG.NICHE_* で調整する
 export function nicheDistance(a, b) {
-  return 0.5 * Math.abs((a.diet ?? 0.25) - (b.diet ?? 0.25)) + Math.abs((a.topt ?? 17) - (b.topt ?? 17)) / 25
-    + Math.abs((a.tTol ?? CFG.COMFORT) - (b.tTol ?? CFG.COMFORT)) / 14
-    + Math.abs((a.aqua ?? 0) - (b.aqua ?? 0));
+  return CFG.NICHE_DIET * Math.abs((a.diet ?? 0.25) - (b.diet ?? 0.25))
+    + CFG.NICHE_TOPT * Math.abs((a.topt ?? 17) - (b.topt ?? 17))
+    + CFG.NICHE_TTOL * Math.abs((a.tTol ?? CFG.COMFORT) - (b.tTol ?? CFG.COMFORT))
+    + CFG.NICHE_AQUA * Math.abs((a.aqua ?? 0) - (b.aqua ?? 0));
 }
 // 食性から、各食べ物の効率を求める（草・木の葉・肉）
 export function dietEfficiency(g) {

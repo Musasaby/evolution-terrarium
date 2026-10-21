@@ -82,7 +82,7 @@ export function spawnFounderGroup(sim, n) {
 export function kill(sim, c, cause) {
   if (c.dead) return;
   c.dead = true; c.deadAt = sim.t; c.cause = cause;
-  c.corpseE = Math.max(c.energy, 0) + c.maxE * 0.35;
+  c.corpseE = Math.max(c.energy, 0) + c.maxE * CFG.CORPSE_E;
   c.energy = 0;
   for (const j of c.joints) j.configureMotorPosition(0, 0, 0.5);
   for (const b of c.bodies) b.setAngularDamping(2);
@@ -213,7 +213,7 @@ export function updateCreatures(sim, dt) {
     for (const P of c.pos) if (P.y < wl) sub++;
     const wetK = 1 - CFG.AQUA_WATER_CUT * c.aqua;
     if (sub) {
-      wet = (2.0 + 8 * c.vol) * sub / c.bodies.length * wetK;
+      wet = (CFG.WATER_COST + CFG.WATER_COST_VOL * c.vol) * sub / c.bodies.length * wetK;
       for (let i = 0; i < c.bodies.length; i++) c.bodies[i].setLinearDamping(c.pos[i].y < wl ? 2.5 * wetK : 0.1);
     } else if (c.wasWet) for (const b of c.bodies) b.setLinearDamping(0.1);
     c.wasWet = sub > 0;
