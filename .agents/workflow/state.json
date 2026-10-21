@@ -1,7 +1,7 @@
 {
   "source": "docs/plans/biodiversity.md",
   "branch": "develop/biodiversity-C",
-  "updated_at": "2026-10-22T06:35:14+09:00",
+  "updated_at": "2026-10-22T07:28:17+09:00",
   "group": "C",
   "tasks": [
     {
@@ -119,6 +119,41 @@
     {
       "id": "T17",
       "title": "タイトル画面と世界の設定画面",
+      "status": "pending",
+      "retries": 0,
+      "commit": null
+    },
+    {
+      "id": "T18",
+      "title": "ばらつきに強い判定を計測ツールに加える",
+      "status": "pending",
+      "retries": 0,
+      "commit": null
+    },
+    {
+      "id": "T19",
+      "title": "草類と木類で植物の枠を分ける",
+      "status": "pending",
+      "retries": 0,
+      "commit": null
+    },
+    {
+      "id": "T20",
+      "title": "木の葉が食べられない原因を調べる",
+      "status": "pending",
+      "retries": 0,
+      "commit": null
+    },
+    {
+      "id": "T21",
+      "title": "湖の面積を CFG に移し、陸の植物とのつり合いを取る",
+      "status": "pending",
+      "retries": 0,
+      "commit": null
+    },
+    {
+      "id": "T22",
+      "title": "Issue #10 の結果を計画の文書に書く",
       "status": "pending",
       "retries": 0,
       "commit": null
