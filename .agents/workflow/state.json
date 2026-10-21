@@ -1,7 +1,7 @@
 {
   "source": "docs/plans/biodiversity.md",
   "branch": "develop/biodiversity-C",
-  "updated_at": "2026-10-22T08:38:15+09:00",
+  "updated_at": "2026-10-22T08:47:21+09:00",
   "group": "C",
   "tasks": [
     {
@@ -154,6 +154,13 @@
     {
       "id": "T22",
       "title": "Issue #10 の結果を計画の文書に書く",
+      "status": "pending",
+      "retries": 0,
+      "commit": null
+    },
+    {
+      "id": "T23",
+      "title": "木の葉に届く高さ CANOPY を下げる",
       "status": "pending",
       "retries": 0,
       "commit": null
