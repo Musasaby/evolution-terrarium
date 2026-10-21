@@ -1,7 +1,7 @@
 {
   "source": "docs/plans/biodiversity.md",
   "branch": "develop/biodiversity-C",
-  "updated_at": "2026-10-21T23:51:35+09:00",
+  "updated_at": "2026-10-22T06:35:14+09:00",
   "group": "C",
   "tasks": [
     {
@@ -70,9 +70,9 @@
     {
       "id": "T10",
       "title": "生態的種分化と係数の調整",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "5349eda66ec0f46a46dd541bfb8d2523b6bd414d"
     },
     {
       "id": "T11",
