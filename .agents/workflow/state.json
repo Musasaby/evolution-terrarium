@@ -1,7 +1,7 @@
 {
   "source": "docs/plans/biodiversity.md",
   "branch": "develop/biodiversity-C",
-  "updated_at": "2026-10-21T23:47:53+09:00",
+  "updated_at": "2026-10-21T23:51:35+09:00",
   "group": "C",
   "tasks": [
     {
@@ -63,9 +63,9 @@
     {
       "id": "T9",
       "title": "肉食の祖先",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "24710a58d7184fbdd3d7b06ece29848254dbcd03"
     },
     {
       "id": "T10",
