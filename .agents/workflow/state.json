@@ -1,7 +1,7 @@
 {
   "source": "docs/plans/biodiversity.md",
   "branch": "develop/biodiversity-C",
-  "updated_at": "2026-10-22T07:28:17+09:00",
+  "updated_at": "2026-10-22T08:04:04+09:00",
   "group": "C",
   "tasks": [
     {
@@ -126,9 +126,9 @@
     {
       "id": "T18",
       "title": "ばらつきに強い判定を計測ツールに加える",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "df78d84a2ac2d1986520f1a5ca6de1c0d4d6e40a"
     },
     {
       "id": "T19",
