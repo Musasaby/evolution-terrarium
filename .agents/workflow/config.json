@@ -1,6 +1,6 @@
 {
   "child_agent": {
-    "command_template": "opencode run -m opencode-go/glm-5.3-flash \"{prompt}\"",
+    "command_template": "claude -p --model claude-sonnet-5-5 --output-format stream-json --verbose --permission-mode bypassPermissions \"{prompt}\"",
     "timeout_seconds": 1800,
     "isolate_xdg": false
   },
