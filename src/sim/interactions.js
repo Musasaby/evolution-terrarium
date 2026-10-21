@@ -92,12 +92,12 @@ function applyHit(sim, att, tgt, dmg) {
   if (tgt.dead) {
     const d = Math.min(tgt.corpseE, dmg * 1.5);
     tgt.corpseE -= d;
-    feed(att, d * 0.8 * CFG.FOOD_GAIN * att.eff.meat);
+    feed(att, d * CFG.PRED_GAIN_CORPSE * CFG.FOOD_GAIN * att.eff.meat);
     return;
   }
   const d = Math.min(tgt.energy, dmg);
   tgt.energy -= d; tgt.hurt = 0.5;
-  feed(att, d * 0.7 * CFG.FOOD_GAIN * att.eff.meat);
+  feed(att, d * CFG.PRED_GAIN * CFG.FOOD_GAIN * att.eff.meat);
   if (tgt.energy <= 0) { kill(sim, tgt, `捕食（${att.species?.name || '?'}）`); att.kills++; sim.counters.predations++; }
 }
 
