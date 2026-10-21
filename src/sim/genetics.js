@@ -33,7 +33,7 @@ export function randomGenome(rng) {
   for (let i = 1; i < n; i++) parts.push(randPart(rng, rng.int(0, i - 1)));
   const marks = new Int32Array(NMARK);
   for (let i = 0; i < NMARK; i++) marks[i] = newAllele();
-  return { parts, freq: rng.range(0.4, 1.6), hue: rng(), pick: rng.range(0.25, 0.5), taxis: rng.range(-2.5, 2.5), seek: rng.range(0, 1.5), diet: rng.range(0, 0.8), topt: rng.range(8, 24), tTol: rng.range(4, 18), aqua: rng.range(0, 1), brain: randBrain(rng), marks };
+  return { parts, freq: rng.range(0.4, 1.6), hue: rng(), pick: rng.range(0.25, 0.5), taxis: rng.range(-2.5, 2.5), seek: rng.range(0, 1.5), diet: rng.range(0, 1), topt: rng.range(8, 24), tTol: rng.range(4, 18), aqua: rng.range(0, 1), brain: randBrain(rng), marks };
 }
 function randPart(rng, parent) {
   return {
