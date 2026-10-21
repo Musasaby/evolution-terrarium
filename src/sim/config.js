@@ -32,6 +32,9 @@ export const CFG = {
   // 適温（遺伝子 topt）と耐温幅（遺伝子 tTol）。topt ± tTol の外で寒さ・暑さのコストがかかる
   COMFORT: 12,         // tTol を持たない古いゲノムの既定値
   TTOL_COST: 0.012,    // 耐温幅 tTol が 1 広いほど基礎代謝がこの割合だけ増える
+  // 水棲適応（遺伝子 aqua）。水中の費用と減衰が aqua に応じて下がる代わりに、陸では基礎代謝が増える
+  AQUA_WATER_CUT: 0.8, // 水中の費用・減衰が aqua に応じて最大この割合だけ下がる
+  AQUA_LAND_COST: 0.5, // 陸にいる分だけ、基礎代謝が aqua × この割合ずつ増える
   // 密集：半径 CROWD_R 内の同種が CROWD_FREE 体を超えると、1体ごとに基礎代謝が CROWD_K 倍ずつ増える
   CROWD_R: 6,
   CROWD_FREE: 6,
