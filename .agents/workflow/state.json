@@ -1,7 +1,7 @@
 {
   "source": "docs/plans/biodiversity.md",
   "branch": "develop/biodiversity-C",
-  "updated_at": "2026-10-22T08:04:04+09:00",
+  "updated_at": "2026-10-22T08:29:47+09:00",
   "group": "C",
   "tasks": [
     {
@@ -133,9 +133,9 @@
     {
       "id": "T19",
       "title": "草類と木類で植物の枠を分ける",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "e332bf1f19cab3d34e4372fafdc2f9e92d7fcbac"
     },
     {
       "id": "T20",
