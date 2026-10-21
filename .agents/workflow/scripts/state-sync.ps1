@@ -2,7 +2,9 @@
     [switch]$Init,
     [string]$Source,
     [string]$Insert,
-    [string[]]$Before
+    [string[]]$Before,
+    [switch]$SetBranch,
+    [string]$Branch
 )
 Set-Location $PSScriptRoot\..\..\..
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -17,6 +19,35 @@ function Fail {
     param([string]$Message)
     [Console]::Error.WriteLine($Message)
     exit 1
+}
+
+if ($SetBranch -and ($Init -or $Source -or $Insert -or $Before)) {
+    Fail "-SetBranch cannot be combined with -Init, -Source, -Insert or -Before"
+}
+
+# --- ブランチの書き換え: tasks.md は読まず、state.json の branch と updated_at だけを更新する ---
+if ($SetBranch) {
+    if (-not (Test-Path $StatePath)) { Fail "state.json not found: $StatePath (run with -Init first)" }
+    $newBranch = $Branch
+    if (-not $newBranch) {
+        $newBranch = ("$(git branch --show-current)").Trim()
+        if (-not $newBranch) { Fail "Cannot determine the branch (detached HEAD?); pass a branch name with -Branch" }
+    }
+    if (-not $newBranch.StartsWith('develop/', [System.StringComparison]::Ordinal)) {
+        Fail "Branch must start with 'develop/': $newBranch"
+    }
+    $state = Get-Content $StatePath -Raw -Encoding UTF8 | ConvertFrom-Json
+    $old = $state.branch
+    if ($old -ceq $newBranch) {
+        Write-Output "Branch unchanged: $newBranch"
+        exit 0
+    }
+    $state.branch = $newBranch
+    $state.updated_at = (Get-Date).ToString('yyyy-MM-ddTHH:mm:sszzz')
+    $json = $state | ConvertTo-Json -Depth 10
+    [System.IO.File]::WriteAllText($StatePath, $json + "`n", [System.Text.UTF8Encoding]::new($false))
+    Write-Output "Updated branch: $old -> $newBranch"
+    exit 0
 }
 
 if (-not (Test-Path $TasksPath)) { Fail "tasks.md not found: $TasksPath" }
@@ -36,7 +67,7 @@ if ($Init) {
         Fail "state.json already exists: $StatePath (use normal sync mode to append, not --Init)"
     }
 } elseif (-not (Test-Path $StatePath)) {
-    Fail "state.json not found: $StatePath (run with --Init first)"
+    Fail "state.json not found: $StatePath (run with -Init first)"
 }
 
 $content = [System.IO.File]::ReadAllText($TasksPath, [System.Text.Encoding]::UTF8)
@@ -101,9 +132,11 @@ if ($Insert) {
 }
 
 # --- 依存欄とグループの検証(全モード共通。state.json を書く前に失敗させる) ---
+$reqTable = @()
 try {
     [void](Resolve-TaskDeps $tasks -CheckCycles)
     [void](Test-GroupDeps $tasks $groupOrder)
+    $reqTable = @(Test-Requirements $tasks $lines)
 } catch {
     Fail $_.Exception.Message
 }
@@ -129,8 +162,15 @@ if ($Init) {
     foreach ($t in $existing.tasks) {
         $out += [ordered]@{ id = $t.id; title = $t.title; status = $t.status; retries = $t.retries; commit = $t.commit }
     }
+    $outById = @{}
+    foreach ($o in $out) { $outById[$o.id] = $o }
     foreach ($t in $tasks) {
-        if (-not $existingStatus.Contains($t.id)) { $out += New-TaskEntry $t }
+        if (-not $existingStatus.Contains($t.id)) {
+            $out += New-TaskEntry $t
+        } elseif ($outById[$t.id].title -cne $t.title) {
+            $outById[$t.id].title = $t.title
+            Write-Output "Updated title: $($t.id)"
+        }
     }
     foreach ($id in $existingStatus.Keys) {
         if (-not $byId.ContainsKey($id)) {
@@ -157,5 +197,6 @@ if ($tasksChanged) {
 
 $json = $state | ConvertTo-Json -Depth 10
 [System.IO.File]::WriteAllText($StatePath, $json + "`n", $utf8NoBom)
+foreach ($row in $reqTable) { Write-Output "Requirement $($row.label): $($row.tasks -join ', ')" }
 Write-Output "Synced: $StatePath"
 exit 0

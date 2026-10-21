@@ -12,6 +12,7 @@ $TasksPath = "$Root/.agents/workflow/tasks.md"
 $StatePath = "$Root/.agents/workflow/state.json"
 $ConfigPath = "$Root/.agents/workflow/config.json"
 $RunsBase = "$Root/.agents/workflow/runs"
+. "$PSScriptRoot/tasklib.ps1"
 
 # --- PR mode: PR作成を子に単発依頼するプロンプトを生成する ---
 # 対象タスク = state.json で done かつ commit が git log origin/<base>..HEAD に含まれるもの。
@@ -47,16 +48,29 @@ if ($Pr) {
     }
     $commits = @(git log "$baseRef..HEAD" --format=%H)
     $selected = @()
+    $selectedIds = @()
     foreach ($t in (Get-Content $StatePath -Raw -Encoding UTF8 | ConvertFrom-Json).tasks) {
         $c = $t.commit
         if ($t.status -eq 'done' -and $c -and @($commits | Where-Object { $_.StartsWith($c) }).Count -gt 0) {
             $selected += "- $($t.id): $($t.title) (commit $c)"
+            $selectedIds += $t.id
         }
     }
     if ($selected.Count -eq 0) {
         [Console]::Error.WriteLine("No done tasks whose commit is in $baseRef..HEAD (nothing to include in the PR)")
         exit 1
     }
+    $reqLines = @()
+    if (Test-Path $TasksPath) {
+        try {
+            $prLines = @(Split-TaskLines ([System.IO.File]::ReadAllText($TasksPath, [System.Text.Encoding]::UTF8)))
+            $reqLines = @(Get-PrRequirementLines (Read-TaskList $prLines) $prLines $selectedIds)
+        } catch {
+            [Console]::Error.WriteLine($_.Exception.Message)
+            exit 1
+        }
+    }
+    $requirementList = if ($reqLines.Count -gt 0) { $reqLines -join "`n" } else { '- なし(tasks.md に要件の節が無い、またはこの PR のタスクに対応する要件が無い)' }
     $prN = 1
     if (Test-Path $RunsBase) {
         Get-ChildItem -Path $RunsBase -Directory | Where-Object { $_.Name -match '^pr-(\d+)-1$' } | ForEach-Object {
@@ -68,6 +82,7 @@ if ($Pr) {
     $null = New-Item -ItemType Directory -Force $prRunDir
     $text = Get-Content "$PSScriptRoot/dispatch-pr-prompt-template.md" -Raw -Encoding UTF8
     $text = $text.Replace('{task_list}', ($selected -join "`n"))
+    $text = $text.Replace('{requirement_list}', $requirementList)
     $text = $text.Replace('{branch}', $branch)
     $text = $text.Replace('{base_branch}', $baseBranch)
     $text = $text.Replace('{base_ref}', $baseRef)
@@ -126,7 +141,6 @@ foreach ($line in $sectionLines) {
 }
 
 # 依存欄の検証(不正なトークンは黙って捨てずにエラーにする)
-. "$PSScriptRoot/tasklib.ps1"
 $allTasks = @(Read-TaskList @(Split-TaskLines ([System.IO.File]::ReadAllText($TasksPath, [System.Text.Encoding]::UTF8))))
 $targetTask = $allTasks | Where-Object { $_.id -eq $TaskId } | Select-Object -First 1
 try {
@@ -139,6 +153,116 @@ $unknownDeps = @($deps | Where-Object { $_ -notin $allTasks.id })
 if ($unknownDeps.Count -gt 0) {
     [Console]::Error.WriteLine("${TaskId}: depends on unknown task(s) $($unknownDeps -join ', ') (not found in tasks.md)")
     exit 1
+}
+
+# 作業量のしきい値(config.json の task_sizing。値が無ければ既定値、不正値は警告して既定値)
+$sizingDefaults = [ordered]@{ max_acceptance_criteria = 5; max_changed_files = 3; max_reference_files = 5 }
+$sizingConfig = $null
+try { $sizingConfig = (Get-Content $ConfigPath -Raw -Encoding UTF8 -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop).task_sizing } catch {}
+$sizing = @{}
+foreach ($key in $sizingDefaults.Keys) {
+    $v = if ($sizingConfig -is [pscustomobject]) { $sizingConfig.$key } else { $null }
+    if ($null -ne $v -and -not (($v -is [int] -or $v -is [long]) -and $v -ge 1)) {
+        [Console]::Error.WriteLine("WARN: config task_sizing.${key} is not a positive integer (using $($sizingDefaults[$key]))")
+        $v = $null
+    }
+    $sizing[$key] = if ($null -eq $v) { $sizingDefaults[$key] } else { [int]$v }
+}
+
+# 参照ファイル欄の検証
+# `- **参照ファイル**:` の下の箇条書き(`` - `<パス>` `` + 任意の説明。`<パス>:10-40` のような
+# 行範囲は可)を、子が最初に読むファイルとして扱う。存在しないパスはエラー、欄が無い・
+# しきい値(max_reference_files)を超える場合は警告のみ。値に `なし` と書いた場合は検証しない。
+$refStart = -1
+for ($i = 0; $i -lt $sectionLines.Count; $i++) {
+    if ($sectionLines[$i].TrimEnd("`r") -match '^(\s*)-\s+\*\*参照ファイル\*\*:\s*(.*?)\s*$') {
+        $refStart = $i; $refIndent = $Matches[1].Length; $refInline = $Matches[2]
+        break
+    }
+}
+if ($refStart -lt 0) {
+    [Console]::Error.WriteLine("WARN: ${TaskId}: no '- **参照ファイル**:' field (the child may read many files before starting)")
+} elseif ($refInline -ne 'なし') {
+    # 同じ行に書かれたパス(`- **参照ファイル**: `a.txt`, `b.sh``)も受け付ける
+    $refPaths = @([regex]::Matches($refInline, '`([^`]+)`') | ForEach-Object { $_.Groups[1].Value -replace ':\d+(-\d+)?$', '' })
+    for ($i = $refStart + 1; $i -lt $sectionLines.Count; $i++) {
+        $line = $sectionLines[$i].TrimEnd("`r")
+        if (-not $line.Trim()) { continue }
+        if (($line.Length - $line.TrimStart().Length) -le $refIndent) { break }
+        if ($line -match '^\s*-\s+`([^`]+)`') { $refPaths += ($Matches[1] -replace ':\d+(-\d+)?$', '') }
+    }
+    if ($refPaths.Count -eq 0) {
+        [Console]::Error.WriteLine("${TaskId}: '- **参照ファイル**:' has no items (write '- ``<path>``' items below the field or ``<path>`` on the same line, or 'なし')")
+        exit 1
+    }
+    $missingRefs = @($refPaths | Where-Object { -not (Test-Path -LiteralPath $_) })
+    if ($missingRefs.Count -gt 0) {
+        [Console]::Error.WriteLine("${TaskId}: reference file(s) not found: $($missingRefs -join ', ')")
+        exit 1
+    }
+    if ($refPaths.Count -gt $sizing['max_reference_files']) {
+        [Console]::Error.WriteLine("WARN: ${TaskId}: $($refPaths.Count) reference files (keep it to a few)")
+    }
+}
+
+# --- 作業量の警告(タスクが1応答で処理しきれなそうなら計画の段階で気付けるようにする) ---
+# 1) 受け入れ基準がしきい値(max_acceptance_criteria)を超える、2) (変更対象)の参照ファイルがしきい値
+# (max_changed_files)を超える。どちらも警告のみで生成は続ける。
+function Find-BulletField {
+    # `- **<名前>**:` の行位置・インデント・同一行の値(無ければ $null)を返す
+    param([string[]]$Lines, [string]$Name)
+    for ($i = 0; $i -lt $Lines.Count; $i++) {
+        if ($Lines[$i].TrimEnd("`r") -match ('^(\s*)-\s+\*\*' + [regex]::Escape($Name) + '\*\*:\s*(.*?)\s*$')) {
+            return [pscustomobject]@{ Start = $i; Indent = $Matches[1].Length; Inline = $Matches[2] }
+        }
+    }
+    return $null
+}
+$acField = Find-BulletField $sectionLines '受け入れ基準'
+if ($acField) {
+    $acCount = 0
+    for ($i = $acField.Start + 1; $i -lt $sectionLines.Count; $i++) {
+        $line = $sectionLines[$i].TrimEnd("`r")
+        if (-not $line.Trim()) { continue }
+        if (($line.Length - $line.TrimStart().Length) -le $acField.Indent) { break }
+        if ($line -match '^\s*-\s+\[[ xX]\]') { $acCount++ }
+    }
+    if ($acCount -gt $sizing['max_acceptance_criteria']) {
+        [Console]::Error.WriteLine("WARN: ${TaskId}: $acCount acceptance criteria (more than $($sizing['max_acceptance_criteria']); consider splitting the task)")
+    }
+}
+$changedRefCount = 0
+if ($refStart -ge 0) {
+    # 参照ファイル欄は既存の検証で走査済み。同じ行の値と欄の下の行から変更対象を数える
+    $changedRefCount += [regex]::Matches($refInline, '[(（]変更対象').Count
+    for ($i = $refStart + 1; $i -lt $sectionLines.Count; $i++) {
+        $line = $sectionLines[$i].TrimEnd("`r")
+        if (-not $line.Trim()) { continue }
+        if (($line.Length - $line.TrimStart().Length) -le $refIndent) { break }
+        $changedRefCount += [regex]::Matches($line, '[(（]変更対象').Count
+    }
+}
+if ($changedRefCount -gt $sizing['max_changed_files']) {
+    [Console]::Error.WriteLine("WARN: ${TaskId}: $changedRefCount reference files marked 変更対象 (more than $($sizing['max_changed_files']); consider splitting the task)")
+}
+
+# AGENTS.md が @ 参照だけのファイルなら警告する(プロファイルの agents_md_imports が false の子CLIは @ を展開しないため、子にルールが届かない)
+if (Test-Path AGENTS.md -PathType Leaf) {
+    $agentsLines = @(Get-Content AGENTS.md -Encoding UTF8 | Where-Object { $_.Trim() })
+    if (-not ($agentsLines | Where-Object { $_.Trim() -notmatch '^@' })) {
+        # 解決に失敗しても prompt-gen は止めず、展開しない(false)とみなす
+        . "$PSScriptRoot/childprofile.ps1"
+        $profileName = 'unknown'
+        $profileImports = $false
+        try {
+            $childProfile = Get-ChildProfile -Root (Get-Location).Path
+            if ($childProfile.Name) { $profileName = $childProfile.Name }
+            $profileImports = ($childProfile.AgentsMdImports -eq $true)
+        } catch { }
+        if (-not $profileImports) {
+            [Console]::Error.WriteLine("WARN: AGENTS.md only contains '@' references; the child CLI (profile: $profileName) does not expand them, so the child cannot read the rules")
+        }
+    }
 }
 
 if ($deps.Count -gt 0) {
@@ -232,18 +356,21 @@ try {
 # config の検証コマンド(command が空のステップは載せない)。1つも無ければ空にし、
 # テンプレート側の「受け入れ基準に書かれた確認手順」だけを子に実行させる
 $verifyLines = @()
+$verifyCmds = @()
 $cdc = if ($config.quality_gate) { "$($config.quality_gate.child_dispatch_command)".Trim() } else { '' }
 if ($cdc) {
     $verifyLines += "- $cdc"
+    $verifyCmds += $cdc
 } elseif ($config.quality_gate -and $config.quality_gate.steps) {
     foreach ($step in $config.quality_gate.steps) {
         $cmd = "$($step.command)".Trim()
         $name = if ($step.name) { $step.name } else { 'check' }
-        if ($step.blocking -and $cmd) { $verifyLines += "- ${name}: $cmd" }
+        if ($step.blocking -and $cmd) { $verifyLines += "- ${name}: $cmd"; $verifyCmds += $cmd }
     }
 }
+# 同じコマンドを2回載せない(子が別物と誤解して迷わないように)
 $tc = "$($config.test_command)".Trim()
-if ($tc) { $verifyLines += "- $tc" }
+if ($tc -and $tc -cnotin $verifyCmds) { $verifyLines += "- $tc" }
 
 $verifyInstruction = $verifyLines -join "`n"
 
