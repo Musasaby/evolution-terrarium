@@ -130,6 +130,77 @@ Invoke-TestCase "sync: 追記 正常" {
     Assert-Eq done (Get-StateTask T1).status "existing status kept"
 }
 
+Invoke-TestCase "sync: 追記 既存タスクのタイトルを更新" {
+    Set-Tasks $basicTasks
+    Set-State 'T1:done' 'T2:done' 'T3:pending' 'T4:pending'
+    Set-Tasks ((Get-TasksText) -replace '## T1: 一番目', '## T1: 改題済み')
+    Invoke-Script state-sync.ps1
+    Assert-Eq 0 $script:Code "title update succeeds: $($script:Err)"
+    Assert-Eq "改題済み" (Get-StateTask T1).title "title updated"
+    Assert-Eq done (Get-StateTask T1).status "existing status kept"
+    Assert-Contains $script:Out "Updated title: T1" "stdout mentions Updated title"
+}
+
+Invoke-TestCase "sync: 追記 タイトル不変なら Updated を出さない" {
+    Set-Tasks $basicTasks
+    Set-State 'T1:done' 'T2:done' 'T3:pending' 'T4:pending'
+    Invoke-Script state-sync.ps1 # 初回: タイトルを tasks.md の見出しに合わせる
+    Assert-Eq 0 $script:Code "first sync succeeds: $($script:Err)"
+    Invoke-Script state-sync.ps1
+    Assert-Eq 0 $script:Code "second sync succeeds: $($script:Err)"
+    Assert-NotContains $script:Out "Updated title" "no Updated title when unchanged"
+}
+
+# ---------- 要件の検証と対応表 (#66) ----------
+
+Invoke-TestCase "sync: 要件がすべてタスクに対応すれば対応表を出す" {
+    Set-Tasks "## 要件`n- R1: 一つ目`n- R2: 二つ目`n`n## T1: a`n- **要件**: R1, R2`n- **依存**: なし`n`n## T2: b`n- **要件**: R1`n- **依存**: T1`n`n## T3: c`n- **要件**: なし`n- **依存**: T2`n"
+    Invoke-Script state-sync.ps1 -Init -Source test
+    Assert-Eq 0 $script:Code "init succeeds: $($script:Err)"
+    Assert-Contains $script:Out "Requirement R1: T1, T2" "R1 row"
+    Assert-Contains $script:Out "Requirement R2: T1" "R2 row"
+    Assert-Contains $script:Out "Requirement なし: T3" "none row"
+}
+
+Invoke-TestCase "sync: 要件節も要件欄も無ければ対応表を出さない" {
+    Set-Tasks $basicTasks
+    Invoke-Script state-sync.ps1 -Init -Source test
+    Assert-Eq 0 $script:Code "init succeeds: $($script:Err)"
+    Assert-NotContains $script:Out "Requirement" "no Requirement lines"
+}
+
+Invoke-TestCase "sync: どのタスクにも対応しない要件はexit 1" {
+    Set-Tasks "## 要件`n- R1: 一つ目`n- R2: 二つ目`n`n## T1: a`n- **要件**: R1`n- **依存**: なし`n"
+    Invoke-Script state-sync.ps1 -Init -Source test
+    Assert-Eq 1 $script:Code "exit code"
+    Assert-Contains $script:Err "Uncovered requirement: R2" "stderr names uncovered requirement"
+    Assert-FileAbsent "$script:Proj/.agents/workflow/state.json" "state.json not created"
+}
+
+Invoke-TestCase "sync: 存在しない要件IDはexit 1" {
+    Set-Tasks "## 要件`n- R1: 一つ目`n`n## T1: a`n- **要件**: R1, R9`n- **依存**: なし`n"
+    Invoke-Script state-sync.ps1 -Init -Source test
+    Assert-Eq 1 $script:Code "exit code"
+    Assert-Contains $script:Err "unknown requirement 'R9'" "stderr names unknown id"
+    Assert-FileAbsent "$script:Proj/.agents/workflow/state.json" "state.json not created"
+}
+
+Invoke-TestCase "sync: 要件節があるのに要件欄が無いタスクはexit 1" {
+    Set-Tasks "## 要件`n- R1: 一つ目`n`n## T1: a`n- **要件**: R1`n- **依存**: なし`n`n## T2: b`n- **依存**: T1`n"
+    Invoke-Script state-sync.ps1 -Init -Source test
+    Assert-Eq 1 $script:Code "exit code"
+    Assert-Contains $script:Err "T2: requirement line" "stderr names the task"
+    Assert-FileAbsent "$script:Proj/.agents/workflow/state.json" "state.json not created"
+}
+
+Invoke-TestCase "sync: 要件節の形式違反の行はexit 1" {
+    Set-Tasks "## 要件`n- R1: 一つ目`n- 二つ目`n`n## T1: a`n- **要件**: R1`n- **依存**: なし`n"
+    Invoke-Script state-sync.ps1 -Init -Source test
+    Assert-Eq 1 $script:Code "exit code"
+    Assert-Contains $script:Err "Malformed requirement line" "stderr reports malformed line"
+    Assert-FileAbsent "$script:Proj/.agents/workflow/state.json" "state.json not created"
+}
+
 # ---------- グループ解析とグループ間依存の検証 (#30) ----------
 
 # tasklib のグループ解析(Read-TaskList / Get-GroupOrder)を直接検証する
@@ -169,7 +240,7 @@ Invoke-TestCase "sync: グループ区切りの解析" {
     Assert-Eq ",P,A" (Get-TaskGroupOrder) "group order (default first)"
     Invoke-Script next-task.ps1
     Assert-Eq 0 $script:Code "next-task with groups: $($script:Err)"
-    Assert-Eq "T1 pending" $script:Out "default group task chosen"
+    Assert-Eq "T1 pending" ($script:Out -split "`n")[0] "default group task chosen"
 }
 
 Invoke-TestCase "sync: グループ欄は位置より優先" {
@@ -291,7 +362,8 @@ Invoke-TestCase "next: 作業グループ完了はexit 6" {
     Set-StateGroup P
     Invoke-Script next-task.ps1
     Assert-Eq 6 $script:Code "exit code: $($script:Err)"
-    Assert-Eq P $script:Out "stdout shows the completed group name"
+    Assert-Eq P ($script:Out -split "`n")[0] "stdout shows the completed group name"
+    Assert-Eq "Next: group-advance" ($script:Out -split "`n")[-1] "next action after group completion"
 }
 
 Invoke-TestCase "next: 次グループを現在グループにしたら選ぶ" {
@@ -300,7 +372,7 @@ Invoke-TestCase "next: 次グループを現在グループにしたら選ぶ" {
     Set-StateGroup A
     Invoke-Script next-task.ps1
     Assert-Eq 0 $script:Code "exit code: $($script:Err)"
-    Assert-Eq "T2 pending" $script:Out "task in the current group is chosen"
+    Assert-Eq "T2 pending" ($script:Out -split "`n")[0] "task in the current group is chosen"
 }
 
 Invoke-TestCase "next: group欄なしは未完了最初のグループ" {
@@ -308,7 +380,7 @@ Invoke-TestCase "next: group欄なしは未完了最初のグループ" {
     Set-State 'T1:done' 'T2:pending' 'T3:pending'
     Invoke-Script next-task.ps1
     Assert-Eq 0 $script:Code "exit code: $($script:Err)"
-    Assert-Eq "T2 pending" $script:Out "first group with unfinished tasks is the work group"
+    Assert-Eq "T2 pending" ($script:Out -split "`n")[0] "first group with unfinished tasks is the work group"
 }
 
 Invoke-TestCase "next: 未知のグループ名は未完了最初のグループ" {
@@ -317,7 +389,7 @@ Invoke-TestCase "next: 未知のグループ名は未完了最初のグループ
     Set-StateGroup ZZZ
     Invoke-Script next-task.ps1
     Assert-Eq 0 $script:Code "exit code: $($script:Err)"
-    Assert-Eq "T1 pending" $script:Out "first group with unfinished tasks (P) is the work group"
+    Assert-Eq "T1 pending" ($script:Out -split "`n")[0] "first group with unfinished tasks (P) is the work group"
 }
 
 Invoke-TestCase "next: 既定グループ完了は空のグループ名でexit 6" {
@@ -326,7 +398,7 @@ Invoke-TestCase "next: 既定グループ完了は空のグループ名でexit 6
     Set-StateGroup ''
     Invoke-Script next-task.ps1
     Assert-Eq 6 $script:Code "exit code: $($script:Err)"
-    Assert-Eq "" $script:Out "stdout shows the default group (empty name)"
+    Assert-Eq "Next: group-advance" $script:Out "trimmed stdout is the next action (empty group name)"
 }
 
 Invoke-TestCase "next: branch_per_group false は全タスクから選ぶ" {
@@ -336,7 +408,7 @@ Invoke-TestCase "next: branch_per_group false は全タスクから選ぶ" {
     Set-BranchPerGroup $false
     Invoke-Script next-task.ps1
     Assert-Eq 0 $script:Code "exit code: $($script:Err)"
-    Assert-Eq "T2 pending" $script:Out "task chosen from all tasks"
+    Assert-Eq "T2 pending" ($script:Out -split "`n")[0] "task chosen from all tasks"
 }
 
 Invoke-TestCase "next: 区切り無しで全完了はexit 3" {
@@ -378,6 +450,47 @@ Invoke-TestCase "sync: group欄の無い旧stateには足さない" {
     Invoke-Script state-sync.ps1
     Assert-Eq 0 $script:Code "append succeeds: $($script:Err)"
     Assert-Eq "<absent>" (Get-StateGroup) "group key not added to legacy state.json"
+}
+
+# ---------- state-sync: --set-branch (#60) ----------
+
+function Get-StateBranch { return (ConvertFrom-Json (Get-StateText)).branch }
+
+# state.json から branch と updated_at を除いた内容(変わっていないことの確認用)
+function Get-StateWithoutBranch {
+    $state = ConvertFrom-Json (Get-StateText)
+    $state.PSObject.Properties.Remove('branch')
+    $state.PSObject.Properties.Remove('updated_at')
+    return ($state | ConvertTo-Json -Depth 10 -Compress)
+}
+
+Invoke-TestCase "sync: --set-branch は現在のブランチを state.json に書く" {
+    Set-Tasks $basicTasks
+    Set-State 'T1:done' 'T2:pending' 'T3:pending' 'T4:pending'
+    $before = Get-StateWithoutBranch
+    git -C $script:Proj switch -q -c develop/new 2>$null
+    Invoke-Script state-sync.ps1 -SetBranch
+    Assert-Eq 0 $script:Code "exit code: $($script:Err)"
+    Assert-Eq "develop/new" (Get-StateBranch) "branch written"
+    Assert-Eq (git -C $script:Proj branch --show-current) (Get-StateBranch) "branch matches git (branch-check --state precondition)"
+    Assert-Eq $before (Get-StateWithoutBranch) "other keys unchanged"
+    Assert-Contains $script:Out "Updated branch: main -> develop/new" "stdout"
+}
+
+Invoke-TestCase "sync: --set-branch に名前を渡せばその名前を書く" {
+    Set-Tasks $basicTasks
+    Set-State 'T1:done' 'T2:pending' 'T3:pending' 'T4:pending'
+    Invoke-Script state-sync.ps1 -SetBranch -Branch develop/other
+    Assert-Eq 0 $script:Code "exit code: $($script:Err)"
+    Assert-Eq "develop/other" (Get-StateBranch) "branch written"
+}
+
+Invoke-TestCase "sync: --set-branch は develop/ 以外を拒否する" {
+    Set-Tasks $basicTasks
+    Set-State 'T1:done' 'T2:pending' 'T3:pending' 'T4:pending'
+    Invoke-Script state-sync.ps1 -SetBranch
+    Assert-Eq 1 $script:Code "exit code on main"
+    Assert-Eq "main" (Get-StateBranch) "branch unchanged"
 }
 
 # ---------- state-sync: 挿入 (#13) ----------
@@ -449,7 +562,8 @@ Invoke-TestCase "next: 依存充足の最初のpending" {
     Set-State 'T1:done' 'T2:done' 'T3:done' 'T4:pending' 'T8:pending'
     Invoke-Script next-task.ps1
     Assert-Eq 0 $script:Code "exit code: $($script:Err)"
-    Assert-Eq "T8 pending" $script:Out "T8 chosen before T4"
+    Assert-Eq "T8 pending" ($script:Out -split "`n")[0] "T8 chosen before T4"
+    Assert-Eq "Next: dispatch T8" ($script:Out -split "`n")[-1] "next action dispatches the chosen task"
 }
 
 Invoke-TestCase "next: 再開対象を優先" {
@@ -457,7 +571,17 @@ Invoke-TestCase "next: 再開対象を優先" {
     Set-State 'T1:done' 'T2:in_review' 'T3:pending' 'T4:pending'
     Invoke-Script next-task.ps1
     Assert-Eq 0 $script:Code "exit code"
-    Assert-Eq "T2 in_review" $script:Out "resume target"
+    Assert-Eq "T2 in_review" ($script:Out -split "`n")[0] "resume target"
+    Assert-Eq "Next: review T2" ($script:Out -split "`n")[-1] "next action reviews the resume target"
+}
+
+Invoke-TestCase "next: in_progressの再開はdispatch" {
+    Set-Tasks $basicTasks
+    Set-State 'T1:done' 'T2:in_progress' 'T3:pending' 'T4:pending'
+    Invoke-Script next-task.ps1
+    Assert-Eq 0 $script:Code "exit code"
+    Assert-Eq "T2 in_progress" ($script:Out -split "`n")[0] "resume target"
+    Assert-Eq "Next: dispatch T2" ($script:Out -split "`n")[-1] "next action dispatches the resume target"
 }
 
 Invoke-TestCase "next: 全完了はexit 3" {
@@ -465,6 +589,7 @@ Invoke-TestCase "next: 全完了はexit 3" {
     Set-State 'T1:done' 'T2:done' 'T3:done' 'T4:done'
     Invoke-Script next-task.ps1
     Assert-Eq 3 $script:Code "exit code"
+    Assert-Eq "Next: finish" ($script:Out -split "`n")[-1] "next action when all tasks are done"
 }
 
 Invoke-TestCase "next: ブロックはexit 4" {
@@ -473,6 +598,7 @@ Invoke-TestCase "next: ブロックはexit 4" {
     Invoke-Script next-task.ps1
     Assert-Eq 4 $script:Code "exit code"
     Assert-Contains $script:Err "T1" "blocker listed"
+    Assert-Eq "Next: escalate reason=blocked" ($script:Out -split "`n")[-1] "next action when blocked"
 }
 
 Invoke-TestCase "next: 依存欄不正はexit 1" {
@@ -557,6 +683,153 @@ Invoke-TestCase "gen: config.json が壊れていればexit 1" {
     Write-Utf8File "$script:Proj/.agents/workflow/config.json" '{ broken'
     Invoke-Script dispatch-prompt-gen.ps1 -TaskId T1
     Assert-Eq 1 $script:Code "broken config.json -> exit 1"
+}
+
+# #36: test_command と child_dispatch_command が同じなら1回だけ載せる
+Invoke-TestCase "gen: 同じ検証コマンドは1回だけ載せる" {
+    Set-Tasks $basicTasks
+    Set-State 'T1:pending'
+    $cfgPath = "$script:Proj/.agents/workflow/config.json"
+    $cfg = Get-Content $cfgPath -Raw | ConvertFrom-Json
+    $cfg.quality_gate.child_dispatch_command = 'pwsh -File tests/check.ps1'
+    $cfg.test_command = 'pwsh -File tests/check.ps1'
+    Write-Utf8File $cfgPath ($cfg | ConvertTo-Json -Depth 10)
+    Invoke-Script dispatch-prompt-gen.ps1 -TaskId T1
+    Assert-Eq 0 $script:Code "exit code: $($script:Err)"
+    Assert-Eq 1 ([regex]::Matches((Get-PromptT1), [regex]::Escape('tests/check.ps1')).Count) "same command listed once"
+}
+
+function Set-RefTasks {
+    param([string]$Field)
+    Set-Tasks "## T1: a`n- **目的**: x`n$Field`n- **依存**: なし`n"
+    Set-State 'T1:pending'
+}
+
+Invoke-TestCase "gen: 参照ファイルが存在すれば通る" {
+    Write-Utf8File "$script:Proj/a.txt" "x`n"
+    Write-Utf8File "$script:Proj/src/b.sh" "y`n"
+    Set-RefTasks "- **参照ファイル**:`n  - ``a.txt``(全体)`n  - ``src/b.sh:10-40``(関数 foo)"
+    Invoke-Script dispatch-prompt-gen.ps1 -TaskId T1
+    Assert-Eq 0 $script:Code "exit code: $($script:Err)"
+    Assert-NotContains $script:Err "WARN" "no warning"
+}
+
+Invoke-TestCase "gen: 存在しない参照ファイルはexit 1" {
+    Set-RefTasks "- **参照ファイル**:`n  - ``nope.txt``"
+    Invoke-Script dispatch-prompt-gen.ps1 -TaskId T1
+    Assert-Eq 1 $script:Code "missing reference file -> exit 1"
+    Assert-Contains $script:Err "nope.txt" "missing path reported"
+    Assert-FileAbsent "$script:Proj/.agents/workflow/runs/T1-1/prompt.md" "no prompt written"
+}
+
+Invoke-TestCase "gen: 参照ファイル欄が無ければ警告" {
+    Set-RefTasks ""
+    Invoke-Script dispatch-prompt-gen.ps1 -TaskId T1
+    Assert-Eq 0 $script:Code "absent field is not an error: $($script:Err)"
+    Assert-Contains $script:Err "WARN: T1: no '- **参照ファイル**:' field" "warning"
+}
+
+Invoke-TestCase "gen: 参照ファイル なし は検証しない" {
+    Set-RefTasks "- **参照ファイル**: なし"
+    Invoke-Script dispatch-prompt-gen.ps1 -TaskId T1
+    Assert-Eq 0 $script:Code "exit code: $($script:Err)"
+    Assert-NotContains $script:Err "WARN" "no warning"
+}
+
+Invoke-TestCase "gen: @参照だけのAGENTS.mdは警告" {
+    Set-Tasks $basicTasks
+    Set-State 'T1:pending'
+    Write-Utf8File "$script:Proj/AGENTS.md" "@.agents/skills/agents-md-setup/templates/AGENTS.md`n"
+    Invoke-Script dispatch-prompt-gen.ps1 -TaskId T1
+    Assert-Eq 0 $script:Code "exit code: $($script:Err)"
+    Assert-Contains $script:Err "AGENTS.md only contains '@' references" "warning"
+    Write-Utf8File "$script:Proj/AGENTS.md" "# AGENTS.md`n@other.md`n"
+    Invoke-Script dispatch-prompt-gen.ps1 -TaskId T1
+    Assert-NotContains $script:Err "AGENTS.md only contains" "no warning when AGENTS.md has content"
+}
+
+Invoke-TestCase "gen: AGENTS.md の @ 参照を展開する profile では警告しない" {
+    Set-Tasks $basicTasks
+    Set-State 'T1:pending'
+    Write-Utf8File "$script:Proj/AGENTS.md" "@.agents/skills/agents-md-setup/templates/AGENTS.md`n"
+    Invoke-Script dispatch-prompt-gen.ps1 -TaskId T1
+    Assert-Contains $script:Err "the child CLI (profile: auto) does not expand them" "profile name in warning"
+    $cfgPath = "$script:Proj/.agents/workflow/config.json"
+    $cfg = Get-Content $cfgPath -Raw | ConvertFrom-Json
+    $cfg.child_agent | Add-Member -NotePropertyName profile -NotePropertyValue 'claude-stream-json' -Force
+    Write-Utf8File $cfgPath ($cfg | ConvertTo-Json -Depth 10)
+    Invoke-Script dispatch-prompt-gen.ps1 -TaskId T1
+    Assert-Eq 0 $script:Code "exit code: $($script:Err)"
+    Assert-NotContains $script:Err "AGENTS.md only contains" "no warning for profile that expands @"
+}
+
+Invoke-TestCase "gen: 同じ行の参照ファイルも検証する" {
+    Write-Utf8File "$script:Proj/a.txt" "x`n"
+    Set-RefTasks "- **参照ファイル**: ``a.txt:1-5``(全体)"
+    Invoke-Script dispatch-prompt-gen.ps1 -TaskId T1
+    Assert-Eq 0 $script:Code "inline reference accepted: $($script:Err)"
+    Set-RefTasks "- **参照ファイル**: ``nope.txt``"
+    Invoke-Script dispatch-prompt-gen.ps1 -TaskId T1
+    Assert-Eq 1 $script:Code "inline missing reference -> exit 1"
+}
+
+Invoke-TestCase "gen: 受け入れ基準が6件以上なら警告" {
+    Write-Utf8File "$script:Proj/a.txt" "x`n"
+    Set-RefTasks "- **受け入れ基準**:`n  - [ ] c1`n  - [ ] c2`n  - [ ] c3`n  - [ ] c4`n  - [ ] c5`n  - [ ] c6`n- **参照ファイル**:`n  - ``a.txt``(全体)"
+    Invoke-Script dispatch-prompt-gen.ps1 -TaskId T1
+    Assert-Eq 0 $script:Code "exit code: $($script:Err)"
+    Assert-Contains $script:Err "WARN: T1: 6 acceptance criteria (more than 5; consider splitting the task)" "warning"
+}
+
+Invoke-TestCase "gen: 変更対象の参照ファイルが4件以上なら警告" {
+    foreach ($f in @('a', 'b', 'c', 'd')) { Write-Utf8File "$script:Proj/$f.txt" "x`n" }
+    Set-RefTasks "- **参照ファイル**:`n  - ``a.txt``(変更対象)`n  - ``b.txt``(変更対象)`n  - ``c.txt``(変更対象)`n  - ``d.txt``(変更対象)"
+    Invoke-Script dispatch-prompt-gen.ps1 -TaskId T1
+    Assert-Eq 0 $script:Code "exit code: $($script:Err)"
+    Assert-Contains $script:Err "WARN: T1: 4 reference files marked 変更対象 (more than 3; consider splitting the task)" "warning"
+}
+
+Invoke-TestCase "gen: 受け入れ基準5件・変更対象3件なら警告しない" {
+    foreach ($f in @('a', 'b', 'c')) { Write-Utf8File "$script:Proj/$f.txt" "x`n" }
+    Set-RefTasks "- **受け入れ基準**:`n  - [ ] c1`n  - [ ] c2`n  - [ ] c3`n  - [ ] c4`n  - [ ] c5`n- **参照ファイル**:`n  - ``a.txt``(変更対象)`n  - ``b.txt``(変更対象)`n  - ``c.txt``(全体)"
+    Invoke-Script dispatch-prompt-gen.ps1 -TaskId T1
+    Assert-Eq 0 $script:Code "exit code: $($script:Err)"
+    Assert-NotContains $script:Err "WARN" "no warning"
+}
+
+function Set-TaskSizing { param($Value)
+    $cfgPath = "$script:Proj/.agents/workflow/config.json"
+    $cfg = Get-Content $cfgPath -Raw | ConvertFrom-Json
+    $cfg | Add-Member -NotePropertyName task_sizing -NotePropertyValue $Value -Force
+    Write-Utf8File $cfgPath ($cfg | ConvertTo-Json -Depth 10)
+}
+
+Invoke-TestCase "gen: task_sizing の値で作業量の警告のしきい値が変わる" {
+    foreach ($f in @('a', 'b', 'c')) { Write-Utf8File "$script:Proj/$f.txt" "x`n" }
+    Set-TaskSizing ([pscustomobject]@{ max_acceptance_criteria = 2; max_changed_files = 1; max_reference_files = 2 })
+    Set-RefTasks "- **受け入れ基準**:`n  - [ ] c1`n  - [ ] c2`n  - [ ] c3`n- **参照ファイル**:`n  - ``a.txt``(変更対象)`n  - ``b.txt``(変更対象)`n  - ``c.txt``(全体)"
+    Invoke-Script dispatch-prompt-gen.ps1 -TaskId T1
+    Assert-Eq 0 $script:Code "exit code: $($script:Err)"
+    Assert-Contains $script:Err "3 acceptance criteria (more than 2; consider splitting the task)" "ac warning"
+    Assert-Contains $script:Err "2 reference files marked 変更対象 (more than 1; consider splitting the task)" "changed warning"
+    Assert-Contains $script:Err "3 reference files (keep it to a few)" "refs warning"
+}
+
+Invoke-TestCase "gen: task_sizing が不正値なら警告して既定値を使う" {
+    Write-Utf8File "$script:Proj/a.txt" "x`n"
+    Set-TaskSizing ([pscustomobject]@{ max_acceptance_criteria = 'x' })
+    Set-RefTasks "- **受け入れ基準**:`n  - [ ] c1`n  - [ ] c2`n  - [ ] c3`n  - [ ] c4`n  - [ ] c5`n  - [ ] c6`n- **参照ファイル**:`n  - ``a.txt``(全体)"
+    Invoke-Script dispatch-prompt-gen.ps1 -TaskId T1
+    Assert-Eq 0 $script:Code "exit code: $($script:Err)"
+    Assert-Contains $script:Err "WARN: config task_sizing.max_acceptance_criteria is not a positive integer (using 5)" "invalid warning"
+    Assert-Contains $script:Err "6 acceptance criteria (more than 5;" "default threshold"
+}
+
+# ---------- テスト環境の切り離し(Issue F-1) ----------
+
+Invoke-TestCase "テストの git はグローバル設定を読まない" {
+    $globalOut = & git config --global --list 2>&1
+    Assert-Eq "" ($globalOut -join "`n") "global config is empty"
 }
 
 Show-Summary

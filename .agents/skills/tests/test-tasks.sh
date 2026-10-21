@@ -172,6 +172,126 @@ EOF
     assert_eq done "$(state_get T1 status)" "existing status kept"
 }
 
+t_sync_append_title_updated() {
+    basic_tasks
+    write_state "T1:done" "T2:done" "T3:pending" "T4:pending"
+    sed -i 's/^## T1: 一番目$/## T1: 改題済み/' "$PROJ/.agents/workflow/tasks.md"
+    run_script state-sync.sh
+    assert_eq 0 "$CODE" "title update succeeds: $ERR"
+    assert_eq "改題済み" "$(state_get T1 title)" "title updated"
+    assert_eq done "$(state_get T1 status)" "existing status kept"
+    assert_contains "$OUT" "Updated title: T1" "stdout mentions Updated title"
+}
+
+t_sync_append_title_unchanged_silent() {
+    basic_tasks
+    write_state "T1:done" "T2:done" "T3:pending" "T4:pending"
+    run_script state-sync.sh # 初回: タイトルを tasks.md の見出しに合わせる
+    assert_eq 0 "$CODE" "first sync succeeds: $ERR"
+    run_script state-sync.sh
+    assert_eq 0 "$CODE" "second sync succeeds: $ERR"
+    assert_not_contains "$OUT" "Updated title" "no Updated title when unchanged"
+}
+
+# ---------- 要件の検証と対応表 (#66) ----------
+
+t_sync_req_table_printed() {
+    write_tasks <<'EOT'
+## 要件
+- R1: 一つ目
+- R2: 二つ目
+
+## T1: a
+- **要件**: R1, R2
+- **依存**: なし
+
+## T2: b
+- **要件**: R1
+- **依存**: T1
+
+## T3: c
+- **要件**: なし
+- **依存**: T2
+EOT
+    run_script state-sync.sh --init --source test
+    assert_eq 0 "$CODE" "init succeeds: $ERR"
+    assert_contains "$OUT" "Requirement R1: T1, T2" "R1 row"
+    assert_contains "$OUT" "Requirement R2: T1" "R2 row"
+    assert_contains "$OUT" "Requirement なし: T3" "none row"
+}
+
+t_sync_req_no_section_unchanged() {
+    basic_tasks
+    run_script state-sync.sh --init --source test
+    assert_eq 0 "$CODE" "init succeeds: $ERR"
+    assert_not_contains "$OUT" "Requirement" "no Requirement lines"
+}
+
+t_sync_req_uncovered_rejected() {
+    write_tasks <<'EOT'
+## 要件
+- R1: 一つ目
+- R2: 二つ目
+
+## T1: a
+- **要件**: R1
+- **依存**: なし
+EOT
+    run_script state-sync.sh --init --source test
+    assert_eq 1 "$CODE" "exit code"
+    assert_contains "$ERR" "Uncovered requirement: R2" "stderr names uncovered requirement"
+    assert_file_absent "$PROJ/.agents/workflow/state.json" "state.json not created"
+}
+
+t_sync_req_unknown_id_rejected() {
+    write_tasks <<'EOT'
+## 要件
+- R1: 一つ目
+
+## T1: a
+- **要件**: R1, R9
+- **依存**: なし
+EOT
+    run_script state-sync.sh --init --source test
+    assert_eq 1 "$CODE" "exit code"
+    assert_contains "$ERR" "unknown requirement 'R9'" "stderr names unknown id"
+    assert_file_absent "$PROJ/.agents/workflow/state.json" "state.json not created"
+}
+
+t_sync_req_missing_field_rejected() {
+    write_tasks <<'EOT'
+## 要件
+- R1: 一つ目
+
+## T1: a
+- **要件**: R1
+- **依存**: なし
+
+## T2: b
+- **依存**: T1
+EOT
+    run_script state-sync.sh --init --source test
+    assert_eq 1 "$CODE" "exit code"
+    assert_contains "$ERR" "T2: requirement line" "stderr names the task"
+    assert_file_absent "$PROJ/.agents/workflow/state.json" "state.json not created"
+}
+
+t_sync_req_malformed_line_rejected() {
+    write_tasks <<'EOT'
+## 要件
+- R1: 一つ目
+- 二つ目
+
+## T1: a
+- **要件**: R1
+- **依存**: なし
+EOT
+    run_script state-sync.sh --init --source test
+    assert_eq 1 "$CODE" "exit code"
+    assert_contains "$ERR" "Malformed requirement line" "stderr reports malformed line"
+    assert_file_absent "$PROJ/.agents/workflow/state.json" "state.json not created"
+}
+
 # ---------- グループ解析とグループ間依存の検証 (#30) ----------
 
 # 解析結果のグループ一覧: 標準出力に "T1=,T2=P,..." 形式
@@ -231,7 +351,7 @@ t_sync_group_parse() {
     assert_eq ",P,A" "$(task_group_order)" "group order (default first)"
     run_script next-task.sh
     assert_eq 0 "$CODE" "next-task with groups: $ERR"
-    assert_eq "T1 pending" "$OUT" "default group task chosen"
+    assert_eq "T1 pending" "${OUT%%$'\n'*}" "default group task chosen"
 }
 
 t_sync_group_field_overrides() {
@@ -394,7 +514,8 @@ t_next_group_done_exit6() {
     set_state_group P
     run_script next-task.sh
     assert_eq 6 "$CODE" "exit code: $ERR"
-    assert_eq "P" "$OUT" "stdout shows the completed group name"
+    assert_eq "P" "${OUT%%$'\n'*}" "stdout shows the completed group name"
+    assert_eq "Next: group-advance" "${OUT##*$'\n'}" "next action after group completion"
 }
 
 t_next_group_advanced_to_next_group() {
@@ -403,7 +524,7 @@ t_next_group_advanced_to_next_group() {
     set_state_group A
     run_script next-task.sh
     assert_eq 0 "$CODE" "exit code: $ERR"
-    assert_eq "T2 pending" "$OUT" "task in the current group is chosen"
+    assert_eq "T2 pending" "${OUT%%$'\n'*}" "task in the current group is chosen"
 }
 
 t_next_group_missing_field_falls_back() {
@@ -411,7 +532,7 @@ t_next_group_missing_field_falls_back() {
     write_state "T1:done" "T2:pending" "T3:pending"   # group フィールド無し
     run_script next-task.sh
     assert_eq 0 "$CODE" "exit code: $ERR"
-    assert_eq "T2 pending" "$OUT" "first group with unfinished tasks is the work group"
+    assert_eq "T2 pending" "${OUT%%$'\n'*}" "first group with unfinished tasks is the work group"
 }
 
 t_next_group_unknown_name_falls_back() {
@@ -420,7 +541,7 @@ t_next_group_unknown_name_falls_back() {
     set_state_group ZZZ   # tasks.md に存在しないグループ名
     run_script next-task.sh
     assert_eq 0 "$CODE" "exit code: $ERR"
-    assert_eq "T1 pending" "$OUT" "first group with unfinished tasks (P) is the work group"
+    assert_eq "T1 pending" "${OUT%%$'\n'*}" "first group with unfinished tasks (P) is the work group"
 }
 
 t_next_default_group_done_exit6() {
@@ -429,7 +550,7 @@ t_next_default_group_done_exit6() {
     set_state_group ""   # 既定グループ(空文字列)
     run_script next-task.sh
     assert_eq 6 "$CODE" "exit code: $ERR"
-    assert_eq "" "$OUT" "stdout shows the default group (empty name)"
+    assert_eq "" "${OUT%%$'\n'*}" "stdout shows the default group (empty name)"
 }
 
 t_next_branch_per_group_false_chooses_all() {
@@ -439,7 +560,7 @@ t_next_branch_per_group_false_chooses_all() {
     set_branch_per_group false
     run_script next-task.sh
     assert_eq 0 "$CODE" "exit code: $ERR"
-    assert_eq "T2 pending" "$OUT" "task chosen from all tasks"
+    assert_eq "T2 pending" "${OUT%%$'\n'*}" "task chosen from all tasks"
 }
 
 t_next_no_separator_all_done_exit3() {
@@ -487,6 +608,55 @@ t_sync_group_absent_kept_absent() {
     assert_eq "<absent>" "$(state_group)" "group key not added to legacy state.json"
 }
 
+state_branch() {
+    python3 - "$(py_path "$PROJ/.agents/workflow/state.json")" <<'PY'
+import json, sys
+with open(sys.argv[1], encoding='utf-8') as f:
+    print(json.load(f)['branch'])
+PY
+}
+
+# state.json から branch と updated_at を除いた内容(変わっていないことの確認用)
+state_without_branch() {
+    python3 - "$(py_path "$PROJ/.agents/workflow/state.json")" <<'PY'
+import json, sys
+with open(sys.argv[1], encoding='utf-8') as f:
+    s = json.load(f)
+s.pop('branch', None)
+s.pop('updated_at', None)
+print(json.dumps(s, ensure_ascii=False, sort_keys=False))
+PY
+}
+
+t_sync_set_branch_current() {
+    basic_tasks
+    write_state "T1:done" "T2:pending" "T3:pending" "T4:pending"
+    local before
+    before="$(state_without_branch)"
+    git -C "$PROJ" switch -q -c develop/new
+    run_script state-sync.sh --set-branch
+    assert_eq 0 "$CODE" "exit code: $ERR"
+    assert_eq "develop/new" "$(state_branch)" "branch written"
+    assert_eq "$(git -C "$PROJ" branch --show-current)" "$(state_branch)" "branch matches git (branch-check --state precondition)"
+    assert_eq "$before" "$(state_without_branch)" "other keys unchanged"
+    assert_contains "$OUT" "Updated branch: main -> develop/new" "stdout"
+}
+
+t_sync_set_branch_named() {
+    basic_tasks
+    write_state "T1:done" "T2:pending" "T3:pending" "T4:pending"
+    run_script state-sync.sh --set-branch develop/other
+    assert_eq 0 "$CODE" "exit code: $ERR"
+    assert_eq "develop/other" "$(state_branch)" "branch written"
+}
+
+t_sync_set_branch_rejects_non_develop() {
+    basic_tasks
+    write_state "T1:done" "T2:pending" "T3:pending" "T4:pending"
+    run_script state-sync.sh --set-branch
+    assert_eq 1 "$CODE" "exit code on main"
+    assert_eq "main" "$(state_branch)" "branch unchanged"
+}
 
 # ---------- state-sync: 挿入 (#13) ----------
 
@@ -571,6 +741,14 @@ t_insert_preserves_crlf() {
     assert_contains "$(cat "$PROJ/.agents/workflow/tasks.md")" $'- **依存**: T1, T8\r' "CRLF kept"
 }
 
+# ---------- テスト環境の切り離し(Issue F-1) ----------
+
+t_test_git_reads_no_global_config() {
+    # lib.sh が GIT_CONFIG_NOSYSTEM / GIT_CONFIG_GLOBAL を設定しているため、
+    # git は利用者のグローバル設定を読まない(commit.gpgsign 等の影響を受けない)
+    assert_eq "" "$(git config --global --list 2>&1)" "global config is empty"
+}
+
 # ---------- next-task (#13) ----------
 
 t_next_first_ready_pending() {
@@ -580,7 +758,8 @@ t_next_first_ready_pending() {
     write_state "T1:done" "T2:done" "T3:done" "T4:pending" "T8:pending"
     run_script next-task.sh
     assert_eq 0 "$CODE" "exit code: $ERR"
-    assert_eq "T8 pending" "$OUT" "T8 chosen before T4"
+    assert_eq "T8 pending" "${OUT%%$'\n'*}" "T8 chosen before T4"
+    assert_eq "Next: dispatch T8" "${OUT##*$'\n'}" "next action dispatches the chosen task"
 }
 
 t_next_resume_first() {
@@ -588,7 +767,17 @@ t_next_resume_first() {
     write_state "T1:done" "T2:in_review" "T3:pending" "T4:pending"
     run_script next-task.sh
     assert_eq 0 "$CODE" "exit code"
-    assert_eq "T2 in_review" "$OUT" "resume target"
+    assert_eq "T2 in_review" "${OUT%%$'\n'*}" "resume target"
+    assert_eq "Next: review T2" "${OUT##*$'\n'}" "next action reviews the resume target"
+}
+
+t_next_resume_in_progress() {
+    basic_tasks
+    write_state "T1:done" "T2:in_progress" "T3:pending" "T4:pending"
+    run_script next-task.sh
+    assert_eq 0 "$CODE" "exit code"
+    assert_eq "T2 in_progress" "${OUT%%$'\n'*}" "resume target"
+    assert_eq "Next: dispatch T2" "${OUT##*$'\n'}" "next action dispatches the resume target"
 }
 
 t_next_all_done() {
@@ -596,6 +785,7 @@ t_next_all_done() {
     write_state "T1:done" "T2:done" "T3:done" "T4:done"
     run_script next-task.sh
     assert_eq 3 "$CODE" "exit code"
+    assert_eq "Next: finish" "${OUT##*$'\n'}" "next action when all tasks are done"
 }
 
 t_next_blocked() {
@@ -604,6 +794,7 @@ t_next_blocked() {
     run_script next-task.sh
     assert_eq 4 "$CODE" "exit code"
     assert_contains "$ERR" "T1" "blocker listed"
+    assert_eq "Next: escalate reason=blocked" "${OUT##*$'\n'}" "next action when blocked"
 }
 
 t_next_invalid_deps() {
@@ -630,6 +821,19 @@ t_insert_before_space_separated() {
     append_t8 "T2"
     run_script state-sync.sh --insert T8 --before "T3 T4"
     assert_eq 0 "$CODE" "space separated --before: $ERR"
+}
+
+t_heading_case_sensitive() {
+    write_tasks <<'EOF'
+## T1: a
+- **依存**: なし
+
+## t2: lower
+- **依存**: T1
+EOF
+    run_script state-sync.sh --init --source test
+    assert_eq 0 "$CODE" "exit code: $ERR"
+    assert_eq "T1" "$(state_ids)" "lowercase heading ignored (same as sh)"
 }
 
 t_next_empty_state() {
@@ -711,7 +915,168 @@ t_gen_broken_config() {
     assert_eq 1 "$CODE" "broken config.json -> exit 1"
 }
 
+# #36: test_command と child_dispatch_command が同じなら1回だけ載せる
+t_gen_dedup_verify_command() {
+    basic_tasks
+    write_state "T1:pending"
+    python3 - "$(py_path "$PROJ/.agents/workflow/config.json")" <<'PY'
+import json, sys
+p = sys.argv[1]
+with open(p, encoding='utf-8') as f:
+    cfg = json.load(f)
+cfg['quality_gate']['child_dispatch_command'] = 'pwsh -File tests/check.ps1'
+cfg['test_command'] = 'pwsh -File tests/check.ps1'
+with open(p, 'w', encoding='utf-8') as f:
+    json.dump(cfg, f, ensure_ascii=False, indent=2)
+PY
+    run_script dispatch-prompt-gen.sh T1
+    assert_eq 0 "$CODE" "exit code: $ERR"
+    assert_eq 1 "$(grep -c 'tests/check.ps1' "$PROJ/.agents/workflow/runs/T1-1/prompt.md")" "same command listed once"
+}
+
+ref_tasks() { # $1 = 参照ファイル欄(行全体。複数行可)
+    write_tasks <<EOF
+## T1: a
+- **目的**: x
+$1
+- **依存**: なし
+EOF
+    write_state "T1:pending"
+}
+
+t_gen_ref_files_ok() {
+    printf 'x\n' > "$PROJ/a.txt"
+    mkdir -p "$PROJ/src" && printf 'y\n' > "$PROJ/src/b.sh"
+    ref_tasks $'- **参照ファイル**:\n  - `a.txt`(全体)\n  - `src/b.sh:10-40`(関数 foo)'
+    run_script dispatch-prompt-gen.sh T1
+    assert_eq 0 "$CODE" "exit code: $ERR"
+    assert_not_contains "$ERR" "WARN" "no warning"
+}
+
+t_gen_ref_files_missing() {
+    ref_tasks $'- **参照ファイル**:\n  - `nope.txt`'
+    run_script dispatch-prompt-gen.sh T1
+    assert_eq 1 "$CODE" "missing reference file -> exit 1"
+    assert_contains "$ERR" "nope.txt" "missing path reported"
+    assert_file_absent "$PROJ/.agents/workflow/runs/T1-1/prompt.md" "no prompt written"
+}
+
+t_gen_ref_files_absent_warns() {
+    ref_tasks ""
+    run_script dispatch-prompt-gen.sh T1
+    assert_eq 0 "$CODE" "absent field is not an error: $ERR"
+    assert_contains "$ERR" "WARN: T1: no '- **参照ファイル**:' field" "warning"
+}
+
+t_gen_ref_files_none() {
+    ref_tasks '- **参照ファイル**: なし'
+    run_script dispatch-prompt-gen.sh T1
+    assert_eq 0 "$CODE" "exit code: $ERR"
+    assert_not_contains "$ERR" "WARN" "no warning"
+}
+
+t_gen_agents_md_at_only_warns() {
+    basic_tasks
+    write_state "T1:pending"
+    printf '@.agents/skills/agents-md-setup/templates/AGENTS.md\n' > "$PROJ/AGENTS.md"
+    run_script dispatch-prompt-gen.sh T1
+    assert_eq 0 "$CODE" "exit code: $ERR"
+    assert_contains "$ERR" "AGENTS.md only contains '@' references" "warning"
+    printf '# AGENTS.md\n@other.md\n' > "$PROJ/AGENTS.md"
+    run_script dispatch-prompt-gen.sh T1
+    assert_not_contains "$ERR" "AGENTS.md only contains" "no warning when AGENTS.md has content"
+}
+
+t_gen_agents_md_at_only_profile_expands() {
+    basic_tasks
+    write_state "T1:pending"
+    printf '@.agents/skills/agents-md-setup/templates/AGENTS.md\n' > "$PROJ/AGENTS.md"
+    run_script dispatch-prompt-gen.sh T1
+    assert_contains "$ERR" "the child CLI (profile: auto) does not expand them" "profile name in warning"
+    python3 - "$(py_path "$PROJ/.agents/workflow/config.json")" <<'PY'
+import json, sys
+p = sys.argv[1]
+with open(p, encoding='utf-8') as f:
+    cfg = json.load(f)
+cfg['child_agent']['profile'] = 'claude-stream-json'
+with open(p, 'w', encoding='utf-8') as f:
+    json.dump(cfg, f, ensure_ascii=False, indent=2)
+PY
+    run_script dispatch-prompt-gen.sh T1
+    assert_eq 0 "$CODE" "exit code: $ERR"
+    assert_not_contains "$ERR" "AGENTS.md only contains" "no warning for profile that expands @"
+}
+
+t_gen_ref_files_inline() {
+    printf 'x\n' > "$PROJ/a.txt"
+    ref_tasks '- **参照ファイル**: `a.txt:1-5`(全体)'
+    run_script dispatch-prompt-gen.sh T1
+    assert_eq 0 "$CODE" "inline reference accepted: $ERR"
+    ref_tasks '- **参照ファイル**: `nope.txt`'
+    run_script dispatch-prompt-gen.sh T1
+    assert_eq 1 "$CODE" "inline missing reference -> exit 1"
+}
+
+t_gen_ac_too_many_warns() {
+    printf 'x\n' > "$PROJ/a.txt"
+    ref_tasks $'- **受け入れ基準**:\n  - [ ] c1\n  - [ ] c2\n  - [ ] c3\n  - [ ] c4\n  - [ ] c5\n  - [ ] c6\n- **参照ファイル**:\n  - `a.txt`(全体)'
+    run_script dispatch-prompt-gen.sh T1
+    assert_eq 0 "$CODE" "exit code: $ERR"
+    assert_contains "$ERR" "WARN: T1: 6 acceptance criteria (more than 5; consider splitting the task)" "warning"
+}
+
+t_gen_changed_ref_files_warns() {
+    for f in a b c d; do printf 'x\n' > "$PROJ/$f.txt"; done
+    ref_tasks $'- **参照ファイル**:\n  - `a.txt`(変更対象)\n  - `b.txt`(変更対象)\n  - `c.txt`(変更対象)\n  - `d.txt`(変更対象)'
+    run_script dispatch-prompt-gen.sh T1
+    assert_eq 0 "$CODE" "exit code: $ERR"
+    assert_contains "$ERR" "WARN: T1: 4 reference files marked 変更対象 (more than 3; consider splitting the task)" "warning"
+}
+
+t_gen_workload_no_warn_5ac_3files() {
+    for f in a b c; do printf 'x\n' > "$PROJ/$f.txt"; done
+    ref_tasks $'- **受け入れ基準**:\n  - [ ] c1\n  - [ ] c2\n  - [ ] c3\n  - [ ] c4\n  - [ ] c5\n- **参照ファイル**:\n  - `a.txt`(変更対象)\n  - `b.txt`(変更対象)\n  - `c.txt`(全体)'
+    run_script dispatch-prompt-gen.sh T1
+    assert_eq 0 "$CODE" "exit code: $ERR"
+    assert_not_contains "$ERR" "WARN" "no warning"
+}
+
+set_task_sizing() { # $1 = task_sizing の JSON
+    python3 - "$(py_path "$PROJ/.agents/workflow/config.json")" "$1" <<'PY'
+import json, sys
+p, ts = sys.argv[1:3]
+with open(p, encoding='utf-8') as f:
+    cfg = json.load(f)
+cfg['task_sizing'] = json.loads(ts)
+with open(p, 'w', encoding='utf-8') as f:
+    json.dump(cfg, f, ensure_ascii=False, indent=2)
+PY
+}
+
+t_gen_task_sizing_thresholds() {
+    for f in a b c; do printf 'x\n' > "$PROJ/$f.txt"; done
+    set_task_sizing '{"max_acceptance_criteria": 2, "max_changed_files": 1, "max_reference_files": 2}'
+    ref_tasks $'- **受け入れ基準**:\n  - [ ] c1\n  - [ ] c2\n  - [ ] c3\n- **参照ファイル**:\n  - `a.txt`(変更対象)\n  - `b.txt`(変更対象)\n  - `c.txt`(全体)'
+    run_script dispatch-prompt-gen.sh T1
+    assert_eq 0 "$CODE" "exit code: $ERR"
+    assert_contains "$ERR" "3 acceptance criteria (more than 2; consider splitting the task)" "ac warning"
+    assert_contains "$ERR" "2 reference files marked 変更対象 (more than 1; consider splitting the task)" "changed warning"
+    assert_contains "$ERR" "3 reference files (keep it to a few)" "refs warning"
+}
+
+t_gen_task_sizing_invalid_uses_default() {
+    printf 'x\n' > "$PROJ/a.txt"
+    set_task_sizing '{"max_acceptance_criteria": "x"}'
+    ref_tasks $'- **受け入れ基準**:\n  - [ ] c1\n  - [ ] c2\n  - [ ] c3\n  - [ ] c4\n  - [ ] c5\n  - [ ] c6\n- **参照ファイル**:\n  - `a.txt`(全体)'
+    run_script dispatch-prompt-gen.sh T1
+    assert_eq 0 "$CODE" "exit code: $ERR"
+    assert_contains "$ERR" "WARN: config task_sizing.max_acceptance_criteria is not a positive integer (using 5)" "invalid warning"
+    assert_contains "$ERR" "6 acceptance criteria (more than 5;" "default threshold"
+}
+
 echo "test-tasks.sh"
+test_case "gen: task_sizing の値で作業量の警告のしきい値が変わる" t_gen_task_sizing_thresholds
+test_case "gen: task_sizing が不正値なら警告して既定値を使う" t_gen_task_sizing_invalid_uses_default
 test_case "gen: 注記付き依存はexit 1" t_gen_annotation_rejected
 test_case "gen: 正しい形式は通る" t_gen_valid_forms_pass
 test_case "gen: 存在しないIDはexit 1" t_gen_unknown_id_rejected
@@ -724,6 +1089,14 @@ test_case "sync: init 依存行なしはexit 1" t_sync_init_missing_line_rejecte
 test_case "sync: init 循環はexit 1" t_sync_init_cycle_rejected
 test_case "sync: 追記 不正ならstate不変" t_sync_append_invalid_keeps_state
 test_case "sync: 追記 正常" t_sync_append_valid
+test_case "sync: 追記 既存タスクのタイトルを更新" t_sync_append_title_updated
+test_case "sync: 追記 タイトル不変なら Updated を出さない" t_sync_append_title_unchanged_silent
+test_case "sync: 要件がすべてタスクに対応すれば対応表を出す" t_sync_req_table_printed
+test_case "sync: 要件節も要件欄も無ければ対応表を出さない" t_sync_req_no_section_unchanged
+test_case "sync: どのタスクにも対応しない要件はexit 1" t_sync_req_uncovered_rejected
+test_case "sync: 存在しない要件IDはexit 1" t_sync_req_unknown_id_rejected
+test_case "sync: 要件節があるのに要件欄が無いタスクはexit 1" t_sync_req_missing_field_rejected
+test_case "sync: 要件節の形式違反の行はexit 1" t_sync_req_malformed_line_rejected
 test_case "sync: グループ区切りの解析" t_sync_group_parse
 test_case "sync: グループ欄は位置より優先" t_sync_group_field_overrides
 test_case "sync: 存在しないグループ名はexit 1" t_sync_group_unknown_rejected
@@ -743,6 +1116,9 @@ test_case "next: 区切り無しで全完了はexit 3" t_next_no_separator_all_d
 test_case "sync: init で group を初期化" t_sync_init_group_field
 test_case "sync: insert・追記で group を保持" t_sync_insert_preserves_group
 test_case "sync: group欄の無い旧stateには足さない" t_sync_group_absent_kept_absent
+test_case "sync: --set-branch は現在のブランチを state.json に書く" t_sync_set_branch_current
+test_case "sync: --set-branch に名前を渡せばその名前を書く" t_sync_set_branch_named
+test_case "sync: --set-branch は develop/ 以外を拒否する" t_sync_set_branch_rejects_non_develop
 test_case "insert: pendingの前に挿入" t_insert_before_pending
 test_case "insert: なし→T8、複数指定" t_insert_before_none_dep
 test_case "insert: pending以外は拒否" t_insert_before_non_pending_rejected
@@ -751,15 +1127,29 @@ test_case "insert: --before必須" t_insert_requires_before
 test_case "insert: CRLF保持" t_insert_preserves_crlf
 test_case "next: 依存充足の最初のpending" t_next_first_ready_pending
 test_case "next: 再開対象を優先" t_next_resume_first
+test_case "next: in_progressの再開はdispatch" t_next_resume_in_progress
 test_case "next: 全完了はexit 3" t_next_all_done
 test_case "next: ブロックはexit 4" t_next_blocked
 test_case "next: 依存欄不正はexit 1" t_next_invalid_deps
 test_case "__pycache__ を作らない" t_no_pycache
 test_case "insert: 空白区切りの--before" t_insert_before_space_separated
+test_case "見出しは大文字小文字を区別" t_heading_case_sensitive
 test_case "next: tasks空はexit 1" t_next_empty_state
 test_case "gen: 不正なTaskIdはexit 1" t_gen_invalid_task_id
 test_case "gen: 空のquality_gateステップは載せない" t_gen_skips_empty_steps
 test_case "gen: 検証コマンド未設定は受け入れ基準を指示" t_gen_no_verify_command
 test_case "gen: プロジェクト固有の指示を含まない" t_gen_no_project_specific_text
 test_case "gen: config.json が壊れていればexit 1" t_gen_broken_config
+test_case "gen: 同じ検証コマンドは1回だけ載せる" t_gen_dedup_verify_command
+test_case "gen: 参照ファイルが存在すれば通る" t_gen_ref_files_ok
+test_case "gen: 存在しない参照ファイルはexit 1" t_gen_ref_files_missing
+test_case "gen: 参照ファイル欄が無ければ警告" t_gen_ref_files_absent_warns
+test_case "gen: 参照ファイル なし は検証しない" t_gen_ref_files_none
+test_case "gen: @参照だけのAGENTS.mdは警告" t_gen_agents_md_at_only_warns
+test_case "gen: AGENTS.md の @ 参照を展開する profile では警告しない" t_gen_agents_md_at_only_profile_expands
+test_case "gen: 同じ行の参照ファイルも検証する" t_gen_ref_files_inline
+test_case "gen: 受け入れ基準が6件以上なら警告" t_gen_ac_too_many_warns
+test_case "gen: 変更対象の参照ファイルが4件以上なら警告" t_gen_changed_ref_files_warns
+test_case "gen: 受け入れ基準5件・変更対象3件なら警告しない" t_gen_workload_no_warn_5ac_3files
+test_case "テストの git はグローバル設定を読まない" t_test_git_reads_no_global_config
 summary
