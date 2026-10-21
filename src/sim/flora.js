@@ -14,7 +14,12 @@ export class Flora {
     this.plants = [];
     this.grid = new Map();   // key -> 植物の配列
     this.version = 0;        // 植物が増減するたびに進む（描画側の更新判定用）
+    this.nSoft = 0;          // 生きている草類の数
+    this.nHard = 0;          // 生きている木類の数
   }
+
+  // その種の枠（草類 / 木類）が上限に達しているか
+  full(sp) { return sp.soft ? this.nSoft >= CFG.MAX_SOFT_PLANTS : this.nHard >= CFG.MAX_HARD_PLANTS; }
 
   suitability(sp, x, z, mean = true, soil) { return suitability(this.terrain, this.climate, sp, x, z, mean, soil); }
 
@@ -30,10 +35,11 @@ export class Flora {
   trySeed(x, z, sp, energyFrac = 0.2) {
     if (Math.abs(x) > EDGE + 1 || Math.abs(z) > EDGE + 1) return null;
     if (this.plants.length >= CFG.MAX_PLANTS) return null;
+    if (sp && this.full(sp)) return null;
     if (!sp) {
-      // その場所に最も適した種（多少ランダム）
+      // その場所に最も適した種（多少ランダム）。枠が埋まった種は選ばない
       let best = null, bs = 0;
-      for (const s of PLANT_SPECIES) { const v = this.suitability(s, x, z) * (0.6 + 0.8 * this.rng()); if (v > bs) { bs = v; best = s; } }
+      for (const s of PLANT_SPECIES) { if (this.full(s)) continue; const v = this.suitability(s, x, z) * (0.6 + 0.8 * this.rng()); if (v > bs) { bs = v; best = s; } }
       sp = best;
     }
     if (!sp) return null;
@@ -61,6 +67,7 @@ export class Flora {
     p.col = this.world.createCollider(desc);
     this.colliderOwner.set(p.col.handle, { kind: 'p', obj: p });
     this.plants.push(p);
+    if (sp.soft) this.nSoft++; else this.nHard++;
     const key = plantKey(x, z);
     (this.grid.get(key) || this.grid.set(key, []).get(key)).push(p);
     this.version++;
@@ -70,6 +77,7 @@ export class Flora {
   remove(p) {
     if (!p.alive) return;
     p.alive = false;
+    if (p.sp.soft) this.nSoft--; else this.nHard--;
     this.colliderOwner.delete(p.col.handle);
     this.world.removeCollider(p.col, false);
     const arr = this.grid.get(plantKey(p.x, p.z));

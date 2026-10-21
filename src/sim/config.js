@@ -17,6 +17,8 @@ export const CFG = {
   MAX_LITTER: 8,
   MATE_COST: 0.08,     // 繁殖行為そのものに使うエネルギー（各親の最大エネルギーに対する割合）
   MAX_PLANTS: 2000,
+  MAX_SOFT_PLANTS: 1000, // 草類（soft）の上限。MAX_SOFT_PLANTS + MAX_HARD_PLANTS === MAX_PLANTS
+  MAX_HARD_PLANTS: 1000, // 木類（soft でない）の上限
   DENSITY: 40,
   FOOD_GAIN: 4.5,      // 食べた量に対して得られるエネルギーの倍率
   GRAZE_FLOOR: 0.2,    // 草がここまで食べ尽くされると、しばらく回復を待つ
