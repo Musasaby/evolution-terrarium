@@ -24,6 +24,7 @@ export function createStore(initial) {
 //   follow    … カメラで追跡するか
 //   tab       … 表示中のパネル id
 //   perfOpen  … パフォーマンス表示を出すか
+//   panelOpen … 右パネルを開いているか（ページ再読み込み後も controls.js が保つ）
 export const appStore = createStore({
-  sim: null, speed: 1, selected: null, follow: false, tab: 'p-stats', perfOpen: false,
+  sim: null, speed: 1, selected: null, follow: false, tab: 'p-stats', perfOpen: false, panelOpen: true,
 });
