@@ -1,8 +1,8 @@
 {
   "source": "docs/plans/biodiversity.md",
-  "branch": "develop/biodiversity-B",
-  "updated_at": "2026-10-14T17:10:09+09:00",
-  "group": "B",
+  "branch": "develop/biodiversity-C",
+  "updated_at": "2026-10-22T10:42:06+09:00",
+  "group": "C",
   "tasks": [
     {
       "id": "T1",
@@ -49,30 +49,30 @@
     {
       "id": "T7",
       "title": "耐温幅 tTol と気温の感覚入力",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "800698d0b16935e3335364030adb9201a175de7b"
     },
     {
       "id": "T8",
       "title": "水棲適応 aqua",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "ebbb0fa8577c6d5854fa91f1a3ffd54f5bf7907a"
     },
     {
       "id": "T9",
       "title": "肉食の祖先",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "24710a58d7184fbdd3d7b06ece29848254dbcd03"
     },
     {
       "id": "T10",
       "title": "生態的種分化と係数の調整",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "5349eda66ec0f46a46dd541bfb8d2523b6bd414d"
     },
     {
       "id": "T11",
@@ -122,6 +122,48 @@
       "status": "pending",
       "retries": 0,
       "commit": null
+    },
+    {
+      "id": "T18",
+      "title": "ばらつきに強い判定を計測ツールに加える",
+      "status": "done",
+      "retries": 0,
+      "commit": "df78d84a2ac2d1986520f1a5ca6de1c0d4d6e40a"
+    },
+    {
+      "id": "T19",
+      "title": "草類と木類で植物の枠を分ける",
+      "status": "done",
+      "retries": 0,
+      "commit": "e332bf1f19cab3d34e4372fafdc2f9e92d7fcbac"
+    },
+    {
+      "id": "T20",
+      "title": "木の葉が食べられない原因を調べる",
+      "status": "done",
+      "retries": 0,
+      "commit": "556147cae0114987f449963f66e9baf48ace5eeb"
+    },
+    {
+      "id": "T21",
+      "title": "湖の面積を CFG に移し、陸の植物とのつり合いを取る",
+      "status": "done",
+      "retries": 0,
+      "commit": "accad7b23c6d8c442c81ebe646c0261084f0e2c1"
+    },
+    {
+      "id": "T22",
+      "title": "Issue #10 の結果を計画の文書に書く",
+      "status": "done",
+      "retries": 0,
+      "commit": "162812be437a4d5be48cbc8c4d63bcac7db8a625"
+    },
+    {
+      "id": "T23",
+      "title": "木の葉に届く高さ CANOPY を下げる",
+      "status": "done",
+      "retries": 0,
+      "commit": "9a888c7552d66583b68bf2ae7d8541e35bdb8129"
     }
   ]
 }

@@ -44,6 +44,8 @@ export class Sim {
     this.litters = [];
     this.counters = { births: 0, deaths: 0, predations: 0, matings: 0, stillborn: 0, rejected: 0 };
     this.rejectUntil = new Map();
+    // 餌の種類別に、食べて得たエネルギーの累計（調査用。状態ハッシュの対象ではない）
+    this.feedStats = { graze: 0, browseHigh: 0, browseLow: 0, browseHighN: 0, browseLowN: 0, meat: 0 };
     this.terrainVersion = 0;
     this.listeners = new Map();
 

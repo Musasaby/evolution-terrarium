@@ -46,7 +46,9 @@ function graze(sim, dt) {
     if (dmg <= 0) continue;
     p.energy -= dmg;
     if (p.energy <= floor + 0.01) p.dormant = sim.t + sim.rng.range(...CFG.RECOVER);
-    feed(cr, dmg * 0.85 * CFG.FOOD_GAIN * cr.eff.soft);
+    const gain = dmg * 0.85 * CFG.FOOD_GAIN * cr.eff.soft;
+    feed(cr, gain);
+    sim.feedStats.graze += gain;
   }
 }
 
@@ -83,7 +85,10 @@ function browse(sim, c, p, F, dt) {
   const dmg = Math.min(p.energy, (high ? 5.0 + eff * 0.02 : eff * 0.015) * dt);
   if (dmg <= 0) return;
   p.energy -= dmg;
-  feed(cr, dmg * 0.85 * CFG.FOOD_GAIN * cr.eff.hard);
+  const gain = dmg * 0.85 * CFG.FOOD_GAIN * cr.eff.hard;
+  feed(cr, gain);
+  const fs = sim.feedStats;
+  if (high) { fs.browseHigh += gain; fs.browseHighN++; } else { fs.browseLow += gain; fs.browseLowN++; }
   if (p.energy <= 0.01) sim.flora.remove(p);
 }
 
@@ -92,12 +97,16 @@ function applyHit(sim, att, tgt, dmg) {
   if (tgt.dead) {
     const d = Math.min(tgt.corpseE, dmg * 1.5);
     tgt.corpseE -= d;
-    feed(att, d * 0.8 * CFG.FOOD_GAIN * att.eff.meat);
+    const gain = d * CFG.PRED_GAIN_CORPSE * CFG.FOOD_GAIN * att.eff.meat;
+    feed(att, gain);
+    sim.feedStats.meat += gain;
     return;
   }
   const d = Math.min(tgt.energy, dmg);
   tgt.energy -= d; tgt.hurt = 0.5;
-  feed(att, d * 0.7 * CFG.FOOD_GAIN * att.eff.meat);
+  const gain = d * CFG.PRED_GAIN * CFG.FOOD_GAIN * att.eff.meat;
+  feed(att, gain);
+  sim.feedStats.meat += gain;
   if (tgt.energy <= 0) { kill(sim, tgt, `捕食（${att.species?.name || '?'}）`); att.kills++; sim.counters.predations++; }
 }
 
