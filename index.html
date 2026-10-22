@@ -105,17 +105,30 @@
         </div>
         <div style="margin-top:12px">
           <h2>消費の内訳（毎秒）</h2>
-          <div class="costs">
-            <div>基礎<b id="c-base">0</b></div><div>運動<b id="c-move">0</b></div><div>寒暖<b id="c-clim2">0</b></div><div>水中<b id="c-wet">0</b></div><div>密集・疫病<b id="c-crowd">0</b></div>
+          <div class="stack" id="i-cost">
+            <i id="c-base" style="background:var(--accent)"></i><i id="c-move" style="background:var(--leaf)"></i><i id="c-clim2" style="background:var(--danger)"></i><i id="c-wet" style="background:var(--water)"></i><i id="c-crowd" style="background:var(--muted)"></i>
           </div>
+          <div class="legend"><span><i style="background:var(--accent)"></i>基礎</span><span><i style="background:var(--leaf)"></i>運動</span><span><i style="background:var(--danger)"></i>寒暖</span><span><i style="background:var(--water)"></i>水中</span><span><i style="background:var(--muted)"></i>密集</span></div>
         </div>
         <div style="margin-top:12px">
           <h2>体の形（真上から）</h2>
           <canvas id="body2d"></canvas>
         </div>
         <div style="margin-top:12px">
+          <h2>生き方</h2>
+          <div class="trait" id="i-diet"><span>食性</span>
+            <div class="mini3"><div class="bar"><div id="d-soft" style="background:var(--leaf)"></div></div><div class="bar"><div id="d-hard" style="background:var(--accent)"></div></div><div class="bar"><div id="d-meat" style="background:var(--danger)"></div></div></div>
+            <em id="d-name"></em></div>
+          <div class="trait"><span>適温</span>
+            <div class="tband" id="i-temp"><div id="t-band"></div></div>
+            <em id="t-text"></em></div>
+          <div class="trait"><span>水棲度</span>
+            <div class="bar" id="i-aqua"><div id="a-bar" style="background:var(--water)"></div></div>
+            <em id="a-text"></em></div>
+        </div>
+        <div style="margin-top:12px">
           <h2>記録</h2>
-          <dl id="i-dl"></dl>
+          <dl id="i-dl" class="two"></dl>
         </div>
         <div class="row" style="margin-top:12px">
           <button class="lone" id="btn-follow" aria-pressed="false">追跡する</button>
@@ -125,7 +138,7 @@
     </section>
 
     <section class="pane" id="p-tree" role="tabpanel" hidden>
-      <div class="note" title="横軸は時間。線は種の存続期間、太線は現存種、縦の細線は祖先種からの分岐。種は「互いを配偶相手と認め、育つ子を残せるか」で判定し、集団が別々に変異を溜めて相手と認めなくなったり雑種が育たなくなったりすると、別の種として分かれます。">横軸は時間、太線は現存種</div>
+      <div class="note tree-note" title="横軸は時間。線は種の存続期間、太線は現存種、縦の細線は祖先種からの分岐。種は「互いを配偶相手と認め、育つ子を残せるか」で判定し、集団が別々に変異を溜めて相手と認めなくなったり雑種が育たなくなったりすると、別の種として分かれます。">横軸は時間、太線は現存種（ホバーで詳細）</div>
       <div class="treewrap"><canvas id="tree"></canvas></div>
     </section>
 

@@ -1,9 +1,10 @@
 // ===== 個体パネル：選んだ個体の遺伝子・エネルギー・系譜 =====
 // 選択状態はストア（selected / follow）から読み、ボタン操作もストアへ書くだけ。
-import { qRot, CFG, dietName } from '../../sim/index.js';
+import { qRot, dietName } from '../../sim/index.js';
 import { speciesCss, CORPSE_COLOR } from '../../render/palette.js';
 import { $, fillDl, prepCanvas } from '../dom.js';
 
+const T_MIN = -10, T_MAX = 42;  // 適温の帯を描く温度軸（℃）。topt 8〜24 ± tTol 4〜18 が収まる範囲
 const MATE_CACHE_SEC = 2;  // 交配相手の数え直し間隔（シム秒）
 
 export class InspectorPanel {
@@ -31,17 +32,14 @@ export class InspectorPanel {
     const e = c.dead ? c.corpseE : c.energy;
     $('i-ebar').style.width = Math.max(0, Math.min(100, e / c.maxE * 100)) + '%';
     $('i-etext').textContent = `${e.toFixed(0)} / ${c.maxE.toFixed(0)}` + (c.dead ? '（死骸の残り）' : '');
-    $('c-base').textContent = c.cost.base.toFixed(2); $('c-move').textContent = c.cost.move.toFixed(2);
-    $('c-clim2').textContent = c.cost.climate.toFixed(2); $('c-wet').textContent = c.cost.water.toFixed(2);
-    $('c-crowd').textContent = (c.cost.crowd ?? 0).toFixed(2);
+    this.drawCost(c);
+    this.drawTraits(c);
     const rows = [
       ['年齢', c.age.toFixed(0) + ' 秒'], ['体積', c.vol.toFixed(2) + ' m³'], ['関節', c.joints.length || c.nParts - 1],
       ['子の数', c.children], ['捕食した数', c.kills], ['獲得エネルギー', c.eaten.toFixed(0)],
       ['振動数', c.genome.freq.toFixed(2) + ' Hz'], ['親', c.parents ? '#' + c.parents.join(', #') : '祖先／移入'],
       ['同時に生まれた数', c.litter ? c.litter + ' 体' : '—'],
       ['選り好みの強さ', (c.genome.pick * 100).toFixed(0) + ' %'],
-      ['食性', `${dietName(c.genome)}（草 ×${c.eff.soft.toFixed(2)} · 木の葉 ×${c.eff.hard.toFixed(2)} · 肉 ×${c.eff.meat.toFixed(2)}）`],
-      ['適温', `${(c.topt - CFG.COMFORT).toFixed(0)}〜${(c.topt + CFG.COMFORT).toFixed(0)} ℃`],
       ['近くの同種', c.dead ? '—' : c.crowd + ' 体' + (sp.plagueUntil > sim.t ? '（疫病が流行中）' : '')],
       ['交配できる相手', this.mateInfo(sim, c)],
       ['誕生時の変異', c.mutations.length ? c.mutations.join('、') : 'なし'],
@@ -51,6 +49,29 @@ export class InspectorPanel {
     $('btn-follow').setAttribute('aria-pressed', String(follow));
     $('btn-follow').textContent = follow ? '追跡中' : '追跡する';
     this.drawBody(c);
+  }
+
+  // 消費の内訳を 1 本の積み上げ帯に（幅は各項目の割合、数値は title で読める）
+  drawCost(c) {
+    const k = c.cost, parts = [['c-base', '基礎', k.base], ['c-move', '運動', k.move], ['c-clim2', '寒暖', k.climate], ['c-wet', '水中', k.water], ['c-crowd', '密集・疫病', k.crowd ?? 0]];
+    for (const [id, name, v] of parts) { const el = $(id); el.style.flex = `${Math.max(0, v)} 0 0`; el.title = `${name} ${v.toFixed(2)}/秒`; }
+  }
+
+  // 食性・適温・水棲度を図で見せる（数値は title に置く）
+  drawTraits(c) {
+    const top = Math.max(1, c.eff.soft, c.eff.hard, c.eff.meat);
+    for (const [id, key, name] of [['d-soft', 'soft', '草'], ['d-hard', 'hard', '木の葉'], ['d-meat', 'meat', '肉']]) {
+      $(id).style.width = c.eff[key] / top * 100 + '%'; $(id).parentElement.title = `${name} ×${c.eff[key].toFixed(2)}`;
+    }
+    $('d-name').textContent = dietName(c.genome);
+    const span = T_MAX - T_MIN, lo = c.topt - c.tTol, hi = c.topt + c.tTol;
+    const l = Math.max(0, (lo - T_MIN) / span), r = Math.min(1, (hi - T_MIN) / span);
+    const band = $('t-band'); band.style.left = l * 100 + '%'; band.style.width = Math.max(0, r - l) * 100 + '%';
+    $('i-temp').title = `${lo.toFixed(0)}〜${hi.toFixed(0)} ℃（軸 ${T_MIN}〜${T_MAX} ℃）`;
+    $('t-text').textContent = `${c.topt.toFixed(0)}℃`;
+    const aq = c.aqua ?? 0;
+    $('a-bar').style.width = aq * 100 + '%'; $('i-aqua').title = `水棲度 ${(aq * 100).toFixed(0)} %`;
+    $('a-text').textContent = `${(aq * 100).toFixed(0)}%`;
   }
 
   // 子を残せる相手（雑種の生存力が半分以上）が今いくついるか
