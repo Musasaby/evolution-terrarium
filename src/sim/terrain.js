@@ -5,7 +5,6 @@ import { clamp, sat } from './math.js';
 
 const N = CFG.GRID, W = N + 1, S = CFG.WORLD;
 const BASE_WATER = 1.2;  // 初期の湖面（climate.js の baseWater と同じ値）
-const LAKE_FRAC = 0.15;  // 湖の面積合計の、世界の面積に対する割合（格子の解像度によらない）
 
 export class Terrain {
   constructor(rng, noise) {
@@ -49,7 +48,7 @@ export class Terrain {
     for (let k = 0; k < nl; k++) {
       // 候補から標高の最も低い平地を選ぶ（既に置いた湖が半径に入る場所は避ける）
       // 面積は世界の面積（S*S）に対する割合で決める（格子の解像度によらない）
-      const rExp = Math.sqrt((LAKE_FRAC / nl) * S * S / Math.PI) / 0.85;
+      const rExp = Math.sqrt((CFG.LAKE_FRAC / nl) * S * S / Math.PI) / 0.85;
       let bx = 0, bz = 0, bb = Infinity, fb = Infinity, fx = 0, fz = 0;
       for (let tryK = 0; tryK < 10; tryK++) {
         const x = rng.range(-28, 28), z = rng.range(-28, 28);
@@ -65,7 +64,7 @@ export class Terrain {
       if (!isFinite(bb)) { bb = fb; bx = fx; bz = fz; }
       // 底の深さは湖の縁の最高地点より十分深くして、斜面でも面積を保つ
       let rimMax = bb;
-      const water = (LAKE_FRAC / nl) * S * S * rng.range(0.9, 1.1);
+      const water = (CFG.LAKE_FRAC / nl) * S * S * rng.range(0.9, 1.1);
       const radius = Math.sqrt(water / Math.PI) / 0.85;
       for (let pv = 0; pv < 8; pv++) {
         const a = (pv / 8) * Math.PI * 2;
