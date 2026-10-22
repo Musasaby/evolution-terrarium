@@ -22,17 +22,22 @@ export function lineChart(cv, stats, series, colors) {
     const x = X(y * CFG.YEAR); ctx.beginPath(); ctx.moveTo(x, T); ctx.lineTo(x, h - B); ctx.stroke();
     ctx.fillText(y + '年', x, h - 4);
   }
+  const scales = [];
   series.forEach((s, si) => {
     let mn = s.min ?? Infinity, mx = s.max ?? -Infinity;
     if (s.min === undefined || s.max === undefined) for (const p of st) { const v = s.get(p); if (s.min === undefined) mn = Math.min(mn, v); if (s.max === undefined) mx = Math.max(mx, v); }
+    if (s.like !== undefined) { mn = scales[s.like].mn; mx = scales[s.like].mx; }
     const span = s.span ?? 1;
     if (mx - mn < span) { const m = (mx + mn) / 2; if (s.min === undefined) mn = m - span / 2; if (s.max === undefined) mx = mn + span; else mn = mx - span; }
     if (s.min !== undefined && mn > s.min) mn = s.min;
+    scales[si] = { mn, mx };
     const Y = (v) => h - B - (v - mn) / (mx - mn) * (h - B - T);
     // 目盛（左右）
     ctx.fillStyle = s.color; ctx.textAlign = si === 0 ? 'right' : 'left';
-    ctx.fillText(fmt(mx), si === 0 ? L - 4 : w - R + 4, T + 8);
-    ctx.fillText(fmt(mn), si === 0 ? L - 4 : w - R + 4, h - B);
+    if (s.like === undefined) {
+      ctx.fillText(fmt(mx), si === 0 ? L - 4 : w - R + 4, T + 8);
+      ctx.fillText(fmt(mn), si === 0 ? L - 4 : w - R + 4, h - B);
+    }
     if (si === 0) {
       ctx.beginPath(); ctx.moveTo(X(st[0].t), h - B);
       for (const p of st) ctx.lineTo(X(p.t), Y(s.get(p)));

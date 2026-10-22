@@ -20,38 +20,39 @@
 <body>
 <div id="app">
   <header>
-    <h1>円柱生物の進化箱庭<small>EVOLUTION TERRARIUM</small></h1>
+    <h1>円柱生物の進化箱庭</h1>
     <div class="readings" id="readings">
-      <span>年 <b id="r-year">0.0</b> <b id="r-season">春</b></span>
-      <span>気温 <b id="r-temp">--</b>℃</span>
-      <span>湖面 <b id="r-water">--</b>m</span>
-      <span><span class="chip" id="r-weather">晴れ</span></span>
-      <span>個体 <b id="r-pop">0</b></span>
-      <span>種 <b id="r-sp">0</b></span>
-      <span>最大世代 <b id="r-gen">0</b></span>
+      <span title="経過年数と季節"><b id="r-year">0.0</b>年 <b id="r-season">春</b></span>
+      <span title="気温"><b id="r-temp">--</b>℃</span>
+      <span title="湖の水位（基準からの差、m）">湖<b id="r-water">--</b></span>
+      <span title="天候"><span class="chip" id="r-weather">晴</span></span>
+      <span title="生きている個体数">個体<b id="r-pop">0</b></span>
+      <span title="現存する種の数">種<b id="r-sp">0</b></span>
+      <span title="最大世代数">世代<b id="r-gen">0</b></span>
     </div>
     <div class="controls">
       <div class="seg" role="group" aria-label="速度" id="speeds">
-        <button id="sp-0" data-s="0">停止</button>
-        <button id="sp-1" data-s="1" aria-pressed="true">×1</button>
-        <button id="sp-3" data-s="3">×3</button>
-        <button id="sp-8" data-s="8">×8</button>
-        <button id="sp-max" data-s="999">最大</button>
+        <button id="sp-0" data-s="0" title="一時停止（Space キー）">停止</button>
+        <button id="sp-1" data-s="1" aria-pressed="true" title="等速">×1</button>
+        <button id="sp-3" data-s="3" title="3 倍速">×3</button>
+        <button id="sp-8" data-s="8" title="8 倍速">×8</button>
+        <button id="sp-max" data-s="999" title="できるだけ速く進める">最大</button>
       </div>
       <div class="seg" role="group" aria-label="環境イベント">
-        <button id="ev-rain" data-w="rain">雨</button>
-        <button id="ev-drought" data-w="drought">干ばつ</button>
-        <button id="ev-ice" data-w="ice">氷河期</button>
+        <button id="ev-rain" data-w="rain" title="雨を降らせる">雨</button>
+        <button id="ev-drought" data-w="drought" title="干ばつを起こす">干ばつ</button>
+        <button id="ev-ice" data-w="ice" title="氷河期を起こす">氷河期</button>
       </div>
-      <button class="lone" id="btn-perf" aria-pressed="true" title="パフォーマンス表示の切り替え（P キー）">性能</button>
-      <button class="lone" id="btn-reset">新しい世界</button>
+      <button class="lone" id="btn-panel" aria-pressed="true" title="右パネルの開閉（B キー）">パネル</button>
+      <button class="lone" id="btn-perf" aria-pressed="false" title="パフォーマンス表示の切り替え（P キー）">性能</button>
+      <button class="lone" id="btn-reset" title="今の世界を捨てて新しい世界を生成する">新しい世界</button>
     </div>
   </header>
 
   <div id="view">
     <div id="loading"><div><div class="big">世界を生成中</div><p id="loading-msg">物理エンジンを読み込んでいます…</p></div></div>
     <section id="perf" aria-label="パフォーマンス" hidden></section>
-    <div id="hint">ドラッグで回転・右ドラッグで移動・ホイールで拡大／生物をクリックで観察／Space で一時停止・P で性能表示</div>
+    <div id="hint">ドラッグで回転・ホイールで拡大・クリックで観察</div>
   </div>
 
   <aside>
@@ -66,17 +67,12 @@
       <div>
         <h2>個体数と種数</h2>
         <canvas class="chart" id="c-pop"></canvas>
-        <div class="legend"><span><i style="background:var(--accent)"></i>個体数</span><span><i style="background:var(--water)"></i>種数</span></div>
-      </div>
-      <div>
-        <h2>多様性</h2>
-        <canvas class="chart" id="c-div"></canvas>
-        <div class="legend"><span><i style="background:var(--accent)"></i>有効種数（e<sup>H</sup>）</span><span><i style="background:var(--danger)"></i>最大の種の割合 %</span></div>
-        <dl id="diversity"></dl>
+        <div class="legend"><span><i style="background:var(--accent)"></i>個体</span><span><i style="background:var(--water)"></i>種</span><span><i style="background:var(--leaf)"></i>実効種</span></div>
+        <div class="note" id="topline"></div>
       </div>
       <div>
         <h2>繁殖</h2>
-        <dl id="repro"></dl>
+        <dl id="repro" class="mini"></dl>
       </div>
       <div>
         <h2>体のつくり（平均）</h2>
@@ -96,7 +92,7 @@
     </section>
 
     <section class="pane" id="p-ind" role="tabpanel" hidden>
-      <div id="ind-empty" class="empty">3D 画面の生物をクリックすると、ここに遺伝子・エネルギー・系譜が表示されます。<br><button class="lone" id="btn-random">ランダムに1体選ぶ</button></div>
+      <div id="ind-empty" class="empty">3D 画面の生物をクリックすると表示されます。<br><button class="lone" id="btn-random">ランダムに1体選ぶ</button></div>
       <div id="ind" hidden>
         <div class="tag">
           <div class="sp"><i id="i-dot"></i><span id="i-species"></span></div>
@@ -109,13 +105,26 @@
         </div>
         <div style="margin-top:12px">
           <h2>消費の内訳（毎秒）</h2>
-          <div class="costs">
-            <div>基礎<b id="c-base">0</b></div><div>運動<b id="c-move">0</b></div><div>寒暖<b id="c-clim2">0</b></div><div>水中<b id="c-wet">0</b></div><div>密集・疫病<b id="c-crowd">0</b></div>
+          <div class="stack" id="i-cost">
+            <i id="c-base" style="background:var(--accent)"></i><i id="c-move" style="background:var(--leaf)"></i><i id="c-clim2" style="background:var(--danger)"></i><i id="c-wet" style="background:var(--water)"></i><i id="c-crowd" style="background:var(--muted)"></i>
           </div>
+          <div class="legend"><span><i style="background:var(--accent)"></i>基礎</span><span><i style="background:var(--leaf)"></i>運動</span><span><i style="background:var(--danger)"></i>寒暖</span><span><i style="background:var(--water)"></i>水中</span><span><i style="background:var(--muted)"></i>密集</span></div>
         </div>
         <div style="margin-top:12px">
           <h2>体の形（真上から）</h2>
           <canvas id="body2d"></canvas>
+        </div>
+        <div style="margin-top:12px">
+          <h2>生き方</h2>
+          <div class="trait" id="i-diet"><span>食性</span>
+            <div class="mini3"><div class="bar"><div id="d-soft" style="background:var(--leaf)"></div></div><div class="bar"><div id="d-hard" style="background:var(--accent)"></div></div><div class="bar"><div id="d-meat" style="background:var(--danger)"></div></div></div>
+            <em id="d-name"></em></div>
+          <div class="trait"><span>適温</span>
+            <div class="tband" id="i-temp"><div id="t-band"></div></div>
+            <em id="t-text"></em></div>
+          <div class="trait"><span>水棲度</span>
+            <div class="bar" id="i-aqua"><div id="a-bar" style="background:var(--water)"></div></div>
+            <em id="a-text"></em></div>
         </div>
         <div style="margin-top:12px">
           <h2>記録</h2>
@@ -129,7 +138,7 @@
     </section>
 
     <section class="pane" id="p-tree" role="tabpanel" hidden>
-      <div class="note">横軸は時間。線は種の存続期間、太線は現存種です。縦の細線は祖先種からの分岐を表します。<br>種は「互いを配偶相手と認め、育つ子を残せるか」で判定します。集団が別々に変異を溜め、体色や体つきの違いで相手と認めなくなったり、雑種が育たなくなったりすると、別の種として分かれます。</div>
+      <div class="note tree-note" title="横軸は時間。線は種の存続期間、太線は現存種、縦の細線は祖先種からの分岐。種は「互いを配偶相手と認め、育つ子を残せるか」で判定し、集団が別々に変異を溜めて相手と認めなくなったり雑種が育たなくなったりすると、別の種として分かれます。">横軸は時間、太線は現存種（ホバーで詳細）</div>
       <div class="treewrap"><canvas id="tree"></canvas></div>
     </section>
 
