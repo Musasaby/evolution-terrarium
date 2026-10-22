@@ -1,7 +1,7 @@
 {
   "source": "docs/plans/biodiversity.md",
   "branch": "develop/biodiversity-F",
-  "updated_at": "2026-10-22T16:17:02+09:00",
+  "updated_at": "2026-10-22T16:23:24+09:00",
   "group": "F",
   "tasks": [
     {
@@ -112,9 +112,9 @@
     {
       "id": "T16",
       "title": "世界の広さを設定できるようにする",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "e108d32f0443405e77c590c7688834e595598a04"
     },
     {
       "id": "T17",
