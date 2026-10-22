@@ -1,8 +1,8 @@
 {
   "source": "docs/plans/biodiversity.md",
-  "branch": "develop/biodiversity-C",
-  "updated_at": "2026-10-22T10:42:06+09:00",
-  "group": "C",
+  "branch": "develop/biodiversity-D",
+  "updated_at": "2026-10-22T15:23:02+09:00",
+  "group": "D",
   "tasks": [
     {
       "id": "T1",
@@ -77,23 +77,23 @@
     {
       "id": "T11",
       "title": "ヘッダーと操作ヒントの簡素化",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "babb4ecfa1f95e6488f134183b21ab2ab994351e"
     },
     {
       "id": "T12",
       "title": "右パネルの縮小と折りたたみ・統計タブの整理",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "0c985727b3ed7333a36bebdca5d74e2750bafd71"
     },
     {
       "id": "T13",
       "title": "個体タブ・系統樹タブの整理",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "c55d09e5967e713b7fd29542ac2bba1ce5f0fc2c"
     },
     {
       "id": "T14",
@@ -164,6 +164,13 @@
       "status": "done",
       "retries": 0,
       "commit": "9a888c7552d66583b68bf2ae7d8541e35bdb8129"
+    },
+    {
+      "id": "T24",
+      "title": "個体タブの記録表を 1 項目 1 行に戻す",
+      "status": "done",
+      "retries": 0,
+      "commit": "144a36656cf48f583e3f18f0767a0ad1b850ab1e"
     }
   ]
 }

@@ -74,10 +74,12 @@ perf
 function applyPerfVisibility({ perfOpen, sim }) {
   overlay.setVisible(perfOpen);
   if (sim) sim.profiler = perfOpen ? simProfiler : NULL_PROFILER;
-  pref.set(PERF_PREF_KEY, perfOpen ? '1' : '0');
 }
 if (pref.get(PERF_PREF_KEY) !== null) store.set({ perfOpen: pref.get(PERF_PREF_KEY) === '1' });
-store.subscribe((s, prev) => { if (s.perfOpen !== prev.perfOpen || s.sim !== prev.sim) applyPerfVisibility(s); });
+store.subscribe((s, prev) => {
+  if (s.perfOpen !== prev.perfOpen) pref.set(PERF_PREF_KEY, s.perfOpen ? '1' : '0'); // 利用者が切り替えたときだけ保存する
+  if (s.perfOpen !== prev.perfOpen || s.sim !== prev.sim) applyPerfVisibility(s);
+});
 store.subscribe((s, prev) => { if (s.speed !== prev.speed) runner.reset(); });
 
 // ---------- クリックで生物を選ぶ ----------
@@ -110,6 +112,8 @@ new GameLoop(perf)
 // ---------- 起動 ----------
 const nextFrame = () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
 let rapierReady = false;
+const HINT_MS = 8000;
+let hintTimer = 0;
 async function start(seed) {
   $('loading').hidden = false;
   $('loading-msg').textContent = rapierReady ? '地形と植生をつくっています…' : '物理エンジンを読み込んでいます…';
@@ -128,6 +132,7 @@ async function start(seed) {
   store.set({ sim });
   $('loading').hidden = true;
   refreshUI();
+  if (!hintTimer) hintTimer = setTimeout(() => $('hint').classList.add('gone'), HINT_MS); // 操作ヒントは最初の世界でだけ見せる
 }
 applyPerfVisibility(store.get());
 start(DEFAULT_SEED).catch(err => { $('loading-msg').textContent = '読み込みに失敗しました: ' + err.message; console.error(err); });
