@@ -2,13 +2,15 @@
 // 高さ場（H）だけを持つ独立した部品。物理エンジンの当たり判定は Sim 側が H から作る。
 import { CFG, EDGE } from './config.js';
 import { clamp, sat } from './math.js';
+import { DEFAULT_SETTINGS } from './world-settings.js';
 
 const N = CFG.GRID, W = N + 1, S = CFG.WORLD;
 const BASE_WATER = 1.2;  // 初期の湖面（climate.js の baseWater と同じ値）
 
 export class Terrain {
-  constructor(rng, noise) {
+  constructor(rng, noise, settings = DEFAULT_SETTINGS) {
     this.rng = rng;
+    this.settings = settings;
     this.H = new Float32Array(W * W);
     this.soil = new Uint8Array(W * W);   // 土壌の種類(0=岩場, 1=砂地, 2=肥沃, 3=泥炭)
     this.distWater = new Float32Array(W * W);
@@ -31,24 +33,28 @@ export class Terrain {
 
   generate(nz) {
     const rng = this.rng;
-    // 山（1〜3 個）：高さと裾野の広さも世界ごとにばらつく
+    const cfg = this.settings;
+    // 山（既定は 1〜3 個）：高さと裾野の広さも世界ごとにばらつく（個数を指定しても乱数は 1 回引き、消費順を保つ）
     this.mtns = [];
-    const nm = 1 + Math.floor(rng() * 3);
+    const nmRand = 1 + Math.floor(rng() * 3);
+    const nm = cfg.mtnCount ?? nmRand;
     for (let k = 0; k < nm; k++) {
       this.mtns.push({
         x: rng.range(18, 34) * (rng() < 0.5 ? -1 : 1),
         z: rng.range(18, 34) * (rng() < 0.5 ? -1 : 1),
-        height: rng.range(14, 26),
+        height: rng.range(14, 26) * cfg.mtnHeight,
         radius: rng.range(18, 30),
       });
     }
-    // 湖（1〜3 個）：標高の低い平地に置き、底の平らな甕状の深い窪みで必要な面積を保証する
+    // 湖（既定は 1〜3 個）：標高の低い平地に置き、底の平らな甕状の深い窪みで必要な面積を保証する
     this.lakes = [];
-    const nl = 1 + Math.floor(rng() * 3);
+    const nlRand = 1 + Math.floor(rng() * 3);
+    const nl = cfg.lakeCount ?? nlRand;
+    const lakeFrac = CFG.LAKE_FRAC * cfg.lakeSize;
     for (let k = 0; k < nl; k++) {
       // 候補から標高の最も低い平地を選ぶ（既に置いた湖が半径に入る場所は避ける）
       // 面積は世界の面積（S*S）に対する割合で決める（格子の解像度によらない）
-      const rExp = Math.sqrt((CFG.LAKE_FRAC / nl) * S * S / Math.PI) / 0.85;
+      const rExp = Math.sqrt((lakeFrac / nl) * S * S / Math.PI) / 0.85;
       let bx = 0, bz = 0, bb = Infinity, fb = Infinity, fx = 0, fz = 0;
       for (let tryK = 0; tryK < 10; tryK++) {
         const x = rng.range(-28, 28), z = rng.range(-28, 28);
@@ -64,7 +70,7 @@ export class Terrain {
       if (!isFinite(bb)) { bb = fb; bx = fx; bz = fz; }
       // 底の深さは湖の縁の最高地点より十分深くして、斜面でも面積を保つ
       let rimMax = bb;
-      const water = (CFG.LAKE_FRAC / nl) * S * S * rng.range(0.9, 1.1);
+      const water = (lakeFrac / nl) * S * S * rng.range(0.9, 1.1);
       const radius = Math.sqrt(water / Math.PI) / 0.85;
       for (let pv = 0; pv < 8; pv++) {
         const a = (pv / 8) * Math.PI * 2;
@@ -118,7 +124,7 @@ export class Terrain {
   }
 
   // 土壌(0=岩場, 1=砂地, 2=肥沃, 3=泥炭)。生成時に決める静的な格子(自己の侵食では変わらない)。
-  // ノイズの場の分位数で陸地を 4 分するので、どの土壌も陸地の約 25% を占める
+  // ノイズの場の分位数で陸地を重み（settings.soil）の比に分ける。既定は均等で、どの土壌も陸地の約 25%
   generateSoil(nz) {
     const W1 = W, rng = this.rng;
     const score = new Float32Array(W * W);
@@ -130,7 +136,8 @@ export class Terrain {
     }
     const s = land.map(id => score[id]).sort((a, b) => a - b);
     const q = n => s[Math.min(s.length - 1, Math.floor(s.length * n))];
-    const t0 = q(0.25), t1 = q(0.5), t2 = q(0.75);
+    const w = this.settings.soil, tot = w[0] + w[1] + w[2] + w[3];
+    const t0 = q(w[0] / tot), t1 = q((w[0] + w[1]) / tot), t2 = q((w[0] + w[1] + w[2]) / tot);
     for (let id = 0; id < W * W; id++) {
       const v = score[id];
       this.soil[id] = v < t0 ? 0 : v < t1 ? 1 : v < t2 ? 2 : 3;

@@ -1,6 +1,7 @@
 // 長時間・複数シードの多様性計測（ブラウザ不要）
 //   npm run check:diversity                     … 既定 27000 ステップ（3 年）・シード 1,2,3
 //   node tools/diversity-check.mjs 27000 2      … ステップ数とシードを指定（カンマ区切りで複数可）
+//   node tools/diversity-check.mjs 9000 1 --settings climate:cold  … 世界の設定（テンプレート ID か JSON）を指定
 //
 // T2 の computeDiversity（src/sim/diversity.js）を使い、0.25 年ごとに
 // 個体数・現存種・実効種数・食性ニッチの実効数・食性 3 分類の個体数・
@@ -8,6 +9,7 @@
 // シードは子プロセスで並行実行する。
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { extractSettings } from './settings-arg.mjs';
 
 const self = fileURLToPath(import.meta.url);
 
@@ -69,9 +71,9 @@ function printVerdict(results) {
   console.log(`  ${mark(noInv * 2 > n)} 2〜3 年に移入が起きないシードが過半（${noInv}/${n}）`);
 }
 
-async function runWorker(steps, seed) {
+async function runWorker(steps, seed, settingsText) {
   return new Promise((resolve, reject) => {
-    const ps = spawn(process.execPath, [self, '--worker', String(steps), String(seed)], {
+    const ps = spawn(process.execPath, [self, ...(settingsText ? ['--settings', settingsText] : []), '--worker', String(steps), String(seed)], {
       stdio: ['ignore', 'pipe', 'inherit'],
     });
     const out = [];
@@ -86,14 +88,16 @@ async function runWorker(steps, seed) {
 }
 
 // 子プロセスとして起動された場合（--worker <ステップ数> <シード>）は 1 シードだけ進めて JSON を出す
-const wi = process.argv.indexOf('--worker');
+const { args, settings, text: settingsText } = extractSettings(process.argv.slice(2));
+const wi = args.indexOf('--worker');
 if (wi >= 0) {
   const { runSeed } = await import('./diversity-worker.mjs');
-  process.stdout.write(JSON.stringify(await runSeed(+process.argv[wi + 1], +process.argv[wi + 2])));
+  process.stdout.write(JSON.stringify(await runSeed(+args[wi + 1], +args[wi + 2], settings)));
 } else {
-  const steps = +(process.argv[2] ?? 27000);
-  const seeds = (process.argv[3] ?? '1,2,3').split(',').map(Number).filter(Number.isFinite);
-  const results = await Promise.all(seeds.map((seed) => runWorker(steps, seed)));
+  const steps = +(args[0] ?? 27000);
+  const seeds = (args[1] ?? '1,2,3').split(',').map(Number).filter(Number.isFinite);
+  const results = await Promise.all(seeds.map((seed) => runWorker(steps, seed, settingsText)));
+  if (settingsText) console.log(`世界の設定: ${settingsText}`);
   console.log(`${steps} ステップ（0.25 年ごとに集計。壁時間 ${Math.max(...results.map((r) => r.elapsed)).toFixed(0)} ms・シードは並行実行）`);
   for (const r of results) printTable(r);
   printVerdict(results);

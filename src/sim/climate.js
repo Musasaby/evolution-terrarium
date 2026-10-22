@@ -2,15 +2,17 @@
 // 乱数と記録用の関数だけを受け取る独立した部品。地形や生物には依存しない。
 import { CFG } from './config.js';
 import { clamp } from './math.js';
+import { DEFAULT_SETTINGS } from './world-settings.js';
 
 export class Climate {
   // rng: 乱数 / log(msg, kind): 出来事の記録
-  constructor(rng, log = () => {}) {
+  constructor(rng, log = () => {}, settings = DEFAULT_SETTINGS) {
     this.rng = rng;
+    this.settings = settings;
     this.log = log;
     this.drift = 0; this.ice = 0; this.iceTarget = 0; this.iceUntil = -1;
     this.weather = 'clear'; this.weatherUntil = 30; this.humidity = 0.55;
-    this.baseWater = 1.2; this.water = 1.2; this.temp = 15; this.meanTemp = 15; this.rainVis = 0;
+    this.baseWater = 1.2; this.water = 1.2; this.temp = 15; this.meanTemp = 15 + settings.tempOffset; this.rainVis = 0;
   }
 
   static seasonName(t) {
@@ -28,14 +30,14 @@ export class Climate {
     if (this.iceTarget === 0 && t > CFG.YEAR * 2 && rng() < dt / (CFG.YEAR * 7)) this.startIceAge(t);
     if (this.iceTarget < 0 && t > this.iceUntil) { this.iceTarget = 0; this.log('氷河期が終わり、温暖化が始まった', 'env'); }
     this.ice += (this.iceTarget - this.ice) * Math.min(1, dt / 60);
-    this.temp = 15 + 11 * season + this.drift + this.ice;
+    this.temp = 15 + this.settings.tempOffset + 11 * this.settings.seasonAmp * season + this.drift + this.ice;
     this.meanTemp += (this.temp - this.meanTemp) * Math.min(1, dt / (CFG.YEAR * 0.6));
     // 天候
     if (t > this.weatherUntil) {
       const r = rng();
       const wetBias = 0.1 * Math.sin((t / CFG.YEAR) * Math.PI * 2 + 1);
-      const prev = this.weather;
-      this.weather = r < 0.33 + wetBias ? 'rain' : r < 0.78 ? 'clear' : 'drought';
+      const prev = this.weather, wet = this.settings.wetness;
+      this.weather = r < 0.33 + wetBias + 0.15 * wet ? 'rain' : r < 0.78 + 0.15 * wet ? 'clear' : 'drought';
       this.weatherUntil = t + rng.range(20, 70) * (this.weather === 'drought' ? 1.8 : 1);
       if (this.weather !== prev) {
         if (this.weather === 'drought') this.log('干ばつが始まった', 'env');

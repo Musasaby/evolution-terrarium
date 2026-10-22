@@ -20,15 +20,18 @@ import { interfertile, updateSpecies } from './speciation.js';
 import { recordStats } from './stats.js';
 import { clampVel } from './body.js';
 import { NULL_PROFILER } from './profiler.js';
+import { normalizeSettings } from './world-settings.js';
 
 const MAX_EVENTS = 120;
 
 export class Sim {
   // opts.profiler: begin(name)/end(name) を持つ計測器（省略時は計測しない）
+  // opts.settings: 世界の設定（world-settings.js。省略した項目は既定値）
   constructor(RAPIER, seed = 1, opts = {}) {
     this.R = RAPIER;
     this.seed = seed;
     this.profiler = opts.profiler || NULL_PROFILER;
+    this.settings = normalizeSettings(opts.settings);
     this.rng = makeRng(seed);
     this.noise = makeNoise(this.rng);
     this.t = 0;
@@ -51,8 +54,8 @@ export class Sim {
 
     this.initPhysics();
     const log = (msg, kind) => this.log(msg, kind);
-    this.climate = new Climate(this.rng, log);
-    this.terrain = new Terrain(this.rng, this.noise);
+    this.climate = new Climate(this.rng, log, this.settings);
+    this.terrain = new Terrain(this.rng, this.noise, this.settings);
     this.buildTerrainCollider();
     this.terrain.computeMoisture(this.climate.water);
     this.flora = new Flora({ R: RAPIER, world: this.world, colliderOwner: this.colliderOwner, rng: this.rng, terrain: this.terrain, climate: this.climate });
