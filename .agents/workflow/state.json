@@ -1,7 +1,7 @@
 {
   "source": "docs/plans/biodiversity.md",
   "branch": "develop/biodiversity-C",
-  "updated_at": "2026-10-22T08:47:21+09:00",
+  "updated_at": "2026-10-22T09:12:44+09:00",
   "group": "C",
   "tasks": [
     {
@@ -161,9 +161,9 @@
     {
       "id": "T23",
       "title": "木の葉に届く高さ CANOPY を下げる",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "9a888c7552d66583b68bf2ae7d8541e35bdb8129"
     }
   ]
 }
