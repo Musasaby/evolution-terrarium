@@ -21,6 +21,7 @@ export function bindControls(store, actions) {
   let prevSpeed = 1;
   const typing = (el) => el instanceof HTMLElement && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName));
   addEventListener('keydown', (e) => {
+    if ($('title') && !$('title').hidden) return; // タイトル画面の表示中は世界を操作しない
     if (typing(e.target) || e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
     if (e.code === 'Space') {
       e.preventDefault();
