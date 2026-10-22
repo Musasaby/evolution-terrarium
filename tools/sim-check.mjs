@@ -1,6 +1,7 @@
 // シミュレーションの動作確認（ブラウザ不要）
 //   npm install && npm run check:sim            … 既定 600 ステップ
 //   node tools/sim-check.mjs 1500 12345          … ステップ数とシードを指定
+//   node tools/sim-check.mjs 600 1 --settings terrain:mountain  … 世界の設定（テンプレート ID か JSON）を指定
 //
 // 同じシード・同じステップ数なら必ず同じ「状態ハッシュ」になる。
 // リファクタリングの前後でハッシュが変わらなければ、シミュレーションの振る舞いは変わっていない。
@@ -8,14 +9,16 @@
 import RAPIER from '@dimforge/rapier3d-compat';
 import { createHash } from 'node:crypto';
 import { Sim, SectionProfiler } from '../src/sim/index.js';
+import { extractSettings } from './settings-arg.mjs';
 
-const steps = +(process.argv[2] ?? 600);
-const seed = +(process.argv[3] ?? 20261007);
+const { args, settings, text } = extractSettings(process.argv.slice(2));
+const steps = +(args[0] ?? 600);
+const seed = +(args[1] ?? 20261007);
 await RAPIER.init();
 
 const t0 = performance.now();
 const prof = new SectionProfiler();
-const sim = new Sim(RAPIER, seed, { profiler: prof });
+const sim = new Sim(RAPIER, seed, { profiler: prof, settings });
 const initMs = performance.now() - t0;
 prof.take();
 const t1 = performance.now();
@@ -34,7 +37,7 @@ for (const p of sim.plants) h.update(`${p.id}|${r(p.energy)}`);
 h.update(Array.from(sim.H, r).join(','));
 
 const live = sim.creatures.filter(c => c.alive && !c.dead).length;
-console.log(`seed ${seed} / ${steps} ステップ（シム ${sim.t.toFixed(1)} 秒）`);
+console.log(`seed ${seed} / ${steps} ステップ（シム ${sim.t.toFixed(1)} 秒）${text ? ` / 設定 ${text}` : ''}`);
 console.log(`状態ハッシュ  ${h.digest('hex').slice(0, 16)}`);
 console.log(`生物 ${live} / 植物 ${sim.plants.length} / 種 ${sim.species.size}`);
 console.log(`世界の生成 ${initMs.toFixed(0)} ms、1ステップ平均 ${(runMs / steps).toFixed(2)} ms`);

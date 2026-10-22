@@ -1,14 +1,18 @@
 // ===== 地形：高さ場の生成・隆起と侵食・水域からの距離 =====
 // 高さ場（H）だけを持つ独立した部品。物理エンジンの当たり判定は Sim 側が H から作る。
-import { CFG, EDGE } from './config.js';
+import { CFG } from './config.js';
 import { clamp, sat } from './math.js';
+import { DEFAULT_SETTINGS, worldGeometry } from './world-settings.js';
 
-const N = CFG.GRID, W = N + 1, S = CFG.WORLD;
 const BASE_WATER = 1.2;  // 初期の湖面（climate.js の baseWater と同じ値）
 
 export class Terrain {
-  constructor(rng, noise) {
+  constructor(rng, noise, settings = DEFAULT_SETTINGS) {
     this.rng = rng;
+    this.settings = settings;
+    const g = worldGeometry(settings.size);
+    this.S = g.size; this.N = g.grid; this.W = g.grid + 1; this.edge = g.edge; this.k = g.k;
+    const W = this.W;
     this.H = new Float32Array(W * W);
     this.soil = new Uint8Array(W * W);   // 土壌の種類(0=岩場, 1=砂地, 2=肥沃, 3=泥炭)
     this.distWater = new Float32Array(W * W);
@@ -19,6 +23,7 @@ export class Terrain {
 
   // 湖がない場合の高さ（湖の深さの決定に使う）
   baseHeight(x, z, nz) {
+    const S = this.S;
     let h = 3 + nz(x * 0.027, z * 0.027, 4) * 5;
     for (const mtn of this.mtns) {
       const dm = Math.hypot(x - mtn.x, z - mtn.z);
@@ -30,28 +35,31 @@ export class Terrain {
   }
 
   generate(nz) {
-    const rng = this.rng;
-    // 山（1〜3 個）：高さと裾野の広さも世界ごとにばらつく
+    const rng = this.rng, cfg = this.settings, N = this.N, W = this.W, S = this.S, k0 = this.k;
+    // 山（既定は 1〜3 個）：高さと裾野の広さも世界ごとにばらつく（個数を指定しても乱数は 1 回引き、消費順を保つ）
     this.mtns = [];
-    const nm = 1 + Math.floor(rng() * 3);
+    const nmRand = 1 + Math.floor(rng() * 3);
+    const nm = cfg.mtnCount ?? nmRand;
     for (let k = 0; k < nm; k++) {
       this.mtns.push({
-        x: rng.range(18, 34) * (rng() < 0.5 ? -1 : 1),
-        z: rng.range(18, 34) * (rng() < 0.5 ? -1 : 1),
-        height: rng.range(14, 26),
+        x: rng.range(18 * k0, 34 * k0) * (rng() < 0.5 ? -1 : 1),
+        z: rng.range(18 * k0, 34 * k0) * (rng() < 0.5 ? -1 : 1),
+        height: rng.range(14, 26) * cfg.mtnHeight,
         radius: rng.range(18, 30),
       });
     }
-    // 湖（1〜3 個）：標高の低い平地に置き、底の平らな甕状の深い窪みで必要な面積を保証する
+    // 湖（既定は 1〜3 個）：標高の低い平地に置き、底の平らな甕状の深い窪みで必要な面積を保証する
     this.lakes = [];
-    const nl = 1 + Math.floor(rng() * 3);
+    const nlRand = 1 + Math.floor(rng() * 3);
+    const nl = cfg.lakeCount ?? nlRand;
+    const lakeFrac = CFG.LAKE_FRAC * cfg.lakeSize;
     for (let k = 0; k < nl; k++) {
       // 候補から標高の最も低い平地を選ぶ（既に置いた湖が半径に入る場所は避ける）
       // 面積は世界の面積（S*S）に対する割合で決める（格子の解像度によらない）
-      const rExp = Math.sqrt((CFG.LAKE_FRAC / nl) * S * S / Math.PI) / 0.85;
+      const rExp = Math.sqrt((lakeFrac / nl) * S * S / Math.PI) / 0.85;
       let bx = 0, bz = 0, bb = Infinity, fb = Infinity, fx = 0, fz = 0;
       for (let tryK = 0; tryK < 10; tryK++) {
-        const x = rng.range(-28, 28), z = rng.range(-28, 28);
+        const x = rng.range(-28 * k0, 28 * k0), z = rng.range(-28 * k0, 28 * k0);
         let far = true;
         for (const lk of this.lakes) {
           if (Math.hypot(x - lk.x, z - lk.z) < (lk.radius + rExp) * 0.8) far = false;
@@ -64,7 +72,7 @@ export class Terrain {
       if (!isFinite(bb)) { bb = fb; bx = fx; bz = fz; }
       // 底の深さは湖の縁の最高地点より十分深くして、斜面でも面積を保つ
       let rimMax = bb;
-      const water = (CFG.LAKE_FRAC / nl) * S * S * rng.range(0.9, 1.1);
+      const water = (lakeFrac / nl) * S * S * rng.range(0.9, 1.1);
       const radius = Math.sqrt(water / Math.PI) / 0.85;
       for (let pv = 0; pv < 8; pv++) {
         const a = (pv / 8) * Math.PI * 2;
@@ -92,6 +100,7 @@ export class Terrain {
   // 湖どうしをつなぐ水路。幅 1〜2 格子・底を湖面より 2 低くする
   // （隆起と侵食の 1 年あたりの合計の上限は ±0.04 × 1 年分の更新 45 回 = 1.8 なので、埋まり切らない）
   generateRivers() {
+    const N = this.N, W = this.W, S = this.S;
     if (this.lakes.length < 2) return;
     const W1 = W, halfW = (S / N) * 0.98, bottom = BASE_WATER - 2;
     // 全部の湖が 1 本につながるように、湖ごとに既に置いた湖で最も近いものへ線を引く
@@ -118,9 +127,9 @@ export class Terrain {
   }
 
   // 土壌(0=岩場, 1=砂地, 2=肥沃, 3=泥炭)。生成時に決める静的な格子(自己の侵食では変わらない)。
-  // ノイズの場の分位数で陸地を 4 分するので、どの土壌も陸地の約 25% を占める
+  // ノイズの場の分位数で陸地を重み（settings.soil）の比に分ける。既定は均等で、どの土壌も陸地の約 25%
   generateSoil(nz) {
-    const W1 = W, rng = this.rng;
+    const N = this.N, W = this.W, S = this.S, W1 = W, rng = this.rng;
     const score = new Float32Array(W * W);
     const land = [];
     for (let i = 0; i <= N; i++) for (let j = 0; j <= N; j++) {
@@ -130,7 +139,8 @@ export class Terrain {
     }
     const s = land.map(id => score[id]).sort((a, b) => a - b);
     const q = n => s[Math.min(s.length - 1, Math.floor(s.length * n))];
-    const t0 = q(0.25), t1 = q(0.5), t2 = q(0.75);
+    const w = this.settings.soil, tot = w[0] + w[1] + w[2] + w[3];
+    const t0 = q(w[0] / tot), t1 = q((w[0] + w[1]) / tot), t2 = q((w[0] + w[1] + w[2]) / tot);
     for (let id = 0; id < W * W; id++) {
       const v = score[id];
       this.soil[id] = v < t0 ? 0 : v < t1 ? 1 : v < t2 ? 2 : 3;
@@ -138,6 +148,7 @@ export class Terrain {
   }
 
   heightAt(x, z) {
+    const N = this.N, W = this.W, S = this.S;
     const fx = clamp((x + S / 2) / S * N, 0, N - 1e-4), fz = clamp((z + S / 2) / S * N, 0, N - 1e-4);
     const i = Math.floor(fx), j = Math.floor(fz), u = fx - i, v = fz - j, H = this.H;
     // 三角形分割に合わせず双線形で近似
@@ -146,6 +157,7 @@ export class Terrain {
 
   // 土壌の種類(0=岩場, 1=砂地, 2=肥沃, 3=泥炭)。静的な格子を引くだけ
   soilAt(x, z) {
+    const N = this.N, W = this.W, S = this.S;
     const i = clamp(Math.round((x + S / 2) / S * N), 0, N), j = clamp(Math.round((z + S / 2) / S * N), 0, N);
     return this.soil[i * W + j];
   }
@@ -153,9 +165,9 @@ export class Terrain {
   // 隆起と侵食（数秒ごと）。高さが変わったら true を返す
   // t: 現在時刻 / humidity: 湿度（雨による侵食の強さ） / log: 出来事の記録
   update(t, humidity, log) {
-    const H = this.H, rng = this.rng;
+    const H = this.H, rng = this.rng, N = this.N, W = this.W, S = this.S, edge = this.edge;
     if (this.hotspots.length < 2 && rng() < 0.08) {
-      const hs = { x: rng.range(-EDGE, EDGE), z: rng.range(-EDGE, EDGE), r: rng.range(8, 18), rate: rng.range(0.006, 0.016) * (rng() < 0.75 ? 1 : -1), until: t + CFG.YEAR * rng.range(1, 3), vx: rng.gauss() * 0.01, vz: rng.gauss() * 0.01 };
+      const hs = { x: rng.range(-edge, edge), z: rng.range(-edge, edge), r: rng.range(8, 18), rate: rng.range(0.006, 0.016) * (rng() < 0.75 ? 1 : -1), until: t + CFG.YEAR * rng.range(1, 3), vx: rng.gauss() * 0.01, vz: rng.gauss() * 0.01 };
       this.hotspots.push(hs);
       log(hs.rate > 0 ? '地殻が隆起を始めた' : '大地が沈降を始めた', 'env');
     }
@@ -185,6 +197,7 @@ export class Terrain {
 
   // 水域からの距離（チャンファー距離変換）
   computeMoisture(waterLevel) {
+    const N = this.N, W = this.W, S = this.S;
     const H = this.H, cell = S / N, D = this.distWater;
     for (let i = 0; i < D.length; i++) D[i] = H[i] < waterLevel ? 0 : 1e9;
     const d1 = cell, d2 = cell * 1.414;
@@ -204,6 +217,7 @@ export class Terrain {
 
   // 湿り気（0〜1）：水辺に近いほど、湿度が高いほど湿る
   moistureAt(x, z, climate) {
+    const N = this.N, W = this.W, S = this.S;
     const i = clamp(Math.round((x + S / 2) / S * N), 0, N), j = clamp(Math.round((z + S / 2) / S * N), 0, N);
     const d = this.distWater[i * W + j];
     const h = this.H[i * W + j] - climate.water;

@@ -25,7 +25,7 @@ export class WorldView {
     this.plants.attach(sim);
     this.plants.rebuild();
     this.env.update(0);
-    this.stage.resetCamera();
+    this.stage.resetCamera(sim.size);
   }
 
   // シーンの中身を sim に合わせて更新する（描画そのものは render()）
