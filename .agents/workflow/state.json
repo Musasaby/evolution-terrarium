@@ -1,7 +1,7 @@
 {
   "source": "docs/plans/biodiversity.md",
   "branch": "develop/biodiversity-D",
-  "updated_at": "2026-10-22T11:13:06+09:00",
+  "updated_at": "2026-10-22T11:15:59+09:00",
   "group": "D",
   "tasks": [
     {
@@ -77,9 +77,9 @@
     {
       "id": "T11",
       "title": "ヘッダーと操作ヒントの簡素化",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "babb4ecfa1f95e6488f134183b21ab2ab994351e"
     },
     {
       "id": "T12",
