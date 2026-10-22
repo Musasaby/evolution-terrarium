@@ -1,7 +1,7 @@
 {
   "source": "docs/plans/biodiversity.md",
   "branch": "develop/biodiversity-C",
-  "updated_at": "2026-10-22T10:40:23+09:00",
+  "updated_at": "2026-10-22T10:42:06+09:00",
   "group": "C",
   "tasks": [
     {
@@ -154,9 +154,9 @@
     {
       "id": "T22",
       "title": "Issue #10 の結果を計画の文書に書く",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "162812be437a4d5be48cbc8c4d63bcac7db8a625"
     },
     {
       "id": "T23",
