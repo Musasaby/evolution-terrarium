@@ -1,7 +1,7 @@
 {
   "source": "docs/plans/biodiversity.md",
   "branch": "develop/biodiversity-D",
-  "updated_at": "2026-10-22T11:19:06+09:00",
+  "updated_at": "2026-10-22T11:21:02+09:00",
   "group": "D",
   "tasks": [
     {
@@ -91,9 +91,9 @@
     {
       "id": "T13",
       "title": "個体タブ・系統樹タブの整理",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "c55d09e5967e713b7fd29542ac2bba1ce5f0fc2c"
     },
     {
       "id": "T14",
