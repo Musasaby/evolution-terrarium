@@ -1,7 +1,7 @@
 {
   "source": "docs/plans/biodiversity.md",
   "branch": "develop/biodiversity-D",
-  "updated_at": "2026-10-22T11:15:59+09:00",
+  "updated_at": "2026-10-22T11:19:06+09:00",
   "group": "D",
   "tasks": [
     {
@@ -84,9 +84,9 @@
     {
       "id": "T12",
       "title": "右パネルの縮小と折りたたみ・統計タブの整理",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "0c985727b3ed7333a36bebdca5d74e2750bafd71"
     },
     {
       "id": "T13",
