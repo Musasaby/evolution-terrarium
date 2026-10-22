@@ -6,10 +6,10 @@ import { Sim, CFG, computeDiversity } from '../src/sim/index.js';
 const INTERVAL_STEPS = Math.round((CFG.YEAR / 4) / CFG.DT);
 const DIET_EDGE = [0.25, 0.75]; // diversity.js と同じ分類：<0.25=草, <0.75=葉, 以上=肉
 
-export async function runSeed(steps, seed) {
+export async function runSeed(steps, seed, settings) {
   await RAPIER.init();
   const t0 = performance.now();
-  const sim = new Sim(RAPIER, seed);
+  const sim = new Sim(RAPIER, seed, { settings });
   const initMs = performance.now() - t0;
 
   // 移入・疫病はイベントログで数える（sim 本体には手を入れない）
