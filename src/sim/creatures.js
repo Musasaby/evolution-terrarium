@@ -2,7 +2,7 @@
 // すべて「sim を第1引数に受け取る関数」として書き、何に依存しているかを引数から読めるようにしている。
 // sim に求めるもの: R, world, rng, t, stepCount, creatures, species, colliderOwner, counters, flora,
 //                    heightAt / isWater / tempAt / log
-import { CFG, SCHEDULE, EDGE, MAXJ, NMEM, NI, NH, NO } from './config.js';
+import { CFG, SCHEDULE, MAXJ, NMEM, NI, NH, NO } from './config.js';
 import { clamp, qRot } from './math.js';
 import { cloneGenome, mutate, newAllele, genomeStats, compatibility, dietEfficiency, NMARK } from './genetics.js';
 import { buildBody, readPose, readJointAngles, driveMotors, travelDir } from './body.js';
@@ -59,7 +59,7 @@ export function spawnFounderGroup(sim, n) {
   const sp = newSpecies(sim, g, null);
   const rng = sim.rng;
   for (let tries = 0; tries < 40; tries++) {
-    const x = rng.range(-EDGE + 10, EDGE - 10), z = rng.range(-EDGE + 10, EDGE - 10);
+    const edge = sim.edge, x = rng.range(-edge + 10, edge - 10), z = rng.range(-edge + 10, edge - 10);
     if (sim.isWater(x, z) || sim.heightAt(x, z) > 12) continue;
     // 移入してきた群れは、たどり着いた土地の気温にある程度なじんでいる
     g.topt = sim.meanTempAt(x, z) + 2 + rng.gauss() * 2.5;
@@ -235,7 +235,7 @@ export function housekeeping(sim) {
   sim.creatures = sim.creatures.filter(c => c.alive);
   const n = livingCount(sim);
   updatePlague(sim, n);
-  if (n < CFG.MIN_POP && sim.autoImmigrate !== false && sim.t - (sim.lastImmig || -99) > 20) {
+  if (n < sim.geo.minPop && sim.autoImmigrate !== false && sim.t - (sim.lastImmig || -99) > 20) {
     sim.lastImmig = sim.t;
     const c = spawnFounderGroup(sim, CFG.GROUP);
     if (c) sim.log(`個体数が減り、未知の新種「${c.species.name}」の群れが移入した`, 'info');

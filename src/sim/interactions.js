@@ -1,6 +1,6 @@
 // ===== 接触による相互作用：採食・捕食・繁殖 =====
 // 物理エンジンの接触イベントを、当たり判定の持ち主（生物・植物・地形）に応じて振り分ける。
-import { CFG, EDGE } from './config.js';
+import { CFG } from './config.js';
 import { clamp } from './math.js';
 import { recombine, mutate, genomeStats, compatibility, recognizes } from './genetics.js';
 import { spawnCreature, kill, center, livingCount, isLiving } from './creatures.js';
@@ -114,7 +114,7 @@ export function tryMate(sim, A, B) {
   const t = sim.t;
   if (t - A.lastMate < 8 || t - B.lastMate < 8 || A.age < 6 || B.age < 6) return;
   if (A.energy < A.maxE * CFG.MATE_E || B.energy < B.maxE * CFG.MATE_E) return;
-  if (livingCount(sim) > CFG.MAX_POP - CFG.MAX_LITTER) return; // 子を育てる余地がない
+  if (livingCount(sim) > sim.geo.maxPop - CFG.MAX_LITTER) return; // 子を育てる余地がない
   const rng = sim.rng;
   const key = A.id < B.id ? A.id + ':' + B.id : B.id + ':' + A.id;
   if ((sim.rejectUntil.get(key) || 0) > t) return;
@@ -143,7 +143,7 @@ export function tryMate(sim, A, B) {
     // 交配後の隔離：系統が離れていると雑種は育たない
     if (rng() > compat) { stillborn++; continue; }
     const ang = (k / 3 + rng() * 0.3) * Math.PI * 2, d = 1.2 + k * 0.35;
-    const x = clamp(mx + Math.cos(ang) * d, -EDGE, EDGE), z = clamp(mz + Math.sin(ang) * d, -EDGE, EDGE);
+    const x = clamp(mx + Math.cos(ang) * d, -sim.edge, sim.edge), z = clamp(mz + Math.sin(ang) * d, -sim.edge, sim.edge);
     const sp = speciesForChild(sim, g, A, B);
     const child = spawnCreature(sim, g, x, z, { species: sp, gen: Math.max(A.gen, B.gen) + 1, energy: e, parents: [A.id, B.id], lift: 0.5 + k * 0.15, mutations: muts });
     born.push(child);

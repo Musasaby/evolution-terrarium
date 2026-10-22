@@ -1,6 +1,5 @@
 // ===== 植生：植物の発芽・成長・拡散・枯死と、その当たり判定 =====
 // 依存するもの: 物理エンジン（R, world）、当たり判定の持ち主表、乱数、地形、気候。生物のことは知らない。
-import { CFG, EDGE } from './config.js';
 import { PLANT_SPECIES } from './plant-species.js';
 import { suitability } from './environment.js';
 
@@ -9,8 +8,8 @@ export const plantKey = (x, z) => (Math.floor((x + 100) / 4) << 8) | Math.floor(
 export const PLANT_CELL = 4;
 
 export class Flora {
-  constructor({ R, world, colliderOwner, rng, terrain, climate }) {
-    Object.assign(this, { R, world, colliderOwner, rng, terrain, climate });
+  constructor({ R, world, colliderOwner, rng, terrain, climate, geo }) {
+    Object.assign(this, { R, world, colliderOwner, rng, terrain, climate, geo });
     this.plants = [];
     this.grid = new Map();   // key -> 植物の配列
     this.version = 0;        // 植物が増減するたびに進む（描画側の更新判定用）
@@ -19,13 +18,14 @@ export class Flora {
   }
 
   // その種の枠（草類 / 木類）が上限に達しているか
-  full(sp) { return sp.soft ? this.nSoft >= CFG.MAX_SOFT_PLANTS : this.nHard >= CFG.MAX_HARD_PLANTS; }
+  full(sp) { return sp.soft ? this.nSoft >= this.geo.maxSoftPlants : this.nHard >= this.geo.maxHardPlants; }
 
   suitability(sp, x, z, mean = true, soil) { return suitability(this.terrain, this.climate, sp, x, z, mean, soil); }
 
   populate() {
-    for (let k = 0; k < 8000 && this.plants.length < 1400; k++) {
-      const x = this.rng.range(-EDGE, EDGE), z = this.rng.range(-EDGE, EDGE);
+    const { edge, area, initPlants } = this.geo;
+    for (let k = 0; k < Math.round(8000 * area) && this.plants.length < initPlants; k++) {
+      const x = this.rng.range(-edge, edge), z = this.rng.range(-edge, edge);
       this.trySeed(x, z, null, 0.75);
     }
   }
@@ -33,8 +33,9 @@ export class Flora {
   density(x, z) { return this.grid.get(plantKey(x, z))?.length || 0; }
 
   trySeed(x, z, sp, energyFrac = 0.2) {
-    if (Math.abs(x) > EDGE + 1 || Math.abs(z) > EDGE + 1) return null;
-    if (this.plants.length >= CFG.MAX_PLANTS) return null;
+    const edge = this.geo.edge;
+    if (Math.abs(x) > edge + 1 || Math.abs(z) > edge + 1) return null;
+    if (this.plants.length >= this.geo.maxPlants) return null;
     if (sp && this.full(sp)) return null;
     if (!sp) {
       // その場所に最も適した種（多少ランダム）。枠が埋まった種は選ばない
@@ -115,7 +116,7 @@ export class Flora {
     }
     if (this.plants.some(p => !p.alive)) this.plants = this.plants.filter(p => p.alive);
     // 遠方からの種子（再定着）
-    for (let k = 0; k < 5; k++) this.trySeed(rng.range(-EDGE, EDGE), rng.range(-EDGE, EDGE), null, 0.2);
+    for (let k = 0; k < 5; k++) this.trySeed(rng.range(-this.geo.edge, this.geo.edge), rng.range(-this.geo.edge, this.geo.edge), null, 0.2);
   }
 
   // 植物の種類ごとの数
