@@ -1,6 +1,6 @@
 {
   "child_agent": {
-    "command_template": "opencode run -m opencode-go/glm-5.3-flash \"{prompt}\"",
+    "command_template": "claude.cmd -p --model claude-sonnet-5-5 --output-format stream-json --verbose --permission-mode bypassPermissions",
     "timeout_seconds": 1800,
     "isolate_xdg": false
   },
@@ -28,5 +28,17 @@
   "upstream": {
     "url": "https://github.com/Musasaby/multi-ai-agents-workflow.git",
     "branch": "main"
+  },
+  "text_refine": {
+    "skill": "yomiyasu",
+    "targets": [
+      "summary",
+      "confirm",
+      "commit",
+      "pr_body",
+      "task_done",
+      "tasks"
+    ],
+    "reader": "informed"
   }
 }

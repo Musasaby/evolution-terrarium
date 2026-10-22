@@ -26,7 +26,7 @@ export function makeCreatureState(sim, genome, opts) {
     hidden: new Float32Array(NH), out: new Float32Array(NO), inp: new Float32Array(NI),
     angles: new Float32Array(MAXJ),
     lastMate: sim.t, hurt: 0, ate: 0, sense: null, mutations: opts.mutations || [],
-    eff: dietEfficiency(genome), topt: genome.topt ?? 17, crowd: 0,
+    eff: dietEfficiency(genome), topt: genome.topt ?? 17, tTol: genome.tTol ?? CFG.COMFORT, aqua: genome.aqua ?? 0, crowd: 0,
     cost: { base: 0, move: 0, climate: 0, water: 0, crowd: 0 },
   };
 }
@@ -82,7 +82,7 @@ export function spawnFounderGroup(sim, n) {
 export function kill(sim, c, cause) {
   if (c.dead) return;
   c.dead = true; c.deadAt = sim.t; c.cause = cause;
-  c.corpseE = Math.max(c.energy, 0) + c.maxE * 0.35;
+  c.corpseE = Math.max(c.energy, 0) + c.maxE * CFG.CORPSE_E;
   c.energy = 0;
   for (const j of c.joints) j.configureMotorPosition(0, 0, 0.5);
   for (const b of c.bodies) b.setAngularDamping(2);
@@ -167,7 +167,8 @@ export function sense(sim, c) {
   const ax = pos.x + f.x * 2.5, az = pos.z + f.z * 2.5;
   s.waterAhead = sim.isWater(ax, az) ? 1 : 0;
   s.slope = clamp((sim.heightAt(ax, az) - sim.heightAt(pos.x, pos.z)) / 2.5, -1, 1);
-  s.temp = clamp((sim.tempAt(pos.x, pos.z) - 15) / 15, -1.5, 1.5);
+  // 「自分にとって今が寒いか暑いか」（自分の適温を基準にした温度差）
+  s.temp = clamp((sim.tempAt(pos.x, pos.z) - c.topt) / 15, -1.5, 1.5);
   s.up = qRot(q, { x: 0, y: 0, z: 1 }).y;
 }
 
@@ -197,26 +198,30 @@ export function updateCreatures(sim, dt) {
     if (!c.sense || (sc + c.id) % SCHEDULE.SENSE === 0) sense(sim, c);
     think(c, dt);
     const move = driveMotors(c);
-    // エネルギー消費
-    const base = 0.1 + 0.65 * c.vol + 0.055 * c.nParts + 0.03 * c.joints.length;
+    // エネルギー消費（耐温幅 tTol が広い個体ほど、基礎代謝が上乗せされる）
+    let base = (0.1 + 0.65 * c.vol + 0.055 * c.nParts + 0.03 * c.joints.length) * (1 + CFG.TTOL_COST * c.tTol);
     const mv = move * 0.0006;
     let clim = 0;
     const pos = c.pos[0];
     const lt = T - 0.55 * Math.max(0, sim.heightAt(pos.x, pos.z) - baseWater);
-    const lo = c.topt - CFG.COMFORT, hi = c.topt + CFG.COMFORT;
+    const lo = c.topt - c.tTol, hi = c.topt + c.tTol;
     if (lt < lo) clim = (lo - lt) * 0.03 * c.area;
     else if (lt > hi) clim = (lt - hi) * 0.12 * c.vol;
+    // 水棲適応 aqua：浸かった部分の水中の費用と減衰が下がり（最大 AQUA_WATER_CUT 減）、
+    // 陸に上がっている部分では基礎代謝が増える
+    let wet = 0, sub = 0;
+    for (const P of c.pos) if (P.y < wl) sub++;
+    const wetK = 1 - CFG.AQUA_WATER_CUT * c.aqua;
+    if (sub) {
+      wet = (CFG.WATER_COST + CFG.WATER_COST_VOL * c.vol) * sub / c.bodies.length * wetK;
+      for (let i = 0; i < c.bodies.length; i++) c.bodies[i].setLinearDamping(c.pos[i].y < wl ? 2.5 * wetK : 0.1);
+    } else if (c.wasWet) for (const b of c.bodies) b.setLinearDamping(0.1);
+    c.wasWet = sub > 0;
+    base *= 1 + CFG.AQUA_LAND_COST * c.aqua * (1 - sub / c.bodies.length);
     // 同種の密集（縄張り争い・資源の取り合い）と疫病による消耗
     const sp = c.species, plague = sp && sp.plagueUntil > sim.t;
     let crowd = base * CFG.CROWD_K * Math.max(0, c.crowd - CFG.CROWD_FREE);
     if (plague) crowd += base * CFG.PLAGUE_K * (1 + c.crowd * 0.5);
-    let wet = 0, sub = 0;
-    for (const P of c.pos) if (P.y < wl) sub++;
-    if (sub) {
-      wet = (2.0 + 8 * c.vol) * sub / c.bodies.length;
-      for (let i = 0; i < c.bodies.length; i++) c.bodies[i].setLinearDamping(c.pos[i].y < wl ? 2.5 : 0.1);
-    } else if (c.wasWet) for (const b of c.bodies) b.setLinearDamping(0.1);
-    c.wasWet = sub > 0;
     c.cost.base = base; c.cost.move = mv; c.cost.climate = clim; c.cost.water = wet; c.cost.crowd = crowd;
     c.energy -= (base + mv + clim + wet + crowd) * dt;
     if (c.energy <= 0) { kill(sim, c, plague ? '疫病' : '飢餓'); continue; }
