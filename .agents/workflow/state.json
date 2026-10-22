@@ -1,7 +1,7 @@
 {
   "source": "docs/plans/biodiversity.md",
   "branch": "develop/biodiversity-C",
-  "updated_at": "2026-10-22T09:12:44+09:00",
+  "updated_at": "2026-10-22T10:40:23+09:00",
   "group": "C",
   "tasks": [
     {
@@ -147,9 +147,9 @@
     {
       "id": "T21",
       "title": "湖の面積を CFG に移し、陸の植物とのつり合いを取る",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "accad7b23c6d8c442c81ebe646c0261084f0e2c1"
     },
     {
       "id": "T22",
