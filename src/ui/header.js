@@ -1,7 +1,7 @@
 // ===== ヘッダーの計器（年・季節・気温・天候・個体数など） =====
 import { $ } from './dom.js';
 
-const WEATHER = { clear: '晴れ', rain: '雨', drought: '干ばつ' };
+const WEATHER = { clear: '晴', rain: '雨', drought: '干ばつ' };
 
 export function updateHeader(sim) {
   const cl = sim.climate;

@@ -20,31 +20,31 @@
 <body>
 <div id="app">
   <header>
-    <h1>円柱生物の進化箱庭<small>EVOLUTION TERRARIUM</small></h1>
+    <h1>円柱生物の進化箱庭</h1>
     <div class="readings" id="readings">
-      <span>年 <b id="r-year">0.0</b> <b id="r-season">春</b></span>
-      <span>気温 <b id="r-temp">--</b>℃</span>
-      <span>湖面 <b id="r-water">--</b>m</span>
-      <span><span class="chip" id="r-weather">晴れ</span></span>
-      <span>個体 <b id="r-pop">0</b></span>
-      <span>種 <b id="r-sp">0</b></span>
-      <span>最大世代 <b id="r-gen">0</b></span>
+      <span title="経過年数と季節"><b id="r-year">0.0</b>年 <b id="r-season">春</b></span>
+      <span title="気温"><b id="r-temp">--</b>℃</span>
+      <span title="湖の水位（基準からの差、m）">湖<b id="r-water">--</b></span>
+      <span title="天候"><span class="chip" id="r-weather">晴</span></span>
+      <span title="生きている個体数">個体<b id="r-pop">0</b></span>
+      <span title="現存する種の数">種<b id="r-sp">0</b></span>
+      <span title="最大世代数">世代<b id="r-gen">0</b></span>
     </div>
     <div class="controls">
       <div class="seg" role="group" aria-label="速度" id="speeds">
-        <button id="sp-0" data-s="0">停止</button>
-        <button id="sp-1" data-s="1" aria-pressed="true">×1</button>
-        <button id="sp-3" data-s="3">×3</button>
-        <button id="sp-8" data-s="8">×8</button>
-        <button id="sp-max" data-s="999">最大</button>
+        <button id="sp-0" data-s="0" title="一時停止（Space キー）">停止</button>
+        <button id="sp-1" data-s="1" aria-pressed="true" title="等速">×1</button>
+        <button id="sp-3" data-s="3" title="3 倍速">×3</button>
+        <button id="sp-8" data-s="8" title="8 倍速">×8</button>
+        <button id="sp-max" data-s="999" title="できるだけ速く進める">最大</button>
       </div>
       <div class="seg" role="group" aria-label="環境イベント">
-        <button id="ev-rain" data-w="rain">雨</button>
-        <button id="ev-drought" data-w="drought">干ばつ</button>
-        <button id="ev-ice" data-w="ice">氷河期</button>
+        <button id="ev-rain" data-w="rain" title="雨を降らせる">雨</button>
+        <button id="ev-drought" data-w="drought" title="干ばつを起こす">干ばつ</button>
+        <button id="ev-ice" data-w="ice" title="氷河期を起こす">氷河期</button>
       </div>
-      <button class="lone" id="btn-perf" aria-pressed="true" title="パフォーマンス表示の切り替え（P キー）">性能</button>
-      <button class="lone" id="btn-reset">新しい世界</button>
+      <button class="lone" id="btn-perf" aria-pressed="false" title="パフォーマンス表示の切り替え（P キー）">性能</button>
+      <button class="lone" id="btn-reset" title="今の世界を捨てて新しい世界を生成する">新しい世界</button>
     </div>
   </header>
 
