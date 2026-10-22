@@ -1,7 +1,7 @@
 {
   "source": "docs/plans/biodiversity.md",
   "branch": "develop/biodiversity-D",
-  "updated_at": "2026-10-22T15:21:18+09:00",
+  "updated_at": "2026-10-22T15:23:02+09:00",
   "group": "D",
   "tasks": [
     {
@@ -168,9 +168,9 @@
     {
       "id": "T24",
       "title": "個体タブの記録表を 1 項目 1 行に戻す",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "144a36656cf48f583e3f18f0767a0ad1b850ab1e"
     }
   ]
 }
