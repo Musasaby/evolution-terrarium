@@ -1,7 +1,7 @@
 {
   "source": "docs/plans/biodiversity.md",
   "branch": "develop/biodiversity-F",
-  "updated_at": "2026-10-22T15:27:11+09:00",
+  "updated_at": "2026-10-22T16:17:02+09:00",
   "group": "F",
   "tasks": [
     {
@@ -105,9 +105,9 @@
     {
       "id": "T15",
       "title": "世界の設定を Sim に渡せるようにする(地形・土壌・気候)",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "a128e4c766c25a515c240fe8c77f6061e112da66"
     },
     {
       "id": "T16",
