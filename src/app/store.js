@@ -25,6 +25,7 @@ export function createStore(initial) {
 //   tab       … 表示中のパネル id
 //   perfOpen  … パフォーマンス表示を出すか
 //   panelOpen … 右パネルを開いているか（ページ再読み込み後も controls.js が保つ）
+//   world     … 実行中の世界の { seed, settings, label }（タイトル画面で決めたもの）
 export const appStore = createStore({
-  sim: null, speed: 1, selected: null, follow: false, tab: 'p-stats', perfOpen: false, panelOpen: true,
+  world: null, sim: null, speed: 1, selected: null, follow: false, tab: 'p-stats', perfOpen: false, panelOpen: true,
 });

@@ -3,6 +3,11 @@ import { $ } from './dom.js';
 
 const WEATHER = { clear: '晴', rain: '雨', drought: '干ばつ' };
 
+// 実行中の世界のシードと設定名を見出しの title 属性に出す
+export function showWorldInfo(world) {
+  $('title-h1').title = world ? `シード ${world.seed} ／ 設定：${world.label}` : '';
+}
+
 export function updateHeader(sim) {
   const cl = sim.climate;
   $('r-year').textContent = sim.year.toFixed(1);
