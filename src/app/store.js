@@ -25,5 +25,5 @@ export function createStore(initial) {
 //   tab       … 表示中のパネル id
 //   perfOpen  … パフォーマンス表示を出すか
 export const appStore = createStore({
-  sim: null, speed: 1, selected: null, follow: false, tab: 'p-stats', perfOpen: true,
+  sim: null, speed: 1, selected: null, follow: false, tab: 'p-stats', perfOpen: false,
 });
