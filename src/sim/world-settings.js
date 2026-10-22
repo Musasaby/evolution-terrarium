@@ -2,7 +2,10 @@
 // タイトル画面で選ぶ値を sim に渡すための定義。省略した項目は DEFAULT_SETTINGS と同じ
 // （既定のときは乱数の消費順を変えないので、今までと同じ世界になる）。
 
+import { CFG } from './config.js';
+
 export const DEFAULT_SETTINGS = Object.freeze({
+  size: 120,                       // 世界の一辺（m）80〜160
   mtnCount: null,                  // 山の数（null=シード任せの 1〜3、または 0〜5）
   mtnHeight: 1,                    // 山の高さの倍率 0.4〜1.8
   lakeCount: null,                 // 湖の数（null=シード任せの 1〜3、または 0〜4）
@@ -12,6 +15,26 @@ export const DEFAULT_SETTINGS = Object.freeze({
   seasonAmp: 1,                    // 季節の振れ幅の倍率 0.5〜1.5
   wetness: 0,                      // 降水の傾向 -1〜1（雨・干ばつの起こりやすさ）
 });
+
+// 広さから決まる値。格子の大きさは既定（CFG.BASE_SIZE / CFG.BASE_GRID）を保ち、
+// 個体数・植物数の上限は面積に比例させる（既定の広さでは今までの値のまま）
+export function worldGeometry(size) {
+  const area = (size / CFG.BASE_SIZE) ** 2;
+  const scale = n => Math.round(n * area);
+  return Object.freeze({
+    size,
+    grid: Math.round(size / (CFG.BASE_SIZE / CFG.BASE_GRID)),
+    edge: size / 2 - 4,
+    k: size / CFG.BASE_SIZE,   // 置き場所の範囲の倍率
+    area,
+    maxPop: scale(CFG.MAX_POP),
+    minPop: scale(CFG.MIN_POP),
+    maxPlants: scale(CFG.MAX_PLANTS),
+    maxSoftPlants: scale(CFG.MAX_SOFT_PLANTS),
+    maxHardPlants: scale(CFG.MAX_HARD_PLANTS),
+    initPlants: scale(1400),
+  });
+}
 
 const num = (v, lo, hi, def) => (Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : def);
 const count = (v, hi) => (v === null || v === undefined || !Number.isFinite(v) ? null : Math.round(Math.min(hi, Math.max(0, v))));
@@ -23,6 +46,7 @@ export function normalizeSettings(partial) {
   let soil = Array.isArray(p.soil) ? [0, 1, 2, 3].map(i => num(p.soil[i], 0, 1, 1)) : [...D.soil];
   if (soil.every(w => w === 0)) soil = [1, 1, 1, 1];
   return Object.freeze({
+    size: num(p.size, 80, 160, D.size),
     mtnCount: count(p.mtnCount, 5),
     mtnHeight: num(p.mtnHeight, 0.4, 1.8, D.mtnHeight),
     lakeCount: count(p.lakeCount, 4),
@@ -36,6 +60,11 @@ export function normalizeSettings(partial) {
 
 // カテゴリ別のテンプレート。各テンプレートは自分のカテゴリの項目だけを持つ
 export const SETTING_PRESETS = Object.freeze({
+  size: Object.freeze([
+    { id: 'small', name: '狭い', desc: '一辺 90 m', values: { size: 90 } },
+    { id: 'standard', name: '標準', desc: '一辺 120 m', values: { size: 120 } },
+    { id: 'large', name: '広い', desc: '一辺 150 m', values: { size: 150 } },
+  ]),
   terrain: Object.freeze([
     { id: 'standard', name: '標準', desc: '山と湖の数はシード任せ', values: { mtnCount: null, mtnHeight: 1, lakeCount: null, lakeSize: 1 } },
     { id: 'mountain', name: '山岳', desc: '高い山が多い', values: { mtnCount: 4, mtnHeight: 1.3, lakeCount: null, lakeSize: 1 } },

@@ -2,12 +2,12 @@
 // 値を調整するときはこのファイルだけを触ればよい。
 
 export const CFG = {
-  WORLD: 120,          // 世界の一辺
-  GRID: 64,            // 地形の分割数
+  BASE_SIZE: 120,      // 既定の世界の一辺（実際の広さは世界の設定 size。world-settings.js）
+  BASE_GRID: 64,       // 既定の世界の地形の分割数（1 格子の大きさの基準）
   DT: 1 / 30,          // 物理ステップ
   YEAR: 300,           // 1年の長さ（シム秒）
   MAXP: 10,            // 最大パーツ数
-  MAX_POP: 200,
+  MAX_POP: 200,        // 以下、個体数・植物数の上限は既定の広さでの値（広さに比例して増減する）
   MIN_POP: 30,         // これを下回ると新種の群れが移入する
   INIT_SPECIES: 14,
   GROUP: 8,            // 1種あたりの初期個体数
@@ -78,7 +78,6 @@ export const SCHEDULE = {
 };
 
 export const MAXJ = CFG.MAXP - 1;           // 関節の最大数
-export const EDGE = CFG.WORLD / 2 - 4;      // 生物・植物が置かれる範囲
 export const NMEM = 2;                      // 記憶ニューロン数
 
 // 神経回路の寸法

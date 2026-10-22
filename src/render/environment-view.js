@@ -1,7 +1,6 @@
 // ===== 空・水面・雨と雪の描画 =====
 // sim から読むもの: climate（天候・気温・湖面・雨の見え具合）
 import * as THREE from 'three';
-import { CFG } from '../sim/index.js';
 
 const skyClear = new THREE.Color('#9cc4da'), skyRain = new THREE.Color('#7f8b93'), skyDry = new THREE.Color('#d6c69e'), skyCold = new THREE.Color('#c9d6de');
 const RAIN_DROPS = 1800, RAIN_BOX = 80, RAIN_TOP = 40;
@@ -12,7 +11,7 @@ export class EnvironmentView {
     this.controls = controls;
     this.sky = new THREE.Color();
     // 水面
-    const g = new THREE.PlaneGeometry(CFG.WORLD, CFG.WORLD); g.rotateX(-Math.PI / 2);
+    const g = new THREE.PlaneGeometry(1, 1); g.rotateX(-Math.PI / 2);
     this.water = new THREE.Mesh(g, new THREE.MeshPhongMaterial({ color: 0x3f7fa0, transparent: true, opacity: 0.78, shininess: 80, depthWrite: false }));
     scene.add(this.water);
     // 雨（カメラの注視点のまわりだけに降らせる）
@@ -24,7 +23,7 @@ export class EnvironmentView {
     scene.add(this.rain);
   }
 
-  attach(sim) { this.sim = sim; }
+  attach(sim) { this.sim = sim; this.water.scale.set(sim.size, 1, sim.size); }
 
   update(dt) {
     const cl = this.sim.climate, sky = this.sky;
