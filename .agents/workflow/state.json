@@ -1,8 +1,8 @@
 {
   "source": "docs/plans/biodiversity.md",
-  "branch": "develop/biodiversity-C",
-  "updated_at": "2026-10-22T10:42:06+09:00",
-  "group": "C",
+  "branch": "develop/biodiversity-D",
+  "updated_at": "2026-10-22T11:13:06+09:00",
+  "group": "D",
   "tasks": [
     {
       "id": "T1",
