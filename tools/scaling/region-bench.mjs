@@ -6,15 +6,35 @@ import { takeSnapshot } from './region-snapshot.mjs';
 
 const workerUrl = new URL('./region-worker.mjs', import.meta.url);
 
-const BOX_BYTES = 2 ** 20;
+const BOX_BYTES = 2 ** 24;
 const BOX_SIZE = 4 + BOX_BYTES;
 const STOP_GENERATION = -1;
+const CTRL_ERROR = 2;
+const CTRL_ERROR_CAPACITY = 3;
+const CTRL_ERROR_ATTEMPTED = 4;
+const CTRL_ERROR_INDEX = 5;
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
+function boxOverflowError(capacity, attempted) {
+  const err = new Error(`共有箱があふれました: 箱の大きさ ${capacity} バイトを超える ${attempted} バイトを書こうとしました`);
+  err.capacity = capacity;
+  err.attempted = attempted;
+  return err;
+}
+
+function workerError(ctrl) {
+  if (Atomics.load(ctrl, CTRL_ERROR) === 0) return null;
+  const capacity = Atomics.load(ctrl, CTRL_ERROR_CAPACITY);
+  const attempted = Atomics.load(ctrl, CTRL_ERROR_ATTEMPTED);
+  if (capacity >= 0 && attempted >= 0) return boxOverflowError(capacity, attempted);
+  return new Error(`区画 ${Atomics.load(ctrl, CTRL_ERROR_INDEX)} の worker でステップ処理に失敗しました`);
+}
+
 function writeBox(sab, value) {
   const bytes = encoder.encode(JSON.stringify(value));
-  if (bytes.length > BOX_BYTES) throw new Error(`共有箱があふれました: ${bytes.length} > ${BOX_BYTES}`);
+  const capacity = sab.byteLength - 4;
+  if (bytes.length > capacity) throw boxOverflowError(capacity, bytes.length);
   new Uint8Array(sab, 4, bytes.length).set(bytes);
   Atomics.store(new Int32Array(sab, 0, 1), 0, bytes.length);
 }
@@ -230,7 +250,7 @@ async function runRegionSetAtomics(snap, regionCount, steps) {
   }
   const countsStart = groups.map((g) => g.length);
 
-  const ctrl = new Int32Array(new SharedArrayBuffer(8));
+  const ctrl = new Int32Array(new SharedArrayBuffer(32));
   const inboxes = bounds.map(() => new SharedArrayBuffer(BOX_SIZE));
   const outboxes = bounds.map(() => new SharedArrayBuffer(BOX_SIZE));
 
@@ -257,37 +277,44 @@ async function runRegionSetAtomics(snap, regionCount, steps) {
   let lastDone = null;
 
   const t0 = performance.now();
-  for (let s = 0; s < steps; s++) {
-    for (let i = 0; i < regionCount; i++) writeBox(inboxes[i], pending[i]);
-    Atomics.store(ctrl, 1, 0);
-    Atomics.add(ctrl, 0, 1);
-    Atomics.notify(ctrl, 0);
-    for (;;) {
-      const done = Atomics.load(ctrl, 1);
-      if (done >= regionCount) break;
-      Atomics.wait(ctrl, 1, done);
-    }
-
-    const responses = outboxes.map((box) => readBox(box));
-    const next = bounds.map(() => []);
-    let maxC = 0;
-    let sumC = 0;
-    for (let i = 0; i < regionCount; i++) {
-      const r = responses[i];
-      maxC = Math.max(maxC, r.computeMs);
-      sumC += r.computeMs;
-      totalHandoverMs += r.handoverMs - prevHandover[i];
-      prevHandover[i] = r.handoverMs;
-      totalHandovers += r.emigrants.length;
-      for (const e of r.emigrants) {
-        const p = e.bodies[0].p;
-        next[assign(p.x, p.z)].push(e);
+  try {
+    for (let s = 0; s < steps; s++) {
+      for (let i = 0; i < regionCount; i++) writeBox(inboxes[i], pending[i]);
+      Atomics.store(ctrl, 1, 0);
+      Atomics.add(ctrl, 0, 1);
+      Atomics.notify(ctrl, 0);
+      for (;;) {
+        const done = Atomics.load(ctrl, 1);
+        if (done >= regionCount) break;
+        Atomics.wait(ctrl, 1, done);
       }
+      const err = workerError(ctrl);
+      if (err) throw err;
+
+      const responses = outboxes.map((box) => readBox(box));
+      const next = bounds.map(() => []);
+      let maxC = 0;
+      let sumC = 0;
+      for (let i = 0; i < regionCount; i++) {
+        const r = responses[i];
+        maxC = Math.max(maxC, r.computeMs);
+        sumC += r.computeMs;
+        totalHandoverMs += r.handoverMs - prevHandover[i];
+        prevHandover[i] = r.handoverMs;
+        totalHandovers += r.emigrants.length;
+        for (const e of r.emigrants) {
+          const p = e.bodies[0].p;
+          next[assign(p.x, p.z)].push(e);
+        }
+      }
+      sumMax += maxC;
+      sumMean += sumC / regionCount;
+      pending = next;
+      lastDone = responses;
     }
-    sumMax += maxC;
-    sumMean += sumC / regionCount;
-    pending = next;
-    lastDone = responses;
+  } catch (err) {
+    for (const w of workers) await w.terminate();
+    throw err;
   }
   const wallMs = performance.now() - t0;
 

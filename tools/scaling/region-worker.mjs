@@ -8,6 +8,13 @@ import { decodeGenome, encodeCreature } from './region-snapshot.mjs';
 const MAXJ = CFG.MAXP - 1;
 const { index, bounds, size, grid, H, atomics } = workerData;
 
+function boxOverflowError(capacity, attempted) {
+  const err = new Error(`共有箱があふれました: 箱の大きさ ${capacity} バイトを超える ${attempted} バイトを書こうとしました`);
+  err.capacity = capacity;
+  err.attempted = attempted;
+  return err;
+}
+
 await RAPIER.init();
 const R = RAPIER;
 const world = new R.World({ x: 0, y: -9.81, z: 0 });
@@ -131,9 +138,15 @@ if (atomics) {
   };
   const writeBox = (sab, value) => {
     const bytes = encoder.encode(JSON.stringify(value));
+    const capacity = sab.byteLength - 4;
+    if (bytes.length > capacity) throw boxOverflowError(capacity, bytes.length);
     new Uint8Array(sab, 4, bytes.length).set(bytes);
     Atomics.store(headerOf(sab), 0, bytes.length);
   };
+  const CTRL_ERROR = 2;
+  const CTRL_ERROR_CAPACITY = 3;
+  const CTRL_ERROR_ATTEMPTED = 4;
+  const CTRL_ERROR_INDEX = 5;
 
   let generation = 0;
   for (;;) {
@@ -143,9 +156,17 @@ if (atomics) {
     }
     if (current < 0) break;
     generation = current;
-    const immigrants = readBox(inbox);
-    const result = processStep(immigrants);
-    writeBox(outbox, result);
+    try {
+      const immigrants = readBox(inbox);
+      const result = processStep(immigrants);
+      writeBox(outbox, result);
+    } catch (err) {
+      if (Atomics.compareExchange(ctrl, CTRL_ERROR, 0, 1) === 0) {
+        Atomics.store(ctrl, CTRL_ERROR_INDEX, index);
+        Atomics.store(ctrl, CTRL_ERROR_CAPACITY, Number.isFinite(err && err.capacity) ? err.capacity : -1);
+        Atomics.store(ctrl, CTRL_ERROR_ATTEMPTED, Number.isFinite(err && err.attempted) ? err.attempted : -1);
+      }
+    }
     Atomics.add(ctrl, 1, 1);
     Atomics.notify(ctrl, 1);
   }
