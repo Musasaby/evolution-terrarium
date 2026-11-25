@@ -2,7 +2,7 @@
   "source": "https://github.com/Musasaby/evolution-terrarium/issues/18",
   "branch": "develop/scaling-study",
   "group": "A",
-  "updated_at": "2026-11-25T18:36:35+09:00",
+  "updated_at": "2026-11-25T18:51:01+09:00",
   "tasks": [
     {
       "id": "T1",
@@ -21,9 +21,9 @@
     {
       "id": "T3",
       "title": "V0 の結果を表と結論にまとめる",
-      "status": "in_progress",
+      "status": "done",
       "retries": 1,
-      "commit": null
+      "commit": "624f40e8c6504281bb4418bbb1d5c10f6fee6ff5"
     },
     {
       "id": "T4",
