@@ -1,8 +1,8 @@
 {
   "source": "docs/plans/biodiversity.md",
-  "branch": "develop/workflow-update-1125",
-  "updated_at": "2026-11-25T10:19:04+09:00",
-  "group": "F",
+  "branch": "develop/biodiversity-E",
+  "updated_at": "2026-11-25T10:43:51+09:00",
+  "group": "E",
   "tasks": [
     {
       "id": "T1",
