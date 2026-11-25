@@ -6,6 +6,8 @@ set -euo pipefail
 # stdout: "Progress: <done>/<全タスク> done"、"Group: <名前> <done>/<数>"(グループ区切りがあるときだけ)、
 #       "Current: <ID> <status> | <title>" / "Current: none"、
 #       "Run: <ID>-<N> running elapsed=<秒>s log_idle=<秒>s" / "Run: <ID>-<N> finished"(in_progress で run があるときだけ)、
+#       "Runner: locked pid=<pid>" / "Runner: idle"、"Runner last: <progress.log の最後の空でない行>"
+#       (runs/workflow-run/progress.log があるときだけ)、
 #       "Failed: T3, T5"(failed があるときだけ)、"PR: <state> <url>" / "PR: none" / "PR: unknown"(finish / group-advance のときだけ)、
 #       "Comprehension: unanswered=<n>[ <ファイル名> ...]"、最後に "Next: ..."
 #       --summary のときは、先頭に "Task <ID> <status> <commit 先頭7文字 | -> retries=<n> | <title>"(全タスク)と
@@ -63,6 +65,7 @@ NEXT_LINE="$(printf '%s\n' "$NEXT_OUT" | tr -d '\r' | grep '^Next:' | tail -n 1 
 # --- PR の状態(finish / group-advance のときだけ) ---
 PR_STATE=""
 PR_URL=""
+UNPUSHED_SUFFIX=""
 if [ "$NEXT_LINE" = "Next: finish" ] || [ "$NEXT_LINE" = "Next: group-advance" ]; then
     PR_STATE="unknown"
     BRANCH="$(python3 -c "
@@ -94,6 +97,18 @@ print(state, str(data.get('url') or ''))
             PR_STATE="none"
         fi
     fi
+    # OPEN のときは未 push のコミットを数える(fetch はせず、リモート追跡ブランチと比べる)
+    if [ "$PR_STATE" = "OPEN" ] && [ -n "$BRANCH" ]; then
+        REMOTE_REF="refs/remotes/origin/$BRANCH"
+        if ! git rev-parse --verify -q "$REMOTE_REF" > /dev/null 2>&1; then
+            UNPUSHED_SUFFIX=" unpushed=no-remote"
+        else
+            UNPUSHED_COUNT="$(git rev-list --count "$REMOTE_REF..refs/heads/$BRANCH" 2> /dev/null)" || UNPUSHED_COUNT=""
+            if [ -n "$UNPUSHED_COUNT" ] && [ "$UNPUSHED_COUNT" -gt 0 ] 2> /dev/null; then
+                UNPUSHED_SUFFIX=" unpushed=$UNPUSHED_COUNT"
+            fi
+        fi
+    fi
 fi
 
 # --- 作業ツリーの変更数(--summary のときだけ git を呼ぶ) ---
@@ -105,13 +120,13 @@ fi
 
 python3 - "$(to_py_path "$SCRIPT_DIR")" "$(to_py_path "$TASKS_PATH")" "$(to_py_path "$STATE_PATH")" \
     "$(to_py_path "$RUNS_DIR")" "$(to_py_path "$COMPREHENSION_DIR")" "$SUMMARY" "$NEXT_LINE" "$PR_STATE" "$PR_URL" \
-    "$DIRTY_COUNT" <<'PY'
+    "$DIRTY_COUNT" "$UNPUSHED_SUFFIX" <<'PY'
 import json, os, re, sys, time
 
 sys.stdout.reconfigure(newline='\n')
 
 (script_dir, tasks_path, state_path, runs_dir, comprehension_dir,
- summary, next_line, pr_state, pr_url, dirty_count) = sys.argv[1:11]
+ summary, next_line, pr_state, pr_url, dirty_count, unpushed_suffix) = sys.argv[1:12]
 sys.path.insert(0, script_dir)
 import tasklib
 
@@ -186,6 +201,26 @@ else:
                     out.append('Run: ' + run_id + ' running elapsed=' + str(int(now - os.path.getmtime(guard)))
                                + 's log_idle=' + idle + 's')
 
+# --- Runner(workflow-run の記録があるときだけ) ---
+runner_dir = os.path.join(runs_dir, 'workflow-run')
+progress_path = os.path.join(runner_dir, 'progress.log')
+if os.path.isfile(progress_path):
+    pid_path = os.path.join(runner_dir, 'lock', 'pid')
+    if os.path.isfile(pid_path):
+        with open(pid_path, encoding='utf-8', errors='replace') as f:
+            pid = f.read().strip()
+        out.append('Runner: locked pid=' + pid)
+    else:
+        out.append('Runner: idle')
+    last_progress = ''
+    with open(progress_path, encoding='utf-8', errors='replace') as f:
+        for line in f:
+            stripped = line.strip()
+            if stripped:
+                last_progress = stripped
+    if last_progress:
+        out.append('Runner last: ' + last_progress)
+
 # --- Failed ---
 failed = [t['id'] for t in st_tasks if t.get('status') == 'failed']
 if failed:
@@ -196,7 +231,7 @@ if pr_state:
     if pr_state in ('none', 'unknown'):
         out.append('PR: ' + pr_state)
     else:
-        out.append('PR: ' + pr_state + (' ' + pr_url if pr_url else ''))
+        out.append('PR: ' + pr_state + (' ' + pr_url if pr_url else '') + unpushed_suffix)
 
 # --- Comprehension ---
 unanswered = []
@@ -223,7 +258,7 @@ if run_shown:
 elif pr_state == 'none':
     out.append('Next: create-pr')
 elif pr_state == 'OPEN':
-    out.append('Next: wait-merge')
+    out.append('Next: update-pr' if unpushed_suffix else 'Next: wait-merge')
 elif pr_state == 'CLOSED':
     out.append('Next: escalate reason=pr-closed')
 else:

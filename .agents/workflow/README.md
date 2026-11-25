@@ -11,11 +11,17 @@
 │   ├── dispatch-start.ps1 / .sh  事前チェック〜デタッチ起動
 │   ├── dispatch-run.ps1 / .sh
 │   ├── dispatch-wait.ps1 / .sh  子の完了待ち(done 検知後に dispatch-check)
+│   ├── workflow-run.ps1 / .sh  1グループ分のタスクのループ(起動・完了待ち・レビュー・collect・品質ゲート・コミット)
+│   ├── run-phase.ps1 / .sh  タスクの段階の判定(workflow-run が使う)
+│   ├── dispatch-finish.ps1 / .sh  サブエージェントの run の完了(done を書いて dispatch-check)
 │   ├── dispatch-check.ps1 / .sh
 │   ├── git-state.ps1 / .sh  git 状態(HEAD・ブランチ・参照・config)の4行出力(dispatch-run/dispatch-check が使用)
 │   ├── dispatch-prompt-gen.ps1 / .sh
 │   ├── dispatch-prompt-template.md
 │   ├── dispatch-pr-prompt-template.md   PR作成の単発依頼用(dispatch-prompt-gen --pr)
+│   ├── dispatch-pr-refine-template.md   PR作成の run に足す推敲の節(text_refine.mode が dispatch のとき)
+│   ├── dispatch-review-template.md  レビュー役の単発依頼用(dispatch-prompt-gen --review)
+│   ├── dispatch-review-worktree-template.md  レビューの run を worktree の中で動かすときに足す節
 │   ├── state-sync.ps1 / .sh
 │   ├── req-status.ps1 / .sh  要件ごとの充足状況の一覧(グループ・サイクル完了時の充足確認に使う)
 │   ├── next-task.ps1 / .sh
@@ -30,17 +36,35 @@
 │   ├── workflow-setup.ps1 / .sh  セットアップ(テンプレート側から実行)
 │   ├── workflow-update.ps1 / .sh  `npx skills update` 後の確認(テンプレート側から実行)
 │   ├── workflow-sync-scripts.ps1 / .sh
+│   ├── workflow-logs.ps1 / .sh  複数の run のログを1つの画面に流す
 │   └── workflow-archive.ps1 / .sh
-├── runs/<タスクID>-<試行回数>/   ← 実行単位の生成物(.gitignore対象。PR作成の単発依頼は pr-<N>-1/)
+├── runs/<タスクID>-<試行回数>/   ← 実行単位の生成物(.gitignore対象。PR作成の単発依頼は pr-<N>-1/、レビューの run は review-<ID>-<N>/)
 │   ├── prompt.md        生成プロンプト
+│   ├── launcher         起動方法の1行(`cli` か `subagent`。dispatch-start が書く。無ければ `cli` 扱い)
 │   ├── fix-notes.md     リトライ時のレビュー指摘(親が作成)
 │   ├── guard.sha256     起動時の管理ファイルの SHA-256(dispatch-run が作成、dispatch-check が改ざん検知に使う)
 │   ├── git-state.txt    起動時の git 状態の4行(git-state の出力。dispatch-run が作成、dispatch-check が改ざん検知に使う)
+│   ├── started          起動時刻(UTC の `YYYY-MM-DDTHH:MM:SSZ`。dispatch-run が作成、dispatch-check が子CLIのログの絞り込みに使う)
+│   ├── worktree/        max_parallel が 2 以上のとき、その run の子が作業する git worktree(collect で消える)
+│   ├── worktree.txt     worktree の path / branch / base の3行(dispatch-worktree create が作成、dispatch-run・dispatch-check が読む)
+│   ├── main-tree.txt    起動時の本体の未コミットの変更のパスとハッシュ(git-state --main-tree の出力。dispatch-run が worktree の run のとき作成、dispatch-check が本体の変更の検知に使う)
+│   ├── changes.patch    collect が worktree の変更から作る差分(本体へ git apply する)
+│   ├── carry            未 collect のこの試行の変更を次の試行に持ち越す印(workflow-run が書き、dispatch-worktree create が読む)
+│   ├── checked          実装の run の dispatch-check が通った印(workflow-run が書く)
+│   ├── superseded       この試行を打ち切り、次の試行を起動してよい印(workflow-run が書く)
+│   ├── gate/            品質ゲートのログ(workflow-run が作る)
 │   ├── tmp/             子エージェントの一時ディレクトリ(TMPDIR・TEMP・TMP がここを指す。GIT_CEILING_DIRECTORIES はその親の runs/<タスクID>-<試行回数>/ を指す)
 │   ├── output.log       子エージェントの出力
 │   ├── done             完了マーカー(EXIT/END の2行)
 │   ├── exit-signal      シグナル番号の一時ファイル(POSIX版のみ。done 書き出し時に削除)
+│   ├── refine.txt       PR作成の run で子に推敲させる対象(`<場面> <入力のパス>` が1行ずつ。dispatch-prompt-gen --pr が書き、dispatch-check が読む)
+│   ├── summary.md       完了時のサマリーの下書き(dispatch-prompt-gen --pr が `runs/refine/summary.md` から移す)
+│   ├── verdict          レビューの run の判定(1行目 pass / fail、2行目 type、3行目 要約。runs/review-<ID>-<N>/ にできる)
 │   └── report.md        完了報告(dispatch-check が ok / no-changes のとき自動で保存)
+├── runs/workflow-run/            ← workflow-run の記録(.gitignore対象)
+│   ├── progress.log      進み具合の記録(実行した行を時刻付きで1行ずつ)
+│   ├── last-output.log   最後に呼んだスクリプトの出力
+│   └── lock/pid          実行中の印(workflow-run の PID。プロセスが生きている間だけロックになる)
 ├── comprehension/                ← 理解確認(タスク単位)
 ├── archive/<日時-スラッグ>/      ← 一巡した過去サイクルの退避先(.gitignore対象)
 └── .config/                      ← 子エージェントCLIのXDG退避先(isolate_xdg: true のときのみ使用)
@@ -59,18 +83,27 @@
 |------|------|-----------|
 | `child_agent.command_template` | 子エージェントCLIのコマンドテンプレート。`{prompt}` はプロンプト本文、`{prompt_file}` は prompt.md の絶対パス(`/` 区切り)に展開される。どちらも無ければプロンプトを stdin で渡す | `opencode run "{prompt}"` |
 | `child_agent.profile` | 子CLIのプロファイル名。出力の変換方法とログからの検知パターンを決める。未指定・空は `auto`(「子CLIのプロファイル」を参照) | `""` |
+| `child_agent.subagent` | 子の実行を親のサブエージェント機能(Claude Code の Agent ツール等)に任せるか。`auto`: 親が `dispatch-start` に `--subagent-capable` を付け、かつ子プロファイルの出力形式が `claude-stream-json` のときだけ使う。`always`: `--subagent-capable` があれば出力形式によらず使う。`never`: 使わず常に子CLIを起動する。未指定・他の値は `auto` 扱い。テンプレートの config.json には書かれていないので、変えたいときに足す | `auto` |
+| `child_agent.subagent_model` | サブエージェントで実行するときのモデル名。未指定・空なら親ツールの既定のモデル。テンプレートの config.json には書かれていないので、変えたいときに足す | 未指定 |
 | `child_agent.timeout_seconds` | 子エージェント実行のタイムアウト(秒)。`dispatch-wait` が判定する | `1800` |
 | `child_agent.isolate_xdg` | `true` なら `dispatch-run` が子CLIの `XDG_CONFIG_HOME` / `XDG_DATA_HOME` を `.agents/workflow/.config` に切り替える(sandbox で `~/.config` 等に書けない環境向け)。切り替えると `~/.local/share/<CLI>/auth.json` 等の認証情報が見えなくなる。未指定は `false` | `false` |
 | `child_agent.healthcheck_command` | `dispatch-start` が起動前に実行する疎通確認のコマンド。空なら省略 | `""` |
-| `child_agent.warmup_command` | サイクルの最初の dispatch の前に1回だけ実行するコマンド(例: ビルドツールのデーモン起動・依存の取得など)。空なら省略 | `""` |
+| `child_agent.warmup_command` | サイクルの最初の dispatch(サブエージェントの run は数えない)の前に1回だけ実行するコマンド(例: ビルドツールのデーモン起動・依存の取得など)。空なら省略 | `""` |
 | `child_agent.idle_timeout_seconds` | 子のログ(`output.log`)が更新されない時間の上限(秒)。超えると `dispatch-run` が子を止め、`done` に `EXIT:idle-timeout` を記録する(`dispatch-check` は exit 4)。未指定・0 以下は無効。POSIX 版は python3 経路のみ対応 | `600` |
 | `child_agent.cli_log` | 子CLI自身のログファイルのパス(先頭の `~/` はホームディレクトリ。例: opencode は `~/.local/share/opencode/log/opencode.log`)。`dispatch-check` がエラー行を出す | 未指定 |
 | `test_command` | 子エージェントに実行させるテストコマンド。空ならタスクごとに親が指定。`quality_gate.steps` の test ステップと同じコマンドに揃える | `""` |
 | `branch_per_group` | tasks.md にグループ区切り(`<!-- グループ <名前> -->`)がある場合に、グループ単位の PR 作成・ブランチ切替(next-task の exit 6 と `group-advance`)を必須手順にする。`false` ならグループを解釈せず全タスクを1つのまとまりとして扱う。config.json が無い・読めない場合の既定値も `true` | `true` |
 | `verify_before_commit` | コミット直前に親がテストコマンドを1回実行する最終ゲート | `false` |
 | `max_fix_retries` | レビュー不合格時の子エージェントへの再依頼上限。超過で親のサブエージェントにフォールバック | `2` |
+| `max_parallel` | 同時に実行するタスク数の上限。2 以上にすると next-task が、依存がすべて完了していて変更対象のファイルが互いに(実行中のタスクとも)重ならないタスクを同時に選び(重なりはディレクトリを含めて判定する。`src/` と `src/app.py` は重なり、`src/a` と `src/ab` は重ならない)、各 run を worktree で実行する。provider の利用上限に当たりやすくなるので、2 から試す | `1` |
+| `parallel_exclusive_files` | 単独で実行するファイルの配列(ルート相対のパスで完全一致)。変更対象(参照ファイル欄で `(変更対象` が付いたパス)にこれらのファイルを1つでも含むタスクは、ほかのタスクが実行中のときは選ばれず、選ばれたときはほかのタスクと一緒に選ばれない。変更対象が1つも無いタスクも同じく単独になる。テンプレートの config.json には書かれていないので、変えたいときに足す | `["AGENTS.md", "README.md"]` |
 | `comprehension_check.enabled` | タスク合格時に理解確認質問を生成するか | `false` |
 | `comprehension_check.questions_per_task` | タスクあたりの質問数 | `3` |
+| `review.mode` | レビューの実行方法。`parent` は親エージェントが自分でレビューする。`dispatch` はレビュー役の子を `runs/review-<ID>-<N>/` の run として起動する(`dispatch-start --review`)。`dispatch` 以外は `parent` 扱い | `parent` |
+| `review.command_template` | `review.mode` が `dispatch` で、レビューの run の launcher が `cli` のときに使うコマンドテンプレート。`{prompt}` / `{prompt_file}` の扱いは `child_agent.command_template` と同じ。空なら `dispatch-start --review` は exit 24 | `""` |
+| `review.profile` | レビューの run の子CLIのプロファイル名。`child_agent.profile` と同じ形式で、`dispatch-start --review` の launcher 判定と `dispatch-check` の出力変換・検知に使う。未指定・空は `auto`。テンプレートの config.json には書かれていないので、変えたいときに足す | `auto` |
+| `review.subagent` | レビューの run を親のサブエージェント機能で実行するか。`always`: 使う。`never`: 使わない。それ以外は `auto` で、`review.profile` の出力形式が `claude-stream-json` のときだけ使う。テンプレートの config.json には書かれていないので、変えたいときに足す | `auto` |
+| `review.subagent_model` | レビューの run をサブエージェントで実行するときのモデル名。未指定・空なら親ツールの既定のモデル。テンプレートの config.json には書かれていないので、変えたいときに足す | 未指定 |
 | `task_sizing.max_acceptance_criteria` | 受け入れ基準のチェックボックス数のしきい値。`dispatch-prompt-gen` が、これを超えると WARN を出す。1以上の整数。値が無ければ既定値、不正値は WARN を出して既定値 | `5` |
 | `task_sizing.max_changed_files` | 参照ファイル欄で `(変更対象` と書いた項目数のしきい値。`dispatch-prompt-gen` が、これを超えると WARN を出す。1以上の整数。値が無ければ既定値、不正値は WARN を出して既定値 | `3` |
 | `task_sizing.max_reference_files` | 参照ファイル欄の項目数のしきい値。`dispatch-prompt-gen` が、これを超えると WARN を出す。1以上の整数。値が無ければ既定値、不正値は WARN を出して既定値 | `5` |
@@ -78,10 +111,20 @@
 | `quality_gate.steps` | 品質ゲートのステップ定義。各要素は `name`(表示名)・`command`(実行コマンド)・`blocking`(真なら不合格時に進行停止)を持つ。`command` は bash と pwsh の両方で動く書き方にする(quality-gate の節を参照) | `[{name:typecheck,...},{name:test,...},{name:lint,...}]` |
 | `quality_gate.child_dispatch_command` | 子エージェントへの検証指示に使う統合コマンド。空文字列でなければ blocking ステップの個別列挙に代えてこの1コマンドを子に指示する。Gradle 等のデーモンの多重コールドスタート回避に有効。子にも同じ判定をさせる場合は `bash .agents/workflow/scripts/quality-gate.sh`(Windows の子は `pwsh -NoProfile -File .agents/workflow/scripts/quality-gate.ps1`)を指定できる | `""` |
 | `upstream.url` | upstream(配布元)リポジトリの URL。`upstream-issue` が起票先に使う | `https://github.com/Musasaby/multi-ai-agents-workflow.git` |
-| `base_branch` | 利用先の基準ブランチ(PR のマージ先)。`branch-check` が `main` に加えてこの名前のブランチもコミット禁止にし、`workflow-archive` が PR 未作成のブランチの比較先に使う。値が無い・空なら `main` | `main` |
+| `base_branch` | 利用先の基準ブランチ(PR のマージ先)。`branch-check` が `main` に加えてこの名前のブランチもコミット禁止にし、`workflow-archive` が PR 未作成のブランチの比較先に使う。`dispatch-prompt-gen --pr` が PR の向き先と比較範囲(`origin/<base_branch>..HEAD`)に使い、`group-advance` が MERGED 後に切り替えて次のブランチを切る元に使う。値が無い・空なら `main` | `main` |
+| `branch_prefixes` | `group-advance --branch` と `state-sync --set-branch` が受け付けるブランチ名の接頭辞の配列。無い・空の配列・不正な値なら既定。`develop` ブランチがあると git の仕様で `develop/...` を作れないため、既定に `develop-` を含む | `["develop/", "develop-"]` |
 | `text_refine.skill` | 推敲に使う yomiyasu を呼ぶ名前(入れ方ごとに違う。プラグインなら `yomiyasu:yomiyasu`、skill 単体なら `yomiyasu` など)。`null`・空なら推敲しない。名前は推測せず、`text-refine` の `Found:` 行を見て利用者が決める | `null` |
 | `text_refine.targets` | 推敲する場面。`summary`(完了サマリー報告)・`confirm`(ユーザーへの確認依頼)・`commit`(コミットメッセージの説明の1行)・`pr_body`(PR説明)・`task_done`(タスク1件の完了報告)・`tasks`(agent-task-plan で書く tasks.md)から選ぶ配列。既存の利用先は `"tasks"` を足すと有効になる | 6つすべて |
 | `text_refine.reader` | 推敲後の文章の読み手。`expert`(同じ分野の専門家)・`informed`(分野は違うが技術に詳しい人)・`general`(専門知識のない人)。他の値は `informed` 扱い | `informed` |
+| `text_refine.mode` | 推敲を誰が行うか。`parent` は親が推敲する。`dispatch` は、PR 本文(`pr_body`)と完了時のサマリー(`summary`)を PR 作成の子が推敲し、コミットの説明・タスク完了報告・確認依頼(`commit`・`task_done`・`confirm`)は推敲しない。tasks.md(`tasks`)はどちらの値でも親が推敲する。値が無い・他の値は `parent`。`dispatch` は、PR 作成の子の CLI から `text_refine.skill` の名前で yomiyasu を呼べることが前提 | `parent` |
+
+**Windows での `command_template`**: `bash ./x.sh "{prompt}"` のように `bash` だけで書くと、`dispatch-run` が子を起動するときの
+Windows のコマンド検索順で System32 の `bash.exe`(WSL)が Git Bash より先に選ばれ、Windows のパスが見えずに失敗することがある。
+Git Bash を使うなら `"C:/Program Files/Git/usr/bin/bash.exe" ./x.sh "{prompt}"` のようにフルパスで書く。
+また、npm でグローバルに入れた CLI(`claude`・`opencode` 等)は実体が `.cmd`(`claude.cmd` 等)のことがある。
+`dispatch-run` は `.cmd` / `.bat` を起動せずに `crashed` にするため(`output.log` に `failed to start:` を書く)、
+実体の `.exe` のフルパスを `command_template` に書く(例: npm のグローバルディレクトリ `%APPDATA%/npm` にある
+`.cmd` ではなく、パッケージが持つ `.exe` を指定する)。
 
 ### 子CLIのプロファイル
 
@@ -94,6 +137,7 @@
 | `opencode` | `opencode run`。テキスト出力のまま `output.log` に書く。ツール実行の ANSI 色付きマーカー行・`permission requested ... auto-rejecting` 等を検知する |
 | `claude-stream-json` | Claude Code(`claude -p ... --output-format stream-json --verbose`)。JSON 行を `[tool_use]` / `[tool_result]` 等の行に変換する。`AGENTS.md` の `@` 参照(import)を子が解決できる |
 | `plain` | 出力形式が不明な CLI。出力をそのまま書き、ログに依存する検知はすべて無効 |
+| `subagent` | 親のサブエージェント機能で実行した run 用(`runs/<ID>-<N>/launcher` が `subagent` の run は、`dispatch-check` が config.json の `profile` によらずこのプロファイルで判定する)。ツール実行のログが無いため、ログに依存する検知はすべて無効。`AGENTS.md` の `@` 参照は解決できる |
 
 **定義ファイル**: 組み込みは `.agents/workflow/scripts/child-profiles.json`。利用先で追加・上書きするときは
 `.agents/workflow/child-profiles.json` を置く(組み込みと同じ形式のオブジェクト)。同名のプロファイルは
@@ -156,6 +200,7 @@
 (assistantのテキスト・使用ツール名と入力要約・`result` の要旨等)に変換して `output.log` へ逐次書き出す
 (パース不能行はそのまま `output.log` に通す)。`output.log` は実行中に随時更新されるため
 `tail -f` / `Get-Content -Wait` で閲覧できる。
+`result` 行は本文を載せず `[result] exit_subtype=<subtype>` の形で書く(本文は `output.jsonl` に残る)。
 `[tool_use]` 行の入力の要約は 300 文字で切り詰める。ツールが `Edit`・`Write`・`MultiEdit`・`NotebookEdit` のときは、
 本文(`old_string`・`new_string`・`content`・`edits`・`new_source`)を外して `file_path` 等だけを載せる
 (本文に書かれたパスの文字列をプロジェクト外アクセスと誤検知しないため。#87)。本文を含む全文は `output.jsonl` に残る。
@@ -291,7 +336,7 @@ PowerShell 版はすべて `exit` で終わるため、`pwsh -File` で起動し
 
 ### Next: 行 — 次の行動の機械可読な指示
 
-判定系スクリプト(`next-task`・`branch-check`・`group-advance`・`dispatch-start`・`dispatch-wait`・`dispatch-check`・`workflow-status`)は、stdout の
+判定系スクリプト(`next-task`・`branch-check`・`group-advance`・`dispatch-start`・`dispatch-wait`・`dispatch-finish`(`dispatch-check` の結果のまま)・`dispatch-check`・`workflow-status`・`workflow-run`)は、stdout の
 最後の行に `Next: <行動> [<タスクID>] [reason=<理由>]` を出す。親は exit code の表ではなく
 この行に従う。`Next:` 行が無い(exit 1 等の使い方不備・入力不備)ときは `escalate reason=error`
 として stderr をユーザーに報告する。
@@ -299,14 +344,20 @@ PowerShell 版はすべて `exit` で終わるため、`pwsh -File` で起動し
 | 行動 | 意味 | 出すスクリプト |
 |------|------|----------------|
 | `dispatch <ID>` | そのタスクを dispatch する | next-task(exit 0) |
-| `review <ID>` | そのタスクをレビューする | next-task(exit 0、`in_review`)・dispatch-check(exit 0。PR 作成の run を除く) |
-| `wait` | 子がまだ実行中。完了を待つ | dispatch-start(exit 0)・dispatch-wait(exit 2)・dispatch-check(exit 2)・workflow-status(実行中の run があるとき) |
-| `finish` | 全タスク完了。サマリー報告へ | next-task(exit 3)・workflow-status |
-| `group-advance` | グループ境界。group-advance を実行する | next-task(exit 6)・workflow-status |
+| `dispatch <ID> <ID>...` | 同時に実行できる複数のタスクを dispatch する(`max_parallel` が 2 以上のとき) | next-task(exit 0) |
+| `wait <ID>...` | 実行中のタスクの完了を待つ(同時に始められるタスクが無い) | next-task(exit 5) |
+| `collect <ID>` | worktree の run の変更を本体へ取り込む(`dispatch-worktree collect`)。その後 review する | dispatch-check(exit 0、worktree の run) |
+| `review <ID>` | そのタスクをレビューする | next-task(exit 0、`in_review`)・dispatch-check(exit 0。PR 作成の run を除く)・workflow-run(段階が `manual`) |
+| `commit <ID>` | レビュー合格(pass)。品質ゲートを実行してコミットする(`agent-review-commit` skill) | dispatch-check(exit 0、レビューの run で `Verdict: pass`) |
+| `retry <ID>` | レビュー不合格(fail)。`fix-notes.md` は書かれているので次の試行で子に渡す | dispatch-check(exit 0、レビューの run で `Verdict: fail`) |
+| `subagent <ID> <N>` | サブエージェントの run を用意した。`Prompt:` の内容でサブエージェントを起動し、最終応答を `Output:` に書いて `dispatch-finish` を呼ぶ | dispatch-start(exit 0、launcher が `subagent`) |
+| `wait` | 子がまだ実行中。完了を待つ | dispatch-start(exit 0)・dispatch-wait(exit 2)・dispatch-check(exit 2)・workflow-status(実行中の run があるとき)・workflow-run(`--max-wait` に達したら呼び直す) |
+| `finish` | 全タスク完了。サマリー報告へ | next-task(exit 3)・workflow-status・workflow-run(`next-task` と同じ意味) |
+| `group-advance` | グループ境界。group-advance を実行する | next-task(exit 6)・workflow-status・workflow-run |
 | `create-pr` | PR を作成する | group-advance(exit 7)・workflow-status(PR が無いとき) |
-| `wait-merge` | PR のマージを待つ(報告して停止) | group-advance(exit 8)・dispatch-check(exit 0、PR 作成の run `pr-*`。PR を検証してから報告する)・workflow-status(PR が `OPEN` のとき) |
-| `update-pr` | 既存の PR に未 push のコミットを push し、本文を作り直す(PR作成の単発依頼を再実行する) | group-advance(exit 10) |
-| `continue` | そのまま作業を続ける | branch-check(exit 0)・group-advance(exit 0)・task-commit(exit 0)・quality-gate(exit 0)・text-refine(推敲しないとき)・text-refine --check(exit 0) |
+| `wait-merge` | PR のマージを待つ(報告して停止) | group-advance(exit 8)・dispatch-check(exit 0、PR 作成の run `pr-*`。PR を検証してから報告する)・workflow-status(PR が `OPEN` で未 push のコミットが無いとき) |
+| `update-pr` | 既存の PR に未 push のコミットを push し、本文を作り直す(PR作成の単発依頼を再実行する) | group-advance(exit 10)・workflow-status(PR が `OPEN` で未 push のコミットがある、または `origin/<branch>` が無いとき) |
+| `continue` | そのまま作業を続ける | branch-check(exit 0)・group-advance(exit 0)・task-commit(exit 0)・quality-gate(exit 0)・text-refine(推敲しないとき。`mode` が `dispatch` で `--request` が無いときを含む)・text-refine --check(exit 0) |
 | `refine` | `Request:` の依頼文で yomiyasu に推敲させ、`Output:` のファイルを使う | text-refine(推敲するとき) |
 | `decide-candidates` | 候補ごとの判断を `Decisions:` のファイルに書いてから `--check` を実行し直す | text-refine --check(exit 2) |
 | `confirm` | `DECIDE` 行や差分をユーザーに確認する | workflow-setup(exit 3)・workflow-update(exit 3) |
@@ -316,6 +367,8 @@ PowerShell 版はすべて `exit` で終わるため、`pwsh -File` で起動し
 `escalate` の reason 一覧:
 
 - `dirty-tree` / `task-status` / `healthcheck` / `warmup` / `prompt-gen` / `task-state` / `launch` — dispatch-start の失敗(exit 20 / 21 / 30 / 31 / 41〜43 / 50 / 60)
+- `review-mode` — dispatch-start --review の exit 23(config.json の `review.mode` が `dispatch` でない。`Next: escalate reason=review-mode`)
+- `review-config` — dispatch-start --review の exit 24(レビューの run の launcher が `cli` なのに `review.command_template` が空。`Next: escalate reason=review-config`)
 - `timeout` — dispatch-wait の exit 3(経過が `child_agent.timeout_seconds` を超えた)
 - `blocked` — next-task の exit 4(実行可能なタスクが無い)
 - `gh-unavailable` — branch-check の exit 4(gh で PR 状態を判定できない)
@@ -325,12 +378,25 @@ PowerShell 版はすべて `exit` で終わるため、`pwsh -File` で起動し
 - `provider-error` / `idle-timeout` / `abnormal-exit` — dispatch-check の exit 4(この順で判定)
 - `permission-denied` / `outside-access` — dispatch-check の exit 6
 - `token-limit` / `no-report` — dispatch-check の exit 5
+- `conflict` — dispatch-worktree の exit 40(`collect` で変更を本体に当てられない、`create` で前の試行の持ち越しが衝突した)
 - `no-changes` — dispatch-check の exit 7(変更が無いのが正しいタスクなら review に進んでよい)・task-commit の exit 20(コミットする変更が無い)
 - `quality-gate` — quality-gate の exit 2(blocking のステップが失敗)
-- `refine-unchecked` — text-refine --check の exit 3(推敲済みファイルか yomiyasu の記録が無く、確かめられない)
+- `refine-unchecked` — text-refine --check の exit 3(推敲済みファイルか yomiyasu の記録が無く、確かめられない)・dispatch-check の exit 9(PR 作成の run で、子の推敲を確かめられない)
+- `refine-undecided` — dispatch-check の exit 9(PR 作成の run で、判断待ちの候補が残った)
 - `refine-structure-changed` — text-refine --check の exit 4(`tasks` の推敲前後で見出し・依存・要件ID 等の構造が変わった)
 - `no-steps` — quality-gate の exit 3(実行するステップが0件)
 - `not-npx` / `sync-failed` — workflow-update の exit 2 / 22(`npx skills` で導入されていない / 配置済みスクリプトとの差分確認の失敗)
+- `runner-unsupported` — workflow-run の exit 4(使える条件を満たさない。親は今のループの手順で進める)
+- `already-running` — workflow-run の exit 5(別の `workflow-run` が動いている)
+- `review-invalid` — workflow-run(レビューの run の完了報告が無効・異常終了)
+- `commit-format` — workflow-run(レビュー役の `type` か要約の形式が違う)
+- `retry-limit` — workflow-run(リトライの上限に達した)
+- `quality-gate-error` — workflow-run(品質ゲートを実行できない)
+- `not-worktree` — workflow-run(worktree の run ではない)
+- `unknown-phase` — workflow-run(タスクの段階を判定できない)
+
+`conflict`・`task-state`・`blocked` など上の一覧にある reason は `workflow-run` からも出る
+(止まる理由の全体は workflow-run の節を参照)。
 
 ### dispatch-prompt-gen — dispatchプロンプトの機械生成
 
@@ -338,6 +404,12 @@ tasks.md・config.json・依存タスクの完了報告(直接依存のみ)か�
 プロンプトを機械的に組み立てて `runs/<タスクID>-<試行回数>/prompt.md` に書き出す。
 定型文(実装ルール・テスト検証指示・完了報告フォーマット)は `dispatch-prompt-template.md`
 から展開する。
+
+worktree の run(`runs/<タスクID>-<試行回数>/worktree.txt` があるとき)は、prompt.md の末尾に
+作業ディレクトリの節も足す。節は `dispatch-worktree-template.md` から展開し、`{workdir}` に
+worktree の絶対パス、`{main_root}` に本体の絶対パスを入れる。子には、ファイルの読み書きと
+コマンドの実行をすべて worktree の中で行い、worktree の外にある本体のファイルは読み書きしない
+よう指示する。サブエージェントの run では、サブエージェント用の節の前に置く。
 
 「テスト・検証」節には、常に「タスクの受け入れ基準に書かれた確認手順・テストコマンド」を
 入れ、加えて config の検証コマンド(`quality_gate.child_dispatch_command`、または `command` が
@@ -386,24 +458,64 @@ tasks.md や AGENTS.md を直してから dispatch する:
 **PR モード**(`-Pr` / `--pr`): PR 作成を子に単発で依頼するプロンプトを
 `dispatch-pr-prompt-template.md` から生成し、`runs/pr-<N>-1/prompt.md` に書き出す
 (`<N>` は既存の `pr-*` の次の連番)。PR に含めるタスクは、state.json で `done` かつ
-`commit` が `git log origin/main..HEAD` に含まれるものを自動で選ぶ(`git fetch origin main` を
-してから比べるため、ローカルの `main` が古くても、マージ済みの無関係なコミットは混ざらない。
+`commit` が `git log origin/<base_branch>..HEAD`(config.json の `base_branch`。無ければ `main`)に
+含まれるものを自動で選ぶ(`origin` の `<base_branch>` を fetch してから比べるため、ローカルの
+基準ブランチが古くても、マージ済みの無関係なコミットは混ざらない。
 origin が無い・fetch に失敗した場合は exit 1)。stdout に `RunId: pr-<N>` を
 出力するので、`dispatch-run` に `pr-<N>` と `1` を渡して起動する。作業ブランチではなく
-`main` 上で実行した場合や、対象タスクが無い場合は exit 1。
+`main` か `base_branch` の上で実行した場合や、対象タスクが無い場合は exit 1。
 PR が既にある場合は、子が未 push のコミットを push し、PR の全コミットをもとに作り直した本文で
 `gh api -X PATCH repos/{owner}/{repo}/pulls/<N> -F body=@<file>` により更新する
 (`gh pr edit` は旧 Projects 廃止のエラーで失敗するため使わない)。
 プロンプトには要件の一覧も入る。tasks.md の要件のうち、この PR のタスクを含むものだけを
 `- R1: <本文>(この PR: T1 / 他の PR: T3)` の形で並べる。対応する要件が無い場合(要件の節が無い場合を含む)は
 `- なし(...)` の1行になる。子はこの一覧を PR 本文に「要件と対応タスク」として載せる。
+`--launcher <cli|subagent>`(ps1 は `-Launcher`)を付けると、prompt.md を書いた後に
+`runs/pr-<N>-1/launcher` へその値を1行で書き、`subagent` なら prompt.md にサブエージェント用の節を足す
+(`dispatch-start --pr` が起動方法を渡すのに使う)。値が `cli`・`subagent` 以外(空を含む)なら
+使い方を stderr に出して exit 1(run ディレクトリは作らない)。ps1 では `-Pr` なしで `-Launcher` を付けても exit 1。
+
+`config.json` の `text_refine.mode` が `dispatch` のときは、`dispatch-pr-refine-template.md` から作った
+推敲の節を prompt.md の `{refine_instruction}` の位置に入れる(`dispatch` でなければ何も入れない)。
+推敲の対象は PR 本文(`runs/pr-<N>-1/pr-body.md`)で、`.agents/workflow/runs/refine/summary.md`
+(親が書いた完了時のサマリーの下書き)があれば `runs/pr-<N>-1/summary.md` に移して対象に加える。
+対象は `runs/pr-<N>-1/refine.txt` に `<場面> <入力のパス>` の形で1行ずつ書く。子は対象ごとに
+`text-refine <場面> <入力のパス> --request` で依頼文を受け取って推敲し、`--check` で確かめる。
+候補を直すか残すかは子が決める。PR 本文を推敲できたときは、推敲済みのファイル(`pr-body.refined.md`)で
+PR を作る。推敲に失敗しても PR は下書きの本文で作る。
 
 ```powershell
-.agents/workflow/scripts/dispatch-prompt-gen.ps1 -Pr
+.agents/workflow/scripts/dispatch-prompt-gen.ps1 -Pr [-Launcher cli|subagent]
 ```
 ```bash
-.agents/workflow/scripts/dispatch-prompt-gen.sh --pr
+.agents/workflow/scripts/dispatch-prompt-gen.sh --pr [--launcher cli|subagent]
 ```
+
+**レビューモード**(`-Review` / `--review <TaskId> <Attempt>`): 子の実装をレビューする役の
+プロンプトを `dispatch-review-template.md` から生成し、`runs/review-<ID>-<N>/prompt.md` に書き出す
+(`<N>` はレビューの試行回数。`dispatch-start --review` は省略時に state.json のタスクの `retries` + 1 を渡す)。
+材料は tasks.md の該当節(`{task_section}`)と完了報告 `.agents/workflow/runs/<ID>-<N>/report.md`
+(`{report_path}`)。置換するのは `{task_id}`・`{attempt}`・`{task_section}`・`{report_path}`・
+`{fix_notes_path}`(=`runs/<ID>-<N+1>/fix-notes.md`)・`{comprehension_instruction}`
+(config の `comprehension_check.enabled` が true なら理解確認の質問ファイルを作る指示、false なら
+作らない指示)。`runs/review-<ID>-<N>/worktree.txt` があるときは、完了報告・`fix-notes.md`・
+理解確認の質問ファイルのパスを本体の絶対パスにし、`dispatch-review-worktree-template.md` の節を
+末尾に足す。節は作業ディレクトリを worktree にし、`git status --porcelain` と `git diff HEAD` を
+その中で実行するよう指示する。worktree に持ち越した変更はステージされているため、レビュー役が
+読む差分は `git diff HEAD` になる。stdout に `RunId: review-<ID>` を出すので、`dispatch-run` に
+`review-<ID>` と `<N>` を渡して起動する。`--launcher <cli|subagent>`(ps1 は `-Launcher`)は PR モードと同じく
+`runs/review-<ID>-<N>/launcher` へ値を1行で書き、`subagent` ならサブエージェント用の節を足す。
+タスクIDの形式違反、tasks.md が無い、または tasks.md に該当タスクの節が無い場合は exit 1、
+完了報告 `report.md` が無い場合は exit 2(レビューできない)。ps1 では `-Review` と
+`-TaskId`・`-Attempt` を組み合わせる。
+
+```powershell
+.agents/workflow/scripts/dispatch-prompt-gen.ps1 -Review -TaskId T1 -Attempt 1 [-Launcher cli|subagent]
+```
+```bash
+.agents/workflow/scripts/dispatch-prompt-gen.sh --review T1 1 [--launcher cli|subagent]
+```
+
 exit 0 の場合も生成されたプロンプト全文は会話に読み込まない
 (読み込むと機械生成によるトークン節約が無意味になる)。
 
@@ -417,7 +529,7 @@ exit 0 の場合も生成されたプロンプト全文は会話に読み込ま�
    確認しない。前の試行の変更を引き継ぐため)
 3. タスクの状態が `pending` / `in_progress` か
 4. 疎通確認(`child_agent.healthcheck_command`。空なら省略)
-5. ウォームアップ(`child_agent.warmup_command`。空なら省略。`guard.sha256` が1つも無い = サイクルの最初の dispatch のときだけ)
+5. ウォームアップ(`child_agent.warmup_command`。空なら省略。CLI の run(launcher が `subagent` でない run)の `guard.sha256` が1つも無い = サイクルの最初の dispatch のときだけ)
 6. `dispatch-prompt-gen`
 7. `task-state <ID> start`(状態を `in_progress` にする)
 8. `dispatch-run` のデタッチ起動(`guard.sha256` が現れるまで最大30秒待つ。環境変数
@@ -427,16 +539,54 @@ exit 0 の場合も生成されたプロンプト全文は会話に読み込ま�
 `.agents/workflow/.config` にして実行する。
 
 ```powershell
-.agents/workflow/scripts/dispatch-start.ps1 -TaskId T1 [-Attempt 1]
-.agents/workflow/scripts/dispatch-start.ps1 -Pr
+.agents/workflow/scripts/dispatch-start.ps1 -TaskId T1 [-Attempt 1] [-SubagentCapable]
+.agents/workflow/scripts/dispatch-start.ps1 -Pr [-SubagentCapable]
+.agents/workflow/scripts/dispatch-start.ps1 -Review -TaskId T1 [-Attempt 1] [-SubagentCapable]
 ```
 ```bash
-.agents/workflow/scripts/dispatch-start.sh T1 [1]
-.agents/workflow/scripts/dispatch-start.sh --pr
+.agents/workflow/scripts/dispatch-start.sh T1 [1] [--subagent-capable]
+.agents/workflow/scripts/dispatch-start.sh --pr [--subagent-capable]
+.agents/workflow/scripts/dispatch-start.sh --review T1 [1] [--subagent-capable]
 ```
+
+**並列実行(`max_parallel` が 2 以上、`--pr` でないとき)**: 手順2(作業ツリーの確認)は行わない。
+手順3の後に `dispatch-worktree create` で worktree の run にする(手順4以降はその WT を使う run になる)。
+成功時の stdout には `Carried:` 行(前の試行の変更の持ち越し結果)と `Worktree: <パス>` 行を、
+`Next: wait` の前に出す。
+worktree を作った後、子の起動前の手順(疎通確認・ウォームアップ・prompt 生成・`task-state`)で失敗したときは、
+`dispatch-worktree abort` で worktree・ブランチを消し、持ち越しで取り除いた前の試行の変更を本体に戻してから止める。
+`dispatch-run` の起動を確認できない exit 60 では abort しない(子が動いている可能性があるため。WT・ブランチは残る)。
+exit 60 のときは、`dispatch-run` のプロセスが動いていないことを確かめる(`$RUN/output.log` が伸びていない、
+`$RUN/done` が無い)。動いていなければ `dispatch-worktree abort <ID> <試行回数>` で片付け、同じ試行で
+`dispatch-start` をやり直す(片付けずにやり直すと WT が残っているため exit 61 になる)。動いていれば `dispatch-wait` で待つ。
 
 `--pr` / `-Pr` は PR 作成の run(`pr-<N>-1`)を起動する。手順3・5・7は行わず、手順6は
 `dispatch-prompt-gen --pr` になる(stdout の `RunId` で起動する)。
+
+**レビューの run(`--review <ID>` / `-Review -TaskId <ID>`)**: レビュー役の run
+(`review-<ID>-<N>`)を起動する。処理の順は次のとおり。
+
+1. `branch-check --state`(非0なら `Next:` 行を流して止める)
+2. `review.mode` が `dispatch` か(違えば exit 23)
+3. タスクが `in_review` か、または `in_progress` で、その試行の run(`runs/<ID>-<N>/`)に
+   `worktree.txt` があり `collected` が無いこと(それ以外は exit 21)
+4. launcher の決定(`--subagent-capable` があるときだけ。`review.subagent` が `always` なら
+   `subagent`、`never` なら `cli`、それ以外(`auto`)は `review-<ID>` のプロファイルが
+   `claude-stream-json` のときだけ `subagent`)。省略時は `cli`
+5. launcher が `cli` なら `review.command_template` が空でないか(空なら exit 24)
+6. `dispatch-prompt-gen --review <ID> <N> --launcher <値>`(stdout の `RunId: review-<ID>`)
+7. `dispatch-run` に `review-<ID>` と `<N>` を渡してデタッチ起動する(`--subagent-capable` かつ
+   launcher が `subagent` なら `dispatch-run --prepare-only` を同期で実行し `Next: subagent review-<ID> <N>`)
+
+`in_review` のタスクは今までどおり本体でレビューする。`in_progress` で未 collect の
+worktree の run をレビューするときは、`worktree.txt` を `runs/review-<ID>-<N>/` に写し、
+レビュー役は worktree の中で動く。成功時の stdout には `Worktree: <パス>` 行が加わる。
+この起動のしかたは `workflow-run` が使う。タスクの状態は変えない。
+
+行わないこと: 作業ツリーの確認・worktree の作成(`max_parallel` が 2 以上でも同じ)・
+疎通確認・ウォームアップ・`task-state`。レビュー役は状態を変えず、コードも変えない
+(`fix-notes.md` と理解確認の質問ファイルだけを書く)。`<N>` の省略時は state.json の
+そのタスクの `retries` + 1。
 
 **exit code 規約**:
 
@@ -446,16 +596,46 @@ exit 0 の場合も生成されたプロンプト全文は会話に読み込ま�
 | `1` | 使い方不備 |
 | `11`〜`15` | `branch-check --state` の exit 1〜5(stdout の `Next:` 行はそのまま流す) |
 | `20` | 作業ツリーが汚れている(リトライで fix-notes.md がある場合を除く。`reason=dirty-tree`) |
-| `21` | タスクの状態が不正(`pending` / `in_progress` 以外、タスク無しを含む。`reason=task-status`) |
+| `21` | タスクの状態が不正(`pending` / `in_progress` 以外、タスク無しを含む。`--review` では `in_review` ではなく、`in_progress` で未 collect の worktree の run も無い場合。`reason=task-status`) |
+| `23` | `--review` なのに config.json の `review.mode` が `dispatch` でない(`reason=review-mode`) |
+| `24` | `--review` で launcher が `cli` なのに `review.command_template` が空(`reason=review-config`) |
 | `30` / `31` | 疎通確認 / ウォームアップの失敗(`reason=healthcheck` / `warmup`。出力の末尾20行を stderr に出す) |
 | `41`〜`43` | `dispatch-prompt-gen` の exit 1〜3(`reason=prompt-gen`。依存未完了・report.md の欠落は 42。`--pr` で RunId が取れない場合は 41) |
+| `22` | `max_parallel` が 2 以上で、worktree の作成が dirty-tree(`dispatch-worktree` の exit 20。`reason=dirty-tree`) |
 | `50` | `task-state` の失敗(`reason=task-state`) |
+| `61` | `max_parallel` が 2 以上で、worktree の作成に失敗(`dispatch-worktree` の exit 20 以外。`reason=worktree`) |
 | `60` | `dispatch-run` の起動を確認できない(`reason=launch`。state.json は `in_progress` のまま) |
 
 `healthcheck_command` / `warmup_command` は sh 版では `bash -c`、ps1 版では `pwsh -Command` で実行する。
 
-stdout は成功時に `Run: <ID>-<N>`・`Log: <output.log のパス>`・`Watch:`(sh 版は `tail -f <パス>`、
-ps1 版は `Get-Content <パス> -Wait -Tail 20`)・`Next: wait` を出す。失敗時は最後の行に `Next: escalate reason=<理由>` を出す(使い方不備の exit 1 を除く)。
+**サブエージェントでの起動(`--subagent-capable`)**: 親がサブエージェントを起動できるとき `--subagent-capable`
+(ps1 は `-SubagentCapable`)を付ける。起動方法(launcher)は次で決め、手順6(`dispatch-prompt-gen`)の前に
+`runs/<ID>-<N>/launcher` へ `cli` か `subagent` を1行で書く(`--pr` は `dispatch-prompt-gen --pr --launcher <値>` が書く)。
+
+- オプションが無い、または `child_agent.subagent` が `never` → `cli`
+- `always` → `subagent`
+- `auto`(未指定・他の値を含む)→ 子プロファイルの出力形式が `claude-stream-json` のときだけ `subagent`、それ以外は `cli`
+
+`subagent` のときは疎通確認(手順4)・ウォームアップ(手順5)を行わず、手順8のデタッチ起動の代わりに
+`dispatch-run --prepare-only` を同期で実行する。失敗すると exit 60(`Next: escalate reason=launch`)。
+成功時の stdout は次の行で、最後は `Next: subagent <ID> <N>`(exit 0)。
+
+```
+Run: <ID>-<N>
+Launcher: subagent
+Prompt: <prompt.md の絶対パス>
+Workdir: <作業ディレクトリ>
+Output: <output.log の絶対パス>
+Model: <child_agent.subagent_model。未指定・空なら default>
+Next: subagent <ID> <N>
+```
+
+`Workdir:` は、並列(worktree)の run では `<ルート>/.agents/workflow/runs/<ID>-<N>/worktree`、そうでなければルート(どちらも絶対パス)。
+親は `Prompt:` の内容を指示にサブエージェントを起動し、最終応答を `Output:` に書いてから `dispatch-finish` を呼ぶ。
+
+stdout は `cli` の成功時に `Run: <ID>-<N>`・`Launcher: cli`・`Log: <output.log のパス>`・`Watch:`(sh 版は `tail -f <パス>`、
+ps1 版は `Get-Content <パス> -Wait -Tail 20`)・`Watch all:`(全 run のログをまとめて流す `workflow-logs` のコマンド。
+sh 版は `bash .agents/workflow/scripts/workflow-logs.sh`、ps1 版は `pwsh -NoProfile -File .agents/workflow/scripts/workflow-logs.ps1`)・`Next: wait` を出す。失敗時は最後の行に `Next: escalate reason=<理由>` を出す(使い方不備の exit 1 を除く)。
 
 ### dispatch-run — 子エージェントCLIのデタッチ実行
 
@@ -474,7 +654,9 @@ prompt.md の絶対パス(`/` 区切り)に置き換える。どちらも無い�
 子を起動せず `output.log` に `Child profile error: <メッセージ>` を書き、`done` の `EXIT:` を `1` にして終える。
 
 `EXIT:` の値は、数値(子CLIの exit code)・`signal:<番号>`(子がシグナルで強制終了された。
-POSIX 版のみ)・`crashed:<メッセージ>`(ラッパー自体の異常終了。PowerShell 版)のいずれか。
+POSIX 版のみ)・`crashed:<メッセージ>`(ラッパー自体の異常終了、または子の起動の失敗。sh 版・ps1 版とも)のいずれか。
+子を起動できなかったとき(存在しないコマンド、`.cmd` / `.bat` の指定等)は、`output.log` に
+`failed to start: <メッセージ>` を書いて `EXIT:crashed:<メッセージ>` を記録する。
 POSIX 版は、Python 経由の起動では子の負の returncode を、bash で直接起動するフォールバック
 経路では 128 より大きい終了コードをシグナル終了とみなし、`signal:15` のように記録する
 (従来は SIGTERM が `EXIT:241` と記録され、通常の終了と区別できなかった)。
@@ -489,11 +671,26 @@ Windows にはシグナルの仕組みが無いため、PowerShell 版での強�
 
 子の一時ファイルの置き場所も `dispatch-run` が設定する: 子プロセスには `TMPDIR`・`TEMP`・`TMP`
 を `runs/<タスクID>-<試行回数>/tmp/`(起動時に作成する)に設定するため、子が `mktemp` 等で作る
-一時ファイルはプロジェクト内の `tmp/` に置かれる。`GIT_CEILING_DIRECTORIES` には `tmp/` の親である
+一時ファイルはプロジェクト内の `tmp/` に置かれる。あわせて `PYTHONDONTWRITEBYTECODE=1` も設定し、
+子が Python を実行しても `__pycache__`(`.pyc`)を残さないようにする。`GIT_CEILING_DIRECTORIES` には `tmp/` の親である
 `runs/<タスクID>-<試行回数>/` を設定する(`tmp/` そのものではない)。git は ceiling と同じ
 ディレクトリが cwd のときも探索を止めないため、その下の `tmp/` で実行された `git` が本物の
 リポジトリを探索でたどり着かないようにする。PowerShell 版は
 呼び出し元の `TEMP` 系環境変数の元の値を保存しておき、ラッパーの終了時(finally)に元に戻す。
+
+**worktree の run**: `runs/<ID>-<N>/worktree.txt` があるとき、子は本体ではなく WT(`path` の行)を作業
+ディレクトリにして実行する。`TMPDIR`・`TEMP`・`TMP` は WT の中の
+`.agents/workflow/runs/<ID>-<N>/tmp/`(`dispatch-worktree create` が作る)に設定し、`GIT_CEILING_DIRECTORIES` も
+WT 側にする。`guard.sha256` の対象のうち `state.json`・`tasks.md` は、子が触れる WT 側のコピー
+(`runs/<ID>-<N>/worktree/.agents/workflow/` の下)にする(`prompt.md`・`config.json`・`child-profiles.json` は本体のまま)。
+`git-state.txt` は WT の中で `git-state --run <branch> --parent <親の作業ブランチ>` を実行した値を記録する。`output.log`・`done` などの
+記録は本体の `runs/<ID>-<N>/` に書く。
+
+**本体で動くレビューの run**(`review-*` で `worktree.txt` が無い run)の `guard.sha256`: 親が並列中に
+`state.json` を更新するため、`state.json` の全体のハッシュは入れない。代わりに、レビュー対象のタスク
+(`review-` を除いた ID)の欄(`status`・`retries`・`commit`)を `runs/<ID>-<N>/state-entry.txt` に、全タスクの
+同じ欄を `state-tasks.json` に記録し、`dispatch-check` がレビュー対象の欄と、ほかのタスクの欄の変化を
+確かめる(下記 dispatch-check の「レビューの run」)。
 
 起動時の git 状態(HEAD・ブランチ・参照・config の SHA-256。「git-state」節の4行)を
 `runs/<タスクID>-<試行回数>/git-state.txt` に記録する(失敗しても起動は止めない)。
@@ -507,6 +704,18 @@ Start-Process pwsh -ArgumentList "-NoProfile -File .agents/workflow/scripts/disp
 nohup .agents/workflow/scripts/dispatch-run.sh T1 1 > /dev/null 2>&1 &
 ```
 
+**`--prepare-only`(ps1 は `-PrepareOnly`)**: `guard.sha256` と `git-state.txt` を書き、`tmp/` を作ったところで
+exit 0 する。子は起動せず、`done` も書かない。サブエージェントの run で `dispatch-start` が同期で呼ぶ
+(worktree の run では上記と同じ guard と git-state を記録する)。`prompt.md` が無くても動き、guard には `-` を記録する。
+sh 版では位置引数の前でも後でも指定できる。
+
+```powershell
+.agents/workflow/scripts/dispatch-run.ps1 -TaskId T1 -Attempt 1 -PrepareOnly
+```
+```bash
+.agents/workflow/scripts/dispatch-run.sh --prepare-only T1 1
+```
+
 ### dispatch-check — 完了検知後の終了状態・成果物の判定
 
 `done` マーカーを検知したら毎回実行する。終了状態の区分(`ok` / `nonzero` / `idle-timeout` /
@@ -515,6 +724,8 @@ nohup .agents/workflow/scripts/dispatch-run.sh T1 1 > /dev/null 2>&1 &
 プロジェクト外アクセスの検出(`Outside access:`)、子CLI自身のログのエラー(`CLI log:` と
 `Provider error:`)、完了報告の判定(`Completion report:`)、変更件数(`Changes:`)、
 `git status --porcelain`、`git diff --stat`、`output.log` の末尾30行をまとめて出力する。
+レビューの run(`review-*`)では、これに `Review verdict:`・`Review findings:`・`Review summary:`・
+`Review type:`・`Fix notes:` の5行を加える(後述)。
 
 - **改ざん検知**: `dispatch-run` は起動時に `prompt.md`・`state.json`・`tasks.md`・`config.json`・
   `.agents/workflow/child-profiles.json` の
@@ -529,6 +740,19 @@ nohup .agents/workflow/scripts/dispatch-run.sh T1 1 > /dev/null 2>&1 &
   `git changed: <名前>` を改ざん検知の問題に加える(例: 子が `git commit` や `git config` で
   リポジトリの git 状態を変えた場合)。PR 作成の run(`pr-*`)だけは `config` を比べない
   (子が `git push -u` で `.git/config` を正当に変えるため)
+- **本体の変更の検知(worktree の run)**: `dispatch-run` は worktree の run のとき、起動時の
+  本体(メインの作業ツリー)の未コミットの変更を `git-state --main-tree` で
+  `runs/<タスクID>-<試行回数>/main-tree.txt` に記録する。`dispatch-check` は今の
+  `git-state --main-tree` の出力と比べ、起動時に無かったパスとハッシュが変わったパスを
+  `changed: main worktree: <パス>` として改ざん検知の問題に加える(`.agents/workflow/` の下は
+  対象外)。`runs/<ID>-<N>/done` より後に更新されたファイルには ` (modified after the run ended)` を
+  付ける(子の終了後の変化か、実行中からの変化かの切り分け用)。起動時にあって今は無いパス(親がコミットした場合など)は問題にしない。
+  `main-tree.txt` が無い worktree の run は `main-tree.txt not found` を問題にする。
+  並列中に親がほかの run を collect して本体に未コミットの変更ができた場合は、自分の
+  `main-tree.txt` より新しい `collected` を持つほかの run の `changes.patch` の
+  `diff --git a/<p> b/<p>` 行にあるパス(a・b の両方)を除外するので、正当な collect では
+  tampered にしない。ただし子が collect で変わるのと同じパスのファイルを本体で編集した場合は
+  見逃す(collect 後のレビューで見つける)
 - **プロファイルのパターンによる判定**: 検知はプロファイル(`Profile:` に出る名前)のパターンで行う。
   プロジェクト外アクセスは `tool_call_pattern`、完了報告の無効判定(ツール実行の記録)は
   `tool_activity_pattern`、権限拒否は `permission_denied_pattern`、プロバイダーエラーは
@@ -567,12 +791,15 @@ nohup .agents/workflow/scripts/dispatch-run.sh T1 1 > /dev/null 2>&1 &
 - **子CLI自身のログのエラー**: config.json の `child_agent.cli_log`(子CLI自身のログファイルのパス。
   先頭の `~/` はホームディレクトリで展開する)を読む。`CLI log:` には設定したパスを出し、
   未設定なら `(not configured)`、パスのファイルが無ければ `<パス> (not found)`。次にそのログの
-  末尾200行のうち `ERROR` を含む行の最後の5行を字下げして出す。`Provider error:` はプロバイダー起因の
+  末尾200行のうち `ERROR` を含む行から、行中の最初のタイムスタンプが `runs/<ID>-<N>/started`
+  (dispatch-run が記録した起動時刻)より前の行を除き、最後の5行を字下げして出す(タイムスタンプや
+  タイムゾーンの無い行は残す。`started` が無い・sh 版で python3 が無いときは絞り込まない)。`Provider error:` はプロバイダー起因の
   失敗かどうか(`yes` / `no` / `unknown`)で、5行のいずれかが `provider_error_pattern` に一致すれば `yes`、
   一致しなければ `no`、`cli_log` が未設定・ファイルが無ければ `unknown`。`provider_error_pattern` が空なら
   `cli_log` の有無にかかわらず `disabled (profile: <name>)`(組み込みの例: `usage limit`・`rate limit`・
   `endpoint is unavailable`・429(前後に英数字を続けない。`.429Z` のようなタイムスタンプ等に
-  一致させないため))。
+  一致させないため)・ヘッダー待ちのタイムアウト(`provider response headers timed out`)・
+  残高不足(`insufficient balance`・`insufficient funds` 等)・`AI_APICallError`(小文字化して一致))。
   利用上限・レート制限・エンドポイント障害の切り分け用の参考情報で、Verdict・exit code には影響しない
 - **権限拒否**: `permission_denied_pattern` に一致する行があれば権限拒否とみなす
   (組み込みの例: opencode の拒否の記録 = 行頭が `! permission requested:` で `auto-rejecting` を含む行。
@@ -595,14 +822,90 @@ exit code(複数に当たる場合は上の行を優先する):
 | `6` | `permission-denied` / `outside-access` | 権限拒否で中断(`Permission denied: yes`)、またはプロジェクト外アクセスの検出(`Outside access: yes`) |
 | `5` | `no-report` | 完了報告が無い・無効 |
 | `7` | `no-changes` | 完了報告はあるが作業ツリーに変更が無い(`pr-*` の run では判定しない) |
+| `9` | `refine-unchecked` / `refine-undecided` | PR 作成の run(`pr-*`)で、子の推敲を確かめられない・判断待ちの候補が残った(`refine.txt` がある run だけ。ほかの判定が ok のときに判定する) |
 | `0` | `ok` | 正常終了かつ完了報告あり |
 | `2` | — | done マーカーが無い(まだ実行中) |
 | `1` | — | 使い方不備、またはプロファイルを解決できない(stderr に原因を出す) |
 
 この版から、done マーカーが無いときは exit 1 ではなく exit 2 を返す(#69)。
 
+**サブエージェントの run**: `runs/<ID>-<N>/launcher` が `subagent` のとき、`config.json` の `profile` によらず
+`subagent` プロファイルで判定する(`Profile: subagent`。上記「子CLIのプロファイル」を参照)。`launcher` が無い、または `cli` の run は `config.json` の
+`profile` のまま。
+
+**worktree の run**: run のディレクトリに `worktree.txt` があるとき、次が変わる。
+- `git-state` の比較は、`worktree.txt` の `path` の WT の中で
+  `git-state --run <branch> --parent <親の作業ブランチ> --other-runs <実行中のタスクの ID>` を
+  実行した値と `git-state.txt` を比べる(`in_progress`・`in_review` のタスクの run のブランチと、親の作業ブランチの
+  進みは検知しない。共有の参照のタグ等や、実行中でないタスクの run のブランチを子が作れば検知する)
+- 親の作業ブランチは、`dispatch-run` が起動時に `parent-head.txt`(1行目に参照名、2行目に SHA)へ記録した値と比べる。
+  参照名が変わった、または SHA が記録した値の子孫でない(巻き戻し・付け替え)ときは `git changed: parent` を出す。
+  親が新しいコミットを積んで進んだだけなら検知しない(`parent-head.txt` が無いのも改ざん)
+- 本体の `state.json` の自分以外のタスクの欄は、`dispatch-run` が起動時に `state-tasks.json`
+  (全タスクの `id`・`status`・`retries`・`commit`)へ記録した値と比べる(`state-tasks.json` が無いのも改ざん)。
+  親の正規の遷移(`task-state`・`state-sync --insert`。`pending` → `in_progress` → `in_review` → `done` と、
+  `commit` が HEAD の祖先である `done`、新しい `pending` のタスクの追加)は許す。次は不正として、
+  タスクごとに `changed: .agents/workflow/state.json (<ID>)` を出す: 起動時に `done` だったタスクの
+  `status`・`commit` が変わった、タスクが消えた、
+  `commit` が HEAD の祖先でない `done`、起動後に追加されたタスクが `pending` 以外。
+  `retries` の増減は調べない(`fail` は `pending` 以外のどの状態からもでき、`reset` で `retries` が 0 に戻るため)
+- `Changes:`・`git status --porcelain`・`git diff --stat` は WT の中で取る
+- WT のディレクトリが無いときは `Guard:` に `worktree not found: <path>` を加え(Verdict は `tampered`)、
+  git 状態の比較は行わず、`Changes:` は本体で取る
+- `Guard:` の管理ファイルの検知は、`state.json`・`tasks.md` を WT 側のコピーに加えて本体の `tasks.md` でも行う。
+  本体の `state.json` は親が並列中に更新するため丸ごとは比べず、`dispatch-run` が起動時に
+  `state-entry.txt` に記録した自分のタスクの欄だけを比べる(`state-entry.txt` が無いのも改ざんとみなす)
+- Verdict が `ok` のときの `Next:` は `collect <ID>`(`dispatch-worktree collect` で本体へ集める)
+
+**レビューの run**(`review-*`): 終了状態・改ざん検知などは通常の run と同じ。加えて次を判定する。
+
+- **完了報告の必須項目**: `Verdict`・`指摘`・`要約`・`fix-notes`・`理解確認` の5つ(`Completion report:` で判定)。
+  `type` も項目にあるが必須ではなく、無い・決まった値でないときは `Review type: invalid` になる。
+  `要約` と `type` は、コミットメッセージ(`<type>: <要約>`)に使われることがある(`workflow-run` の経路)
+- **追加の検証**: 完了報告が有効なとき、`Verdict` が `pass` / `fail` 以外なら
+  `invalid (Verdict must be pass or fail)`、`fail` なのに
+  `.agents/workflow/runs/<ID>-<N+1>/fix-notes.md` が無ければ `invalid (fix-notes not found: <パス>)`、
+  `pass` で `comprehension_check.enabled` が true なのに `.agents/workflow/comprehension/<ID>.md` が
+  無ければ `invalid (comprehension file not found: <パス>)`。いずれも `Completion report:` が invalid に
+  なり exit 5(`reason=no-report`)
+- **変更0件の判定**: 行わない(`pr-*` と同じく exit 7 にしない)
+- **プロファイル**: `review.profile` と `review-<ID>` のプロファイルで判定する(launcher が `subagent` なら
+  `subagent` プロファイル)
+- **本体で動くレビューの run の `state.json`**: レビューの run(`worktree.txt` が無い `review-*`)では、
+  `guard.sha256` に `state.json` の全体のハッシュは無い。代わりに、レビュー対象のタスク
+  (`review-` を除いた ID)の欄を `state-entry.txt` と比べ(`state-entry.txt` が無いのも改ざん)、
+  ほかのタスクの欄を `state-tasks.json` と比べて変化が正規の遷移かを確かめる(worktree の run と同じ。
+  `task-state`・`state-sync --insert` による遷移だけを許し、不正なら
+  `changed: .agents/workflow/state.json (<ID>)` を出す)
+- **本体の変更の検知**: `dispatch-run` はレビューの run でも起動時に `main-tree.txt`
+  (`git-state --main-tree` の値)を記録する。`dispatch-check` は今の値と比べ、起動時に無かったパスと
+  ハッシュが変わったパスを `changed: main worktree: <パス>` として `Guard:` に加える
+  (`main-tree.txt` が無いのも改ざん)。`done` より後に更新されたファイルには
+  ` (modified after the run ended)` が付く。レビュー役はコードを変えないため、本体の変更は tampered(exit 8)
+  になる
+- **出力**: 通常の行に加えて `Review verdict:`(pass / fail)・`Review findings:`(`指摘` の値)・
+  `Review summary:`(`要約` の値)・`Review type:`(feat / fix / refactor / docs / test / chore / perf / ci の
+  どれか。それ以外や項目が無いときは `invalid`)・`Fix notes:`(`fix-notes.md` があればそのパス、無ければ
+  `none`)の5行を出す。`Review type:` は表示だけで、exit code と `Next:` 行は変わらない
+- **Next**: exit 0 で `Verdict` が `pass` なら `Next: commit <ID>`(品質ゲートとコミットへ)、`fail` なら
+  `Next: retry <ID>`(`fix-notes.md` は書かれているので次の試行で子に渡す)
+
 `0` 以外の場合はレビューに進まず、出力された内容をユーザーに報告する(`7` は、変更が無いのが
 正しいタスクに限り検証に進んでよい。詳細は `agent-dispatch` skill §2)。
+
+**PR 作成の run の推敲の確認**(`pr-*`): `runs/pr-<N>-1/refine.txt` があり、ほかの判定が `ok` のとき、
+行ごとに `text-refine <場面> <パス> --check` を実行する。結果を `Refine <場面>: <結果>` の行で出す。
+結果は次のいずれか。
+
+- `ok` — 推敲を確かめられた
+- `off` — 推敲しない設定(`text_refine.skill` が未設定等)
+- `skipped` — yomiyasu 以外の skill
+- `undecided` — 判断待ちの候補が残った(`Undecided:` の行も出す)
+- `unchecked` — 推敲済みファイルや記録が無い(`Unchecked:` の行も出す)
+
+`undecided`・`unchecked` が1つでもあれば exit 9 で、`Verdict:` と `Next: escalate reason=` は、
+`unchecked` があれば `refine-unchecked`、無ければ `refine-undecided` になる。それ以外は exit 0 で
+`Next: wait-merge`。
 
 ### dispatch-wait — 子の完了待ち
 
@@ -624,10 +927,282 @@ run の完了をポーリングで待つ。1回の呼び出しで `--max-wait` �
 
 | exit | 意味 |
 |------|------|
-| `0` / `4`〜`8` | `done` があった。`dispatch-check` の結果のまま(上の表) |
-| `1` | 使い方不備、または run が起動されていない |
+| `0` / `4`〜`9` | `done` があった。`dispatch-check` の結果のまま(上の表) |
+| `1` | 使い方不備、または run が起動されていない。サブエージェントの run(`runs/<ID>-<N>/launcher` が `subagent`)も exit 1(`dispatch-finish` を使う。`guard.sha256` の確認より前に判定する) |
 | `2` | まだ実行中(この呼び出しの待ちが `--max-wait` に達した)。最後の行は `Next: wait`。再度呼んで待ちを続ける |
 | `3` | 経過が `child_agent.timeout_seconds` を超えた。最後の行は `Next: escalate reason=timeout` |
+
+### dispatch-finish — サブエージェントの run の完了
+
+`launcher` が `subagent` の run を完了させる。親がサブエージェントの最終応答を `output.log` に書いた後に呼ぶ。
+`done` が無ければ `dispatch-run` と同じ形式(`EXIT:<値>` / `END:<ISO 8601>`)で書き、
+`dispatch-check` を実行してその結果(stdout・stderr・exit code)をそのまま返す。`done` が既にあれば上書きしない。
+
+```powershell
+.agents/workflow/scripts/dispatch-finish.ps1 -TaskId T1 -Attempt 1 [-Exit 0]
+```
+```bash
+.agents/workflow/scripts/dispatch-finish.sh T1 1 [--exit 0]
+```
+
+- `--exit` / `-Exit`: `done` に書く `EXIT:` の値(0 以上の整数、既定 0)
+
+| exit | 意味 |
+|------|------|
+| `1` | 使い方不備(`--exit` が不正を含む)、`launcher` が `subagent` でない、`output.log` が無い |
+| それ以外 | `dispatch-check` の exit code のまま(上の `dispatch-check` の表) |
+
+### dispatch-worktree — 子エージェントの run 用 git worktree の作成・回収・削除
+
+`max_parallel` が 2 以上のとき、`dispatch-start` が呼ぶ。run ごとに git worktree を作り、
+子はその中で作業する。`RUN=.agents/workflow/runs/<ID>-<N>`、`WT=$RUN/worktree`、
+ブランチは `agents-run/<ID>-<N>`。
+
+```powershell
+.agents/workflow/scripts/dispatch-worktree.ps1 -Action <create|collect|remove|abort> -TaskId T1 -Attempt 1
+```
+```bash
+.agents/workflow/scripts/dispatch-worktree.sh <create|collect|remove|abort> T1 1
+```
+
+- `create`: WT を HEAD から作る。試行回数が 2 以上で、前の試行に `collected`(collect が成功した印)があれば、
+  前の試行の変更(`changes.patch`)を本体から取り除き(取り除いたら `$RUN/reverted` に前のパッチのパスを書く)、
+  新しい WT に 3way で持ち越す。`collected` が無くても、前の試行に `carry`(未 collect の変更を次の試行に
+  持ち越す印)があれば、前の試行の変更は本体に入っていないため本体から取り除かずに、新しい WT に 3way で
+  持ち越す。`collected` も `carry` も無い前の試行(collect が衝突・失敗して取り込まれなかった)の変更は
+  本体に無いので持ち越さない。stdout に `Carried: <パッチ>` / `Carried: none` /
+  `Carried: none (not collected: <前のパッチのパス>)` のどれかと、`Worktree: <パス>`、`Branch: <名前>` を出す。
+  持ち越しが衝突したら exit 40 で、WT・ブランチを残さず、取り除いた変更を本体に戻す
+  - `git worktree add` の失敗は、失敗ごとに stderr の全文を `$RUN/worktree-add.log` に残す
+    (`--- attempt <n>` の行に続けて書く)。stderr に `.lock` と `File exists` の両方が含まれる失敗は
+    worktree のロックの取り合いなので、作りかけの WT・ブランチを消して `Retry: git worktree add (<n>/2)` を
+    stderr に出し、1 秒待ってやり直す(やり直しは 2 回まで)
+  - やり直しても失敗したときは、後片付けの後に stderr へ `git worktree add failed:` の行、失敗の
+    最初の `fatal:` / `error:` の行(無ければ最後の非空行)、`Detail: <worktree-add.log のパス>` の
+    3 行を出して exit 30 で終わる
+- `collect`: WT の変更(未追跡・WT でコミットした変更を含む。`.agents/workflow` は除く)の、`worktree.txt` の
+  `base` との差分を `$RUN/changes.patch` にして本体へ `git apply` し、空の `$RUN/collected` を作って
+  WT・ブランチ・`worktree.txt` を消す(`base` の行が無ければ `HEAD` との差分)。tasks.md の `changed` に無い
+  ファイルは `Undeclared: <path>`(無ければ `Undeclared: none`)で出す。成功時は `Applied: <N> files`・
+  `Patch: <パス>`・`Next: review <ID>`。WT の中の git(`git add` 等)が失敗したときは exit 30 で、
+  WT・ブランチ・`worktree.txt` を残す(原因を直して collect し直せる)
+- `remove`: WT・ブランチ・`worktree.txt` を消す(無くてもエラーにしない)。`create` が取り除いた前の試行の変更は
+  本体に当て直さない(試行 2 以降で引き取らない run には `abort` を使う)
+- `abort`: `remove` と同じく消したうえで、`$RUN/reverted` があれば、そこに書かれた前のパッチを本体に
+  `git apply` で当て直して `reverted` を消す(`create` で取り除いた前の試行の変更を戻す)。
+  当て直せなければ stderr にパッチのパスを出して exit 20。`dispatch-start` が起動前の失敗で呼ぶ
+
+**Windows でのパスの長さ**: WT は `.agents/workflow/runs/<ID>-<N>/worktree/` に作るので、WT 内のパスは
+本体より約35文字長くなる。`dispatch-worktree` は WT に対する git の操作に `core.longpaths` を付けて作るが、
+子の CLI やツールが長いパスを扱えないことがある。プロジェクトは短いパスに置く(例: `C:\work\proj`)。
+
+`worktree.txt` は `$RUN/` に書く3行(`dispatch-run` と `dispatch-check` が読む):
+
+```
+path <WT の絶対パス>
+branch refs/heads/agents-run/<ID>-<N>
+base <作成時の HEAD>
+```
+
+| exit | 意味 |
+|------|------|
+| `0` | 成功 |
+| `1` | 使い方不備 |
+| `20` | `reason=dirty-tree`。`create` では前の試行の変更を本体から取り除けない、`collect` では本体の作業ツリーが clean でない、`abort` では `reverted` のパッチを本体に当て直せない |
+| `30` | `reason=worktree`。WT が既にある・作成に失敗した。`collect` では `worktree.txt` または WT のディレクトリが無い、WT の中の git が失敗した(WT は残る) |
+| `40` | `reason=conflict`。`collect` で `changes.patch` を本体に当てられない、`create` で前の試行の持ち越しが衝突した |
+
+使い方不備の exit 1 を除き、stdout の最後の行に `Next:`(`continue` / `review <ID>` /
+`escalate reason=<理由>`)を出す。
+
+### workflow-run — 1グループ分のタスクのループ
+
+1グループ分のタスクを、起動・完了待ち・レビュー・collect・品質ゲート・コミットまで1回の
+呼び出しで進める。常駐はせず、`--max-wait` 秒に達するか、グループが終わるか、止まるまで動く。
+
+```powershell
+.agents/workflow/scripts/workflow-run.ps1 [-MaxWait 480] [-Interval 15]
+```
+```bash
+.agents/workflow/scripts/workflow-run.sh [--max-wait 480] [--interval 15]
+```
+
+- `--max-wait`: 1回の呼び出しで進める上限(秒、既定 480)。`0` は上限なし
+- `--interval`: 状態を確かめ直す間隔(秒、既定 15)
+- 使える条件: config.json の `review.mode` が `dispatch`、`review.command_template` が空でない、
+  `max_parallel` が 2 以上。どれかを満たさなければ stderr に理由を出し、exit 4 で止まる
+  (`workflow-run` を使わない手順で進める)
+
+1回の呼び出しで行うこと:
+
+1. 進行中(`in_progress` / `in_review`)のタスクを `run-phase` の段階に応じて1つずつ進める
+2. `next-task` で新しいタスクを起動する(空きがある限り)
+3. `--max-wait` に達したら `Next: wait` を返して終わる(呼び直せば続きから進む)
+
+続きは毎回 state.json と `runs/` から判定するので、途中で終わっても呼び直せば再開する。
+レビューは collect の前に、worktree の中で行う。複数のタスクのレビューは同時に進み、
+collect・品質ゲート・コミットは1件ずつ行う。レビュー中もタスクは `in_progress` のままで、
+`max_parallel` の枠を使う。
+
+| 段階 | 行うこと |
+|------|----------|
+| `start` | `dispatch-start` でその試行を起動する |
+| `running` | 実装の run の完了を1回だけ確かめ、通れば `checked` を作る |
+| `review-start` | `dispatch-start --review` で worktree の中のレビューを起動する |
+| `reviewing` | レビューの run の完了を確かめ、結果を `runs/review-<ID>-<N>/verdict` に書く |
+| `collect` | `dispatch-worktree collect` で変更を本体に取り込み、品質ゲートとコミットへ進む |
+| `gate` | 品質ゲートを通し、レビュー役の `type` と `要約` でコミットする |
+| `retry` | レビュー不合格の再 dispatch(変更を持ち越す) |
+| `manual` | 親が今の手順で処理する(`Next: review <ID>` を返して止まる) |
+
+やり直しの経路は3つ:
+
+| 経路 | 行うこと |
+|------|----------|
+| レビュー不合格 | `carry` を書き、変更を持ち越して次の試行を起動する(`retries` が増える) |
+| 品質ゲート FAIL | `fix-notes.md` を機械的に書いて次の試行を起動する(`retries` が増える) |
+| collect の衝突 | 最新の HEAD から次の試行を起動する(`retries` は増えない。試行は `max_fix_retries + 1` 回まで) |
+
+コミットはレビュー役の `type` と `要約` で行う。この経路では推敲しない。
+
+| exit | 最後の行 | 意味 |
+|------|----------|------|
+| `0` | `Next: group-advance` / `Next: finish` | グループが終わった(`next-task` の結果) |
+| `1` | なし | 使い方の誤り、または state.json が無い |
+| `2` | `Next: wait` | `--max-wait` に達した。呼び直して続ける |
+| `3` | `Next: escalate reason=<理由>` | 止まった(段階が `manual` のときだけ `Next: review <ID>`) |
+| `4` | `Next: escalate reason=runner-unsupported` | 使える条件を満たさない |
+| `5` | `Next: escalate reason=already-running` | 別の `workflow-run` が実行中 |
+
+stdout の行:
+
+- `Started: <ID>-<N>` — 実装の run を起動した
+- `Checked: <ID>-<N>` — 実装の run が `dispatch-check` を通った
+- `Review started: <ID>-<N>` — レビューの run を起動した
+- `Review: <ID>-<N> <pass|fail>` — レビューの結果
+- `Collected: <ID>-<N>` — 変更を本体に取り込んだ
+- `Undeclared: <ID> <パス>` — tasks.md の `changed` に無いファイルを取り込んだ
+- `Gate warning: <ID> <ステップ>` — 非 blocking の品質ゲートのステップが失敗した
+- `Done: <ID> <ハッシュ7桁> retries=<n>` — コミットした
+- `Retry: <ID> <n>/<上限> (review|quality-gate)` — 次の試行を起動した
+- `Redo: <ID>-<N> (conflict)` — 衝突のため次の試行を起動した
+- `Stopped: <ID> reason=<理由>` — 止まった(タスクIDが無ければ `-`)
+- `Finished: <Next の値>` — グループが終わった
+- `In flight: <ID>-<N> <段階>` — 実行中のタスク(記録には書かない)
+- `Detail: <last-output.log のパス>` — 止まったときの詳細(記録には書かない)
+
+`In flight:` と `Detail:` 以外は `runs/workflow-run/progress.log` にも時刻付きで書かれる。
+
+止まる理由:
+
+- `dispatch-check`・`dispatch-start`・`dispatch-worktree`・`task-commit` が出した reason はそのまま使う
+- `workflow-run` が決める reason: `review-invalid`・`commit-format`・`retry-limit`・`conflict`・
+  `quality-gate-error`・`task-state`・`not-worktree`・`blocked`・`next-task`・`unknown-phase`・`manual`
+  (`manual` のときだけ最後の行が `Next: review <ID>`。詳細は `run-phase` の段階の表)
+
+止まったときも、実行中のほかの run は止めない。詳細は `runs/workflow-run/last-output.log` に残る。
+
+ロック: `runs/workflow-run/lock/pid` に自分の PID を書いて実行する。ロックがあるとき、
+そのプロセスが生きていれば exit 5、死んでいれば引き継ぐ。sh 版と ps1 版を同時に動かした場合は
+検知できない。
+
+### run-phase — タスクの段階の判定
+
+タスクが今どの段階にあるかを、state.json と `runs/` のファイルの有無だけから判定する。
+何も書き換えない(読み取り専用)。`workflow-run` が毎回呼ぶ。
+
+```powershell
+.agents/workflow/scripts/run-phase.ps1 -TaskId T1
+```
+```bash
+.agents/workflow/scripts/run-phase.sh T1
+```
+
+stdout に `Phase: <段階> <試行回数>` の1行を出して exit 0。使い方の誤り・state.json が無い・
+タスクが state.json に無いときは stderr に理由を出して exit 1。
+
+- `<試行回数>`: `runs/<ID>-<n>/guard.sha256` がある最大の `n`(無ければ 0)
+- `<段階>`: 次の表のとおり
+
+| 条件 | 段階 |
+|------|------|
+| status が `in_progress`・`in_review` 以外 | `<status> <N>`(`pending` / `done` / `failed`) |
+| `in_progress`、N が 0 | `start 1` |
+| `in_progress`、`runs/<ID>-<N>/superseded` か `collected` がある | `start <N+1>` |
+| `in_progress`、`checked` が無い | `running <N>` |
+| `in_progress`、`runs/review-<ID>-<N>/guard.sha256` が無い | `review-start <N>` |
+| `in_progress`、`verdict` が無い | `reviewing <N>` |
+| `in_progress`、`verdict` の1行目が `pass` | `collect <N>` |
+| `in_progress`、`verdict` の1行目が `fail` | `retry <N>` |
+| `in_progress`、`verdict` の1行目がそれ以外 | `unknown <N>` |
+| `in_review`、`verdict` が `pass` かつ `collected` がある | `gate <N>` |
+| `in_review`、`verdict` が `fail` かつ `collected` が無い | `retry <N>` |
+| `in_review`、それ以外 | `manual <N>` |
+
+| exit | 意味 |
+|------|------|
+| `0` | 判定した(stdout の1行) |
+| `1` | 使い方不備、state.json が無い、タスクが state.json に無い |
+
+### workflow-logs — 複数の run のログを1つの画面に流す
+
+`tail -f` の複数 run 版。実行中の子エージェント run の `output.log` を1つの画面にまとめて流す。
+何も書き換えない。sh 版は python3 が必要(ps1 版は不要)。
+
+```powershell
+.agents/workflow/scripts/workflow-logs.ps1 [-Run <ID>-<N>[,...]] [-Tail 20] [-Interval 1] [-Duration <秒>] [-Once] [-Layout <columns|stream>] [-Width <桁>] [-Height <行>]
+```
+```bash
+.agents/workflow/scripts/workflow-logs.sh [--run <ID>-<N>]... [--tail 20] [--interval 1] [--duration <秒>] [--once] [--layout <columns|stream>] [--width <桁>] [--height <行>]
+```
+
+- `--run`: 指定した名前の run だけを追う(複数指定可。ps1 版は `-Run` にカンマ区切りで渡す。形式は `^[A-Za-z0-9_-]+-[0-9]+$`)。
+  ディレクトリがまだ無ければ現れるまで待つ
+- `--tail`: run を初めて見つけたとき、`output.log` の末尾から出す行数(既定 20)
+- `--interval`: run の探し直しとログ確認の間隔(秒、既定 1。0 より大きい数だけ。0・0.0 は使い方の誤りで exit 1)
+- `--duration`: 指定した秒数で終了する
+- `--once`: 対象の run を1回だけ描いて終了する(stream は末尾の行、columns は1画面)
+- `--layout`: 表示のしかた。`columns` は run ごとに横へ列を並べる、`stream` は全 run の行を1列に流す。
+  既定は出力が端末なら `columns`、そうでなければ `stream`(パイプ・テストでは `stream` のまま)
+- `--width`: 画面の幅(桁)。無ければ端末の幅、取れなければ 120
+- `--height`: 画面の高さ(行)。無ければ端末の高さ、取れなければ 30
+- 対象の run: `--run` があればその名前の run。無ければ `.agents/workflow/runs/*/` のうち
+  `guard.sha256` があり `done` が無いもの(`--interval` ごとに探し直し、新しい run を加える)。
+  1回起動すれば、以後に dispatch した run のログもまとめて流れる。
+  `output.log`(無ければ `guard.sha256`)の最終更新が `child_agent.timeout_seconds` 秒
+  (`.agents/workflow/config.json`。読めない・正の整数でなければ 1800)より前の run は、
+  止まった run(kill・クラッシュで `done` が無い)として新たには追わない。追跡中の run と `--run` 指定の run には当てない
+- 文字コード: `output.log` の先頭が BOM `FF FE` なら UTF-16LE(Windows PowerShell 5.1 の `*>`)として、
+  `EF BB BF` なら UTF-8 の BOM を除いて読む。それ以外は UTF-8。2バイト単位に満たない端数は次の読み込みに回す。
+  出力は BOM なしの UTF-8。`.ps1` 版は、出力が端末のときだけ出力コードページ(`[Console]::OutputEncoding`)を
+  UTF-8 に切り替えて終了時に戻す(日本語環境の 932 での文字化けを防ぐ)。リダイレクトされているときは切り替えない
+- columns レイアウト: run を見つけた順に左から並べ、列の間に ` │ ` を挟む。列の幅は画面の幅を列の数で割る。
+  各列は 1 行目が run の名前、2 行目が `updated HH:MM:SS` と状態(`running` / `finished (<EXIT の値>)`)、
+  3 行目が区切りの線、4 行目から下がその run のログの末尾(列の幅で折り返す)。2 行目は
+  `updated HH:MM:SS (<N>s ago) running` の形で、列の幅に入らないときは `(<N>s ago)` を外し、それでも
+  入らなければ先頭の `updated ` も外し、最後は列の幅で切る。列の幅が 30 桁に満たなくなる数の run があるときは
+  入るだけの列を出し、入らない run は最下行に `+<N> more: <run> (updated HH:MM:SS) ...` で出す。
+  列に入れる行は制御文字を整える: `\r` を含む行は最後の `\r` より後ろだけを出し、色(SGR)以外のエスケープと
+  タブ以外の制御文字は消し、タブは空白 4 個にする。行を切ったときは色を戻す `\x1b[0m` を足す。
+  終わった run の列は、新しい run が入りきらなくなるまで残す。再描画は `--interval` ごとに画面全体で、
+  端末では代替画面に切り替えて終了時(Ctrl+C を含む)に戻す(`--once` は ESC を使わず1画面だけ出す)
+- stream レイアウト: run を最初に見つけたとき `[<run>] --- watching (updated HH:MM:SS)`、新しい行が
+  60 秒出ないごとに `[<run>] --- no output for <N>s (updated HH:MM:SS)` を出す(`updated` は最終更新のローカル時刻)
+- 出力: 各行の先頭に `[<run>] ` を付ける。出力が端末へ向いていて環境変数 `NO_COLOR` が空か未設定なら、
+  接頭辞に run ごとに違う色(ANSI 31〜36)を付ける(`NO_COLOR` は値が空でないときだけ色を止める)。
+  初回は末尾の `--tail` 行、以後は追記された完成した行だけ。
+  `output.log` が短くなったら先頭から読み直し `[<run>] --- log truncated` を出す。
+  `done` が現れたら残りの行(末尾の改行の無い行を含む)と `[<run>] --- finished (<EXIT の値>)` を出し、
+  その run の追跡をやめる(`EXIT:` 行がまだ無ければ 0.1 秒おきに最大 10 回読み直す)。開始時に stderr へ `Watching: ...` を出す
+- 終わり方: `--once` は1回描いて終了 / `--duration` は指定秒数で終了 /
+  `--run` 指定時は指定した run がすべて終わったら終了 / それ以外は Ctrl+C まで続ける。
+  どちらの版も Ctrl+C は exit 0 で終わる(sh 版は traceback を出さない。ps1 版は入力がリダイレクトされていなければ
+  Ctrl+C を自分で受け取り、待ちの間に見つけて終わる)
+
+| exit | 意味 |
+|------|------|
+| `0` | 正常に終わった(Ctrl+C を含む) |
+| `1` | 使い方不備(未知の引数・値の無いオプション・形式不正・数値でない値・0 以下の `--interval`)、または python3 が無い(sh 版) |
 
 ### git-state — git 状態の4行出力
 
@@ -643,6 +1218,30 @@ config <git config ファイルの SHA-256(16進小文字)>
 ```
 
 `refs` は push で正当に変わる `refs/remotes` を含めない。
+
+`--ref <refname>`(ps1 は `-Ref <refname>`)を付けると、`refs` 行はその参照だけの
+`git for-each-ref` の出力の SHA-256 になる(参照が無ければ空の出力のハッシュ)。worktree の run が
+自分のブランチだけを見て、並列の他の run が作るブランチや参照の変化を改ざんと誤検知しないために使う。
+`--run <refname> --parent <refname>`(ps1 は `-Run`・`-Parent`)を付けると、`refs` 行は既定の参照一覧から
+次の行を除いたものの SHA-256 になる: 参照名が `refs/heads/agents-run/` で始まり `--run` の値と一致しない行
+(ほかの run のブランチ)、`--parent` の値と一致する行(親の作業ブランチ。`-` か空なら除かない)。
+worktree の run が、並列の他の run や親のコミットを改ざんと誤検知せず、タグなど共有の参照の変化は検知するために使う。
+`--other-runs <ID,ID,...>`(ps1 は `-OtherRuns`)は `--run` のときだけ使え、ほかの run のブランチの除外を
+`refs/heads/agents-run/<ID>-<数字>` で `<ID>` が一覧にある行に限る。`dispatch-run`・`dispatch-check` は
+一覧に、自分以外の `in_progress`・`in_review` のタスク(=実行中または回収待ちの run)の ID を渡す。
+実行中でないタスクの run のブランチを子が作ると、除かれずに `refs` の変化として検知される。
+一覧が無い・空なら、自分以外の `agents-run/*` を何も除かない。
+`--main-tree`(ps1 は `-MainTree`)を付けると、上の4行の代わりに、カレントディレクトリの
+作業ツリーの未コミットの変更をパスごとに出す。対象は
+`git diff --name-only HEAD -- . ':(exclude).agents/workflow'` と
+`git ls-files --others --exclude-standard -- . ':(exclude).agents/workflow'` のパスの和集合で、
+`LC_ALL=C sort -u` の順に `<sha256 の16進小文字>  <パス>`(区切りは空白2つ。ファイルが
+無ければ `-  <パス>`)を1行ずつ出す。git の失敗は、その部分を空として扱う。`--main-tree` は
+ほかのオプションと併用できない。`dispatch-run` が worktree の run の起動時にこの出力を
+`main-tree.txt` に記録し、`dispatch-check` が本体の変更の検知に使う。
+`--run` と `--parent` は両方そろって使い、`--ref` とは併用できない。
+未知の引数・値の無いオプション・上の組み合わせの誤りは stderr に
+`Usage: git-state.sh [--main-tree | --ref <refname> | --run <refname> --parent <refname> [--other-runs <ID,ID,...>]]` を出して exit 1。
 `dispatch-run` が子の起動時にこの出力を `git-state.txt` に記録し、`dispatch-check` が実行後の
 出力と比べて、子がリポジトリのどこを変えたか(HEAD・ブランチ・参照・設定)を特定する。
 
@@ -694,8 +1293,8 @@ JSONを直接書くことはない。
   ```bash
   .agents/workflow/scripts/state-sync.sh --set-branch
   ```
-  名前を省略すると現在のブランチを記録する。`develop/` で始まらない名前と、名前を省略した detached HEAD は
-  拒否する(exit 1)。すでに同じ値なら `Branch unchanged: <名前>` を出して何もしない。
+  名前を省略すると現在のブランチを記録する。config.json の `branch_prefixes`(既定 `develop/`・`develop-`)のどれでも始まらない名前と、
+  名前を省略した detached HEAD は拒否する(exit 1)。すでに同じ値なら `Branch unchanged: <名前>` を出して何もしない。
 
 どのモードでも、state.json を書く前に全タスクの依存欄を検証する(形式違反・存在しないID・
 自己依存・循環依存・依存行の欠落)。あわせて要件の節と要件欄も検証する(検査内容は
@@ -766,8 +1365,10 @@ Progress: <done>/<全タスク> done
 Group: <名前> <done>/<数>
 Current: <ID> <status> | <title>
 Run: <ID>-<N> running elapsed=<秒>s log_idle=<秒>s
+Runner: locked pid=<pid> / Runner: idle
+Runner last: <progress.log の最後の空でない行>
 Failed: T3, T5
-PR: <state> <url>
+PR: <state> <url> [unpushed=<n>|unpushed=no-remote]
 Comprehension: unanswered=<n> <ファイル名> ...
 Next: <行動> [reason=<理由>]
 ```
@@ -777,15 +1378,26 @@ Next: <行動> [reason=<理由>]
 - `Current:` — `in_progress` / `in_review` のタスクがあればその行、無ければ `Current: none`
 - `Run:` — `Current` が `in_progress` で、そのタスクの最新の run に `guard.sha256` があるときだけ。
   `done` ファイルがあれば `finished`、無ければ `running`(`elapsed` は guard からの経過、`log_idle` は `output.log` の無更新秒数。ログが無ければ `-`)
+- `Runner:` — `runs/workflow-run/progress.log` があるときだけ、`Run:` の後・`Failed:` の前に出す。
+  `runs/workflow-run/lock/pid` があれば `Runner: locked pid=<pid>`、無ければ `Runner: idle`。
+  プロセスが生きているかは調べない(ロックの判定は `workflow-run` 自身が行う)
+- `Runner last:` — 同じく `progress.log` があるときだけ、`Runner:` の次の行に最後の空でない行を出す
+  (空でない行が無ければ出さない。`workflow-run` の stdout を時刻付きで記録したもの)
 - `Failed:` — `failed` のタスクがあるときだけ
 - `PR:` — `next-task` の判定が `finish` / `group-advance` のときだけ(下記)
 - `Comprehension:` — 常に出す。`comprehension/` の質問ファイルのうち、回答が未記入のものの件数とファイル名
-- `Next:` — 最後に1行。実行中の run があれば `wait`、PR が `none` なら `create-pr`、`OPEN` なら `wait-merge`、
+- `Next:` — 最後に1行。実行中の run があれば `wait`、PR が `none` なら `create-pr`、`OPEN` で未 push の
+  コミットがあれば `update-pr`、`OPEN` で未 push のコミットが無ければ `wait-merge`、
   `CLOSED` なら `escalate reason=pr-closed`、それ以外は `next-task` の `Next:` 行をそのまま出す
 
 PR の状態は、`next-task` の判定が `finish` / `group-advance` のときだけ `gh pr view <state.json の branch>` で調べる。
 PR が無ければ `PR: none`、gh が無い・`branch` が空・gh の失敗(PR 無し以外)・出力を読めないときは `PR: unknown`
 (`Next:` は `next-task` の行のまま)。
+
+PR が `OPEN` のときは、`origin/<branch>`(リモート追跡ブランチ)とローカルの `<branch>` を比べて
+未 push のコミットを数え、`PR:` 行に `unpushed=<n>` を足す(fetch はしない)。`origin/<branch>` が無ければ
+`unpushed=no-remote` を足す。どちらの場合も `Next:` は `update-pr` になる。未 push のコミットが無い
+(または比較に失敗した)ときは何も足さず、`Next:` は `wait-merge` になる。
 
 `--summary`(`-Summary`)では、完了時のサマリー報告用に行を足す:
 
@@ -806,14 +1418,14 @@ exit code: `0`=出力あり、`1`=使い方不備・tasks.md/state.json 不在�
 ### text-refine — yomiyasu への推敲の依頼文
 
 `config.json` の `text_refine` から、yomiyasu(日本語の推敲 skill)への依頼文を機械的に作る。
-推敲そのものは親が行い、このスクリプトは文章を書き換えない(入力ファイルは変更しない)。
+推敲そのものは親(`text_refine.mode` が `dispatch` のときの PR 本文とサマリーは、PR 作成の子)が行い、このスクリプトは文章を書き換えない(入力ファイルは変更しない)。
 サマリー報告・確認依頼・コミットメッセージ・PR説明・タスク完了報告・tasks.md を、利用者に見せる前に整えるために使う。
 
 ```powershell
-.agents/workflow/scripts/text-refine.ps1 <summary|confirm|commit|pr_body|task_done|tasks> <入力ファイル> [-Check]
+.agents/workflow/scripts/text-refine.ps1 <summary|confirm|commit|pr_body|task_done|tasks> <入力ファイル> [-Check|-Request]
 ```
 ```bash
-.agents/workflow/scripts/text-refine.sh <summary|confirm|commit|pr_body|task_done|tasks> <入力ファイル> [--check]
+.agents/workflow/scripts/text-refine.sh <summary|confirm|commit|pr_body|task_done|tasks> <入力ファイル> [--check|--request]
 ```
 
 - 第1引数は推敲する場面(`text_refine.targets` と同じ6つの値)、第2引数は推敲前の文章のファイル
@@ -832,6 +1444,18 @@ Next: continue
 - `Found:` と `Hint:` は `skill` が未設定のときだけ。yomiyasu が見つかった場所ごとに `Found:` を出し、
   1件以上あれば `Hint:` を出す(入力ファイルの存在は確かめない)
 
+`text_refine.mode` が `dispatch` のとき、場面が `tasks` 以外で `--request`(ps1 は `-Request`)が無ければ、
+`Refine: dispatch` と `Next: continue` の2行を出して exit 0 で終わる(入力ファイルの有無は確かめない)。
+
+```
+Refine: dispatch
+Next: continue
+```
+
+- `--request` を付けると、`mode` に関係なく「推敲するとき」の出力になる
+- `--request` は PR 作成の子が使う(親が使うのは、子が推敲できずに親が推敲し直すときだけ)
+- `--check` は `mode` の影響を受けない
+
 推敲するとき:
 
 ```
@@ -846,6 +1470,9 @@ Next: refine
   同名のファイルが既にあれば先に削除する(`.decisions` のファイルも削除する)
 - 依頼文には、場面ごとの文章の種類、読み手(`text_refine.reader`)、変えてはいけないもの
   (コマンド・パス・タスクID・コミットハッシュ・URL・括弧書きの補足、場面によって構成や改行)を入れる
+- `skill` が `yomiyasu` / `yomiyasu:yomiyasu` のときは、依頼文に検査のコマンド
+  (`python3 <yomiyasu のディレクトリ>/scripts/yomiyasu_check.py run --source <入力> --final <出力>`)を
+  入れる。子は推敲の後にこのコマンドを実行して検査の記録を残す(記録が無いと `--check` で止まる)
 
 推敲の後のチェック(`--check`。ps1 は `-Check`):
 
@@ -878,7 +1505,9 @@ Next: decide-candidates
 - 判断のファイルは入力ファイルの拡張子の前に `.decisions` を足したもの(`report.md` → `report.decisions.md`)。
   各候補のキーが含まれていれば判断済みとみなす。判断が無い候補は `Undecided:` で出し、`Next: decide-candidates`
 - 確かめられないとき(推敲済みファイル・記録・lint の報告が無い等)は `Unchecked: <理由>` と
-  `Next: escalate reason=refine-unchecked`
+  `Next: escalate reason=refine-unchecked`。`--check` が `no record`(推敲済みファイルの SHA-256 に
+  一致する記録が無い)で止まったときは、その間に `Hint:` の行に、記録を作るための
+  `yomiyasu_check.py run` のコマンドを出す
 - `tasks` の `--check` は、yomiyasu の記録を確かめる前に、推敲前後の構造を比べる。構造は見出し(`#` 始まり)・
   コメント行(`<!--` 始まり)・`依存`・`要件`・`グループ`・`参照ファイル` の行と参照ファイルの箇条・要件ID(`- R1:` 等)・
   コードブロックの中身で、行末の空白は無視する。この比較は yomiyasu 以外の skill でも行う
@@ -900,7 +1529,7 @@ Next: decide-candidates
 skill の名前は入れ方(プラグイン・skill 単体・エージェントごとの配置)で変わるため、スクリプトは推測しない。
 検出して `Hint:` を出すだけで、`text_refine.skill` は利用者が設定する。
 
-exit code: `0`=出力あり、`1`=使い方不備(引数の数・場面の値・`--check` 以外のオプション)・推敲するときに入力ファイルが無い、
+exit code: `0`=出力あり、`1`=使い方不備(引数の数・場面の値・`--check`・`--request` 以外のオプション)・推敲するときに入力ファイルが無い、
 `2`=判断が無い候補がある(`--check`)、`3`=推敲済みファイルか記録が無い(`--check`)、
 `4`=`tasks` の推敲前後で構造が変わった(`--check`)。
 
@@ -964,6 +1593,17 @@ state.json の並び順ではなく依存関係を見るため、挿入したタ
 1. `in_progress` / `in_review` のタスク(中断からの再開対象)があれば、その最初のもの
 2. なければ、依存タスクがすべて `done` の最初の `pending` タスク
 
+`max_parallel` が 2 以上のとき(config.json。整数で 1 以上のとき以外は 1 として扱う)は、
+`in_review` のタスクを先に返し、全 `done`(exit 3)・グループ完了(exit 6)の判定を通ったあと、
+依存がすべて `done` の `pending` タスクから、実行中のタスク(`in_progress`)とも互いにも
+変更対象のファイルが重ならないものを `max_parallel` から実行中の数を引いた数まで選ぶ。
+`parallel_exclusive_files`(文字列の配列。既定 `["AGENTS.md", "README.md"]`、空配列も有効)に
+挙げたファイルを変更対象に持つタスク(変更対象が1つも無いタスクも同じ)は単独で実行し、
+他のタスクが実行中のときは選ばず、選ぶときも他のタスクと一緒には選ばない。
+選べたら `Next: dispatch <ID> <ID>...`(exit 0)、選べず実行中のタスクがあれば
+`Next: wait <ID>...`(exit 5)、どちらも無ければ blocked(exit 4)になる。
+`max_parallel` が 1 のときは従来どおり。
+
 ```powershell
 .agents/workflow/scripts/next-task.ps1
 ```
@@ -981,6 +1621,7 @@ stdout に `<タスクID> <status>`(例: `T8 pending`)を出力する。config �
 exit code: `0`=該当タスクあり、`1`=tasks.md/state.json 不在・依存欄の不正(形式違反・
 存在しないID・自己依存・循環依存)、`3`=全タスク `done`、
 `4`=実行可能なタスクが無い(`failed` や未完了の依存で止まっている。原因を stderr に列挙)、
+`5`=実行中のタスクの完了待ち(`max_parallel` が 2 以上のとき。`Next: wait <ID>...`)、
 `6`=作業グループ完了(他グループに未完了あり。`group-advance` で分岐する)。
 
 stdout の最後の行には `Next:` 行を出す(「Next: 行」の節を参照)。
@@ -1000,7 +1641,8 @@ stdout の最後の行には `Next:` 行を出す(「Next: 行」の節を参照
 ```
 
 PR が MERGED だった場合のみ `--branch` / `-Branch`(次のグループ用の新ブランチ名。
-`develop/` 始まりが必須)を使い、`git switch main` → `git pull --ff-only` →
+`branch_prefixes` のどれかで始まる名前が必須)を使い、`git switch <base_branch>`
+(config.json の `base_branch`。無ければ `main`) → `git pull --ff-only` →
 `git switch -c <新ブランチ>` で切替し、state.json の `branch` を新ブランチ名、
 `group` を次のグループ(未完了タスクを含む最初のグループ)に更新する。stdout に
 `ADVANCED <新ブランチ名> <新グループ名>` を出力する。state.json を書き換えるのは
@@ -1012,7 +1654,7 @@ PR が MERGED だった場合のみ `--branch` / `-Branch`(次のグループ用
 追跡しないリポジトリではコミットしない。コミットに失敗したら stderr に出して exit 1。
 
 exit code: `0`=切替完了、`1`=使い方・前提不備(グループ未完了・作業ツリー未クリーン・
-`--branch` 未指定や `develop/` 以外の名前 等)、`7`=PR 未作成(stdout `NO_PR`)、
+`--branch` 未指定や `branch_prefixes` に合わない名前 等)、`7`=PR 未作成(stdout `NO_PR`)、
 `8`=PR が OPEN(マージ待ち。stdout `OPEN <PR URL>`)、`9`=PR が未マージのまま閉鎖
 (エスカレーション)、`10`=PR が OPEN だが `origin/<branch>` に未 push のコミットがある、または
 `origin/<branch>` が無い(stdout `OPEN <PR URL>`、`Next: update-pr`。fetch はせず、ローカルの

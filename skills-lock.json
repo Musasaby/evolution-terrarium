@@ -1,65 +1,75 @@
 {
-  "version": 1,
+  "version": 2,
   "skills": {
     "agent-branch-guard": {
       "source": "Musasaby/multi-ai-agents-workflow",
       "sourceType": "github",
       "skillPath": "agent-branch-guard/SKILL.md",
-      "computedHash": "42a1eb4544506060731d706a7fc34dffba95f9c83cc64cbfba395ad86d1485c1"
+      "computedHash": "6668a5495a6a2302a9dc1514dbdf3f38643ddbe0355a62c1eeb7df32526f9f1e",
+      "commit": "80405748f990abffeedefed9b6158f679c26f6a6"
     },
     "agent-comprehension-check": {
       "source": "Musasaby/multi-ai-agents-workflow",
       "sourceType": "github",
       "skillPath": "agent-comprehension-check/SKILL.md",
-      "computedHash": "9ab2bb9b2212e822ea8b04d9d6f2632661e6719d6477d84c95dc87b08f56c497"
+      "computedHash": "9cae727708488099a426c81398c477b727bb333f7cf7eb416e6e42b2e75a0225",
+      "commit": "80405748f990abffeedefed9b6158f679c26f6a6"
     },
     "agent-dispatch": {
       "source": "Musasaby/multi-ai-agents-workflow",
       "sourceType": "github",
       "skillPath": "agent-dispatch/SKILL.md",
-      "computedHash": "6d6951bfe2290e237fa54acddd4bf40f19dd15223bd7ac07af6b75e035fce0c0"
+      "computedHash": "5e0fd2303ea0cca2cea9245db97279086da7f23eb6a7168344a19f89629852cf",
+      "commit": "80405748f990abffeedefed9b6158f679c26f6a6"
     },
     "agent-quality-gate": {
       "source": "Musasaby/multi-ai-agents-workflow",
       "sourceType": "github",
       "skillPath": "agent-quality-gate/SKILL.md",
-      "computedHash": "eaf5609f3d68243464377b87a11b88f6f9baa69b5b5eb67e4ed08d3ef59f8a8c"
+      "computedHash": "3a639b886378cb8d86ab7e2e9fea06a55d5624648ee42376e6583decdd8d21a6",
+      "commit": "80405748f990abffeedefed9b6158f679c26f6a6"
     },
     "agent-review-commit": {
       "source": "Musasaby/multi-ai-agents-workflow",
       "sourceType": "github",
       "skillPath": "agent-review-commit/SKILL.md",
-      "computedHash": "a09a7e86910a15c4e0f341bcc316288bb6d05823491d32677b2e605b8ab11357"
+      "computedHash": "ece9764b214019ebc62a4480045b8c950a3c8492d45beceb60bacbbc2bd87623",
+      "commit": "80405748f990abffeedefed9b6158f679c26f6a6"
     },
     "agent-task-plan": {
       "source": "Musasaby/multi-ai-agents-workflow",
       "sourceType": "github",
       "skillPath": "agent-task-plan/SKILL.md",
-      "computedHash": "70347db9e1fb29bdeb33b2a0d85abb972577aad07c230dd0cfec456b60961e0c"
+      "computedHash": "eb40b652f18f08676eee1b376c74d44f4b4bad635f87ad8075fb659b4b9d98b9",
+      "commit": "80405748f990abffeedefed9b6158f679c26f6a6"
     },
     "agent-workflow": {
       "source": "Musasaby/multi-ai-agents-workflow",
       "sourceType": "github",
       "skillPath": "agent-workflow/SKILL.md",
-      "computedHash": "cc38259fa773b1ac68d61ba37bb79a1fec14711b247d0c6813e631721e3b872f"
+      "computedHash": "53432891e6b203f17a541ecde382fcfb3f2f55ad9f2483dfe34997f35c3d7619",
+      "commit": "80405748f990abffeedefed9b6158f679c26f6a6"
     },
     "agents-md-setup": {
       "source": "Musasaby/multi-ai-agents-workflow",
       "sourceType": "github",
       "skillPath": "agents-md-setup/SKILL.md",
-      "computedHash": "b04062c9d8afdf2ab9542a8ae6456b7283bfa5ef08847739dec80a0e5bb328ef"
+      "computedHash": "030d59a86817336ba36ce2a60a5c1571abb0a9ded714854f670a3e7c34ce4926",
+      "commit": "80405748f990abffeedefed9b6158f679c26f6a6"
     },
     "workflow-update": {
       "source": "Musasaby/multi-ai-agents-workflow",
       "sourceType": "github",
       "skillPath": "workflow-update/SKILL.md",
-      "computedHash": "0569ea1077a413db7081c8a3430a1cd008e43a820fe7b51c12548a4c4c955dc9"
+      "computedHash": "431ea175b40d1fcefffa4a3cbb7ab0ccc63dd8c0560464411e53c2f3f07bead6",
+      "commit": "80405748f990abffeedefed9b6158f679c26f6a6"
     },
     "yomiyasu": {
       "source": "nanaism/yomiyasu",
       "sourceType": "github",
       "skillPath": "skills/yomiyasu/SKILL.md",
-      "computedHash": "2dc806e9c3e867d99cc78be0483742e09d5c6ceeeed798e3ead868db1544e349"
+      "computedHash": "7b47ceca68a2f8027290dfc289e01c24073ad21353a1f589e867324f6bdf7cf9",
+      "commit": "fbd4e420fb71a6ba90f475898cf611ccb6a08cb2"
     }
   }
 }

@@ -15,6 +15,12 @@ description: 子エージェントの実装をタスクの受け入れ基準に�
 
 ## 手順
 
+### レビューの方式
+
+`config.json` の `review.mode` が `dispatch` なら、§1〜§3 と §5.2 の代わりに
+[レビュー役への dispatch](references/review-dispatch.md) の手順でレビューする。
+それ以外(`parent` を含む)は次の §1〜§3 と §5.2 を親が行う。
+
 ### 1. レビュー材料の収集
 
 - `git diff` / `git status` で変更全体を取得
@@ -53,6 +59,8 @@ description: 子エージェントの実装をタスクの受け入れ基準に�
     (**ここだけは親のLLM出力**。要件の例外事項)。`/agent-dispatch <タスクID>` を次の試行回数で
     リトライ実行すると `dispatch-prompt-gen` がこれをプロンプト冒頭に結合する。
     ファイルが無いまま試行回数 2 以上で実行すると `dispatch-start` が止まる
+  - 並列実行中(`max_parallel` が 2 以上)は、dispatch-start が前の試行の変更を本体から取り除いて
+    新しい worktree に持ち越す。親は本体を編集しない
   - `fix-notes.md` にはタスク固有の指摘だけを書き、「実装ルール」が定める事項は書かない
     (理由と、指摘がテンプレートに収まらないとき `prompt.md` を直接書く手順は
     [手動プロンプト作成](../agent-dispatch/references/troubleshooting.md#手動プロンプト作成))

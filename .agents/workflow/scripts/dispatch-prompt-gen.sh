@@ -8,12 +8,40 @@ export PYTHONIOENCODING=utf-8
 # tasklib を import しても scripts/__pycache__ を作らない(利用先の作業ツリーを汚さないため)
 export PYTHONDONTWRITEBYTECODE=1
 
-USAGE="Usage: dispatch-prompt-gen.sh <TaskId> [Attempt] | dispatch-prompt-gen.sh --pr"
+USAGE="Usage: dispatch-prompt-gen.sh <TaskId> [Attempt] | dispatch-prompt-gen.sh --pr [--launcher <cli|subagent>] | dispatch-prompt-gen.sh --review <TaskId> <Attempt> [--launcher <cli|subagent>]"
 PR_MODE=false
+PR_LAUNCHER=""
+REVIEW_MODE=false
+REVIEW_LAUNCHER=""
 if [ "${1:-}" = "--pr" ]; then
     PR_MODE=true
     TASK_ID="pr"
     ATTEMPT=1
+    # --launcher: prompt.md を書いた後、runs/pr-<N>-1/launcher へこの値を書く(サブエージェント用の節の判定に使う)
+    if [ "${2:-}" = "--launcher" ]; then
+        PR_LAUNCHER="${3:-}"
+        if [ "$PR_LAUNCHER" != "cli" ] && [ "$PR_LAUNCHER" != "subagent" ]; then
+            echo "$USAGE" >&2
+            exit 1
+        fi
+    fi
+elif [ "${1:-}" = "--review" ]; then
+    REVIEW_MODE=true
+    TASK_ID="${2:?$USAGE}"
+    ATTEMPT="${3:?$USAGE}"
+    # パスやコード片に埋め込むため、タスクIDと試行回数の形式を検証する(通常モードと同じ)
+    if ! [[ "$TASK_ID" =~ ^[A-Za-z0-9_-]+$ ]] || ! [[ "$ATTEMPT" =~ ^[0-9]+$ ]]; then
+        echo "Invalid TaskId/Attempt: '$TASK_ID' '$ATTEMPT' (TaskId: [A-Za-z0-9_-]+, Attempt: number)" >&2
+        exit 1
+    fi
+    # --launcher: prompt.md を書いた後、runs/review-<ID>-<N>/launcher へこの値を書く(サブエージェント用の節の判定に使う)
+    if [ "${4:-}" = "--launcher" ]; then
+        REVIEW_LAUNCHER="${5:-}"
+        if [ "$REVIEW_LAUNCHER" != "cli" ] && [ "$REVIEW_LAUNCHER" != "subagent" ]; then
+            echo "$USAGE" >&2
+            exit 1
+        fi
+    fi
 else
     TASK_ID="${1:?$USAGE}"
     ATTEMPT="${2:-1}"
@@ -51,13 +79,72 @@ CONFIG_PATH_PY="$(to_py_path "$CONFIG_PATH")"
 TEMPLATE_PATH_PY="$(to_py_path "$TEMPLATE_PATH")"
 PROMPT_PATH_PY="$(to_py_path "$PROMPT_PATH")"
 
+# runs/<ID>-<N>/launcher が subagent の run は、prompt.md の末尾にサブエージェント用の節を足す
+# 引数: run ディレクトリ(絶対パス)
+append_subagent_section() {
+    local run_dir="$1"
+    [ -f "$run_dir/launcher" ] || return 0
+    [ "$(tr -d '[:space:]' < "$run_dir/launcher")" = "subagent" ] || return 0
+    local workdir
+    workdir="$ROOT"
+    if [ -f "$run_dir/worktree.txt" ]; then
+        local wt
+        wt="$(sed -n 's/^path //p' "$run_dir/worktree.txt" | head -n 1 | tr -d '\r')"
+        [ -n "$wt" ] && workdir="$wt"
+    fi
+    python3 - "$(to_py_path "$workdir")" "$(to_py_path "$run_dir")" "$(to_py_path "$SCRIPT_DIR/dispatch-subagent-template.md")" <<'PY'
+import os, sys
+workdir, run_dir, template_path = sys.argv[1:4]
+workdir = workdir.replace('\\', '/').rstrip('/')
+run_dir = run_dir.replace('\\', '/').rstrip('/')
+run_name = run_dir.rsplit('/', 1)[-1]
+tmp_dir = workdir + '/.agents/workflow/runs/' + run_name + '/tmp'
+output_log = run_dir + '/output.log'
+with open(template_path, encoding='utf-8') as f:
+    section = f.read()
+for key, value in (('{workdir}', workdir), ('{tmp_dir}', tmp_dir), ('{output_log}', output_log)):
+    section = section.replace(key, value)
+prompt_path = os.path.join(run_dir, 'prompt.md')
+with open(prompt_path, encoding='utf-8', newline='') as f:
+    text = f.read()
+with open(prompt_path, 'w', encoding='utf-8', newline='\n') as f:
+    f.write(text.rstrip('\n') + '\n\n' + section)
+PY
+}
+
+# runs/<ID>-<N>/worktree.txt がある run は、prompt.md の末尾に worktree 用の節を足す
+# 引数: run ディレクトリ(絶対パス)
+append_worktree_section() {
+    local run_dir="$1"
+    [ -f "$run_dir/worktree.txt" ] || return 0
+    local workdir
+    workdir="$(sed -n 's/^path //p' "$run_dir/worktree.txt" | head -n 1 | tr -d '\r')"
+    [ -n "$workdir" ] || return 0
+    python3 - "$(to_py_path "$workdir")" "$(to_py_path "$ROOT")" "$(to_py_path "$run_dir")" "$(to_py_path "$SCRIPT_DIR/dispatch-worktree-template.md")" <<'PY'
+import os, sys
+workdir, main_root, run_dir, template_path = sys.argv[1:5]
+workdir = workdir.replace('\\', '/').rstrip('/')
+main_root = main_root.replace('\\', '/').rstrip('/')
+with open(template_path, encoding='utf-8') as f:
+    section = f.read()
+for key, value in (('{workdir}', workdir), ('{main_root}', main_root)):
+    section = section.replace(key, value)
+prompt_path = os.path.join(run_dir, 'prompt.md')
+with open(prompt_path, encoding='utf-8', newline='') as f:
+    text = f.read()
+with open(prompt_path, 'w', encoding='utf-8', newline='\n') as f:
+    f.write(text.rstrip('\n') + '\n\n' + section)
+PY
+}
+
 # --- PR mode: PR作成を子に単発依頼するプロンプトを生成する ---
 # 対象タスク = state.json で done かつ commit が git log origin/<base>..HEAD に含まれるもの。
 # 出力先は runs/pr-<連番>-1/prompt.md。stdout に "RunId: pr-<連番>" を出す。
 if [ "$PR_MODE" = true ]; then
-    BASE_BRANCH="main"
+    BASE_BRANCH="$(python3 -c 'import sys; sys.path.insert(0, sys.argv[1]); import tasklib; print(tasklib.base_branch(tasklib.load_config(sys.argv[2])))' \
+        "$(to_py_path "$SCRIPT_DIR")" "$CONFIG_PATH_PY" | tr -d '\r')"
     BRANCH="$(git branch --show-current)"
-    if [ -z "$BRANCH" ] || [ "$BRANCH" = "$BASE_BRANCH" ]; then
+    if [ -z "$BRANCH" ] || [ "$BRANCH" = "main" ] || [ "$BRANCH" = "$BASE_BRANCH" ]; then
         echo "PR mode must be run on a work branch (current: '${BRANCH:-detached HEAD}')" >&2
         exit 1
     fi
@@ -96,11 +183,55 @@ if [ "$PR_MODE" = true ]; then
     python3 - "$STATE_PATH_PY" "$(to_py_path "$SCRIPT_DIR/dispatch-pr-prompt-template.md")" \
         "$(to_py_path "$PR_RUN_DIR/prompt.md")" "$BRANCH" "$BASE_BRANCH" "$BASE_REF" \
         ".agents/workflow/runs/pr-${PR_N}-1" "$COMMITS" "$(to_py_path "$TASKS_PATH")" \
-        "$(to_py_path "$SCRIPT_DIR")" <<'PY' || { rmdir "$PR_RUN_DIR" 2>/dev/null; exit 1; }
+        "$(to_py_path "$SCRIPT_DIR")" "$CONFIG_PATH_PY" <<'PY' || { rmdir "$PR_RUN_DIR" 2>/dev/null; exit 1; }
 import json, os, sys
-state_path, template_path, prompt_path, branch, base, base_ref, run_dir, commits, tasks_path, script_dir = sys.argv[1:11]
+state_path, template_path, prompt_path, branch, base, base_ref, run_dir, commits, tasks_path, script_dir, config_path = sys.argv[1:12]
 sys.path.insert(0, script_dir)
 import tasklib
+
+REFINE_SOURCE = '.agents/workflow/runs/refine/summary.md'   # カレントディレクトリはプロジェクトのルート
+WHEN = {
+    'pr_body': '手順4 の後、手順5 の前に行う。推敲できたとき(下の 2. が `Next: continue` で終わったとき)は、手順5 で `{input}` の代わりに `{output}` を使う。',
+    'summary': '手順5 の後に行う。親が書いた完了時のサマリーの下書きを推敲する。',
+}
+
+def refine_instruction():
+    # 戻り値: {refine_instruction} に入れる文字列。推敲しないときは ''
+    # 1. config_path の text_refine.mode が 'dispatch' でなければ '' を返す
+    #    (ファイルが無い・読めない・キーが無いときも '')
+    text_refine = tasklib.load_config(config_path).get('text_refine')
+    if not isinstance(text_refine, dict) or text_refine.get('mode') != 'dispatch':
+        return ''
+    # 2. targets = [('pr_body', run_dir + '/pr-body.md')]
+    targets = [('pr_body', run_dir + '/pr-body.md')]
+    # 3. REFINE_SOURCE があれば、prompt.md と同じディレクトリの summary.md へ移し、
+    #    targets に ('summary', run_dir + '/summary.md') を足す
+    if os.path.exists(REFINE_SOURCE):
+        os.replace(REFINE_SOURCE, run_dir + '/summary.md')
+        targets.append(('summary', run_dir + '/summary.md'))
+    # 4. script_dir の dispatch-pr-refine-template.md を読み、targets ごとに節を作る
+    with open(os.path.join(script_dir, 'dispatch-pr-refine-template.md'), encoding='utf-8') as f:
+        refine_template = f.read()
+    sections = []
+    for scene, input_path in targets:
+        base_path, ext = os.path.splitext(input_path)
+        output_path = base_path + '.refined' + ext
+        # {when} を最初に置換する(WHEN の文に {input}・{output} が入っているため)
+        section = refine_template.replace('{when}', WHEN[scene])
+        section = section.replace('{scene}', scene)
+        section = section.replace('{input}', input_path)
+        section = section.replace('{output}', output_path)
+        section = section.replace('{request_command}',
+                                  '.agents/workflow/scripts/text-refine.sh ' + scene + ' ' + input_path + ' --request')
+        section = section.replace('{check_command}',
+                                  '.agents/workflow/scripts/text-refine.sh ' + scene + ' ' + input_path + ' --check')
+        sections.append(section)
+    # 5. prompt.md と同じディレクトリの refine.txt に '<場面> <入力のパス>' を1行ずつ書く
+    with open(os.path.join(os.path.dirname(prompt_path), 'refine.txt'), 'w', encoding='utf-8', newline='\n') as f:
+        for scene, input_path in targets:
+            f.write(scene + ' ' + input_path + '\n')
+    # 6. 各節の末尾の改行を取り除き、空行1つでつないで返す
+    return '\n\n'.join(section.rstrip('\n') for section in sections)
 commits = [c for c in commits.split() if c]
 with open(state_path, encoding='utf-8') as f:
     tasks = json.load(f)['tasks']
@@ -128,11 +259,16 @@ requirement_list = '\n'.join(req_lines) if req_lines else \
 with open(template_path, encoding='utf-8') as f:
     text = f.read()
 for key, value in (('{task_list}', '\n'.join(selected)), ('{requirement_list}', requirement_list), ('{branch}', branch),
-                   ('{base_branch}', base), ('{base_ref}', base_ref), ('{run_dir}', run_dir)):
+                   ('{base_branch}', base), ('{base_ref}', base_ref), ('{run_dir}', run_dir),
+                   ('{refine_instruction}', refine_instruction())):
     text = text.replace(key, value)
 with open(prompt_path, 'w', encoding='utf-8', newline='\n') as f:
     f.write(text)
 PY
+    if [ -n "$PR_LAUNCHER" ]; then
+        printf '%s\n' "$PR_LAUNCHER" > "$PR_RUN_DIR/launcher"
+    fi
+    append_subagent_section "$PR_RUN_DIR"
     echo "Generated: $PR_RUN_DIR/prompt.md"
     echo "RunId: pr-${PR_N}"
     exit 0
@@ -149,6 +285,96 @@ extract_task_section() {
         in_section { print }
     ' "$TASKS_PATH"
 }
+
+# --- Review mode: 子の実装をレビューするプロンプトを生成する ---
+# 出力先は runs/review-<ID>-<N>/prompt.md。stdout に "RunId: review-<ID>" を出す。
+# report.md が無いとレビューできないため exit 2、tasks.md にタスクの節が無ければ exit 1。
+# runs/review-<ID>-<N>/worktree.txt があれば、パスを本体の絶対パスにし、worktree 用の節を足す
+if [ "$REVIEW_MODE" = true ]; then
+    REPORT_REL=".agents/workflow/runs/${TASK_ID}-${ATTEMPT}/report.md"
+    REVIEW_RUN_DIR="$RUNS_BASE/review-${TASK_ID}-${ATTEMPT}"
+    REPORT_PATH="$ROOT/$REPORT_REL"
+    # worktree の中でレビューする run は、材料のパスを本体の絶対パスにする
+    REVIEW_WT=""
+    if [ -f "$REVIEW_RUN_DIR/worktree.txt" ]; then
+        REVIEW_WT="$(sed -n 's/^path //p' "$REVIEW_RUN_DIR/worktree.txt" | head -n 1 | tr -d '\r')"
+    fi
+    PATH_PREFIX=""
+    if [ -n "$REVIEW_WT" ]; then
+        PATH_PREFIX="$(to_py_path "$ROOT")/"
+    fi
+    if [ ! -f "$TASKS_PATH" ] || ! grep -q "^## ${TASK_ID}:" "$TASKS_PATH" 2>/dev/null; then
+        echo "Task '${TASK_ID}' not found in ${TASKS_PATH}" >&2
+        exit 1
+    fi
+    if [ ! -f "$REPORT_PATH" ]; then
+        echo "Report not found: $REPORT_REL" >&2
+        exit 2
+    fi
+    TASK_SECTION="$(extract_task_section "$TASK_ID")"
+    # 理解確認の指示: config の comprehension_check.enabled で切り替える
+    COMPREHENSION_INSTRUCTION="$(python3 - "$CONFIG_PATH_PY" "$TASK_ID" "$PATH_PREFIX" <<'PY'
+import json, sys
+config_path, task_id, prefix = sys.argv[1:4]
+try:
+    with open(config_path, encoding='utf-8') as f:
+        cc = json.load(f).get('comprehension_check') or {}
+except Exception:
+    cc = {}
+if not isinstance(cc, dict):
+    cc = {}
+if cc.get('enabled') is True:
+    q = cc.get('questions_per_task', 3)
+    if isinstance(q, bool) or not isinstance(q, int) or q < 1:
+        q = 3
+    print('pass のときだけ、`' + prefix + '.agents/skills/agent-review-commit/references/comprehension-questions.md` の手順4の観点で '
+          + str(q) + ' 問の質問を作り、`' + prefix + '.agents/skills/agent-comprehension-check/SKILL.md` の「質問ファイルのフォーマット」に従って '
+          + '`' + prefix + '.agents/workflow/comprehension/' + task_id + '.md` に書く。`## 解説` 見出しは含めない')
+else:
+    print('質問ファイルは作らない(完了報告の理解確認は なし)')
+PY
+)" || exit 1
+    REVIEW_PROMPT_PATH="$REVIEW_RUN_DIR/prompt.md"
+    mkdir -p "$REVIEW_RUN_DIR"
+    python3 - "$(to_py_path "$SCRIPT_DIR/dispatch-review-template.md")" "$(to_py_path "$REVIEW_PROMPT_PATH")" \
+        "$TASK_ID" "$ATTEMPT" "$TASK_SECTION" "${PATH_PREFIX}${REPORT_REL}" \
+        "${PATH_PREFIX}.agents/workflow/runs/${TASK_ID}-$((ATTEMPT + 1))/fix-notes.md" "$COMPREHENSION_INSTRUCTION" <<'PY' || { rmdir "$REVIEW_RUN_DIR" 2>/dev/null; exit 1; }
+import sys
+template_path, prompt_path, task_id, attempt, task_section, report_path, fix_notes_path, comprehension = sys.argv[1:9]
+with open(template_path, encoding='utf-8') as f:
+    text = f.read()
+for key, value in (('{task_id}', task_id), ('{attempt}', attempt), ('{task_section}', task_section),
+                   ('{report_path}', report_path), ('{fix_notes_path}', fix_notes_path),
+                   ('{comprehension_instruction}', comprehension)):
+    text = text.replace(key, value)
+with open(prompt_path, 'w', encoding='utf-8', newline='\n') as f:
+    f.write(text)
+PY
+    if [ -n "$REVIEW_LAUNCHER" ]; then
+        printf '%s\n' "$REVIEW_LAUNCHER" > "$REVIEW_RUN_DIR/launcher"
+    fi
+    if [ -n "$REVIEW_WT" ]; then
+        python3 - "$(to_py_path "$REVIEW_WT")" "$(to_py_path "$ROOT")" "$(to_py_path "$REVIEW_RUN_DIR")" "$(to_py_path "$SCRIPT_DIR/dispatch-review-worktree-template.md")" <<'PY'
+import os, sys
+workdir, main_root, run_dir, template_path = sys.argv[1:5]
+workdir = workdir.replace('\\', '/').rstrip('/')
+main_root = main_root.replace('\\', '/').rstrip('/')
+with open(template_path, encoding='utf-8') as f:
+    section = f.read()
+for key, value in (('{workdir}', workdir), ('{main_root}', main_root)):
+    section = section.replace(key, value)
+prompt_path = os.path.join(run_dir, 'prompt.md')
+with open(prompt_path, encoding='utf-8', newline='') as f:
+    text = f.read()
+with open(prompt_path, 'w', encoding='utf-8', newline='\n') as f:
+    f.write(text.rstrip('\n') + '\n\n' + section)
+PY
+    fi
+    append_subagent_section "$REVIEW_RUN_DIR"
+    echo "Generated: $REVIEW_PROMPT_PATH"
+    echo "RunId: review-${TASK_ID}"
+    exit 0
+fi
 
 # --- Get task title from state.json ---
 get_task_title() {
@@ -487,5 +713,8 @@ result = result.replace('{verify_instruction}', verify_instruction)
 with open('$PROMPT_PATH_PY', 'w', encoding='utf-8', newline='\n') as f:
     f.write(result)
 " "$FIX_NOTES" "$TASK_SECTION" "$HANDOFF_REPORTS" "$VERIFY_LINES"
+
+append_worktree_section "$RUN_DIR"
+append_subagent_section "$RUN_DIR"
 
 echo "Generated: $PROMPT_PATH"

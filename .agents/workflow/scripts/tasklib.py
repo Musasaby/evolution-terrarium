@@ -5,8 +5,11 @@ state-sync.sh / next-task.sh / dispatch-prompt-gen.sh から import して使う
 グループ区切り行の厳密フォーマット: `<!-- グループ <名前> -->` または
 `<!-- グループ <名前>: <説明> -->`(<名前> は空白と ':' を含まない文字列)
 """
+import json
 import re
 
+DEFAULT_BASE_BRANCH = 'main'
+DEFAULT_BRANCH_PREFIXES = ['develop/', 'develop-']
 HEADING_RE = re.compile(r'^## (T\d+):\s*(.+)')
 DEP_LINE_RE = re.compile(r'^(\s*-\s+\*\*依存\*\*:)[ \t]*(.*?)[ \t]*$')
 TASK_ID_RE = re.compile(r'^T\d+$')
@@ -25,6 +28,41 @@ class TaskFileError(Exception):
     pass
 
 
+def load_config(config_path):
+    """config.json を dict で返す。無い・読めない・dict でないときは {}。"""
+    try:
+        with open(config_path, encoding='utf-8-sig') as f:
+            config = json.load(f)
+    except (OSError, ValueError):
+        return {}
+    return config if isinstance(config, dict) else {}
+
+
+def base_branch(config):
+    """base_branch が空でない文字列ならそれ、それ以外は 'main'。"""
+    value = config.get('base_branch')
+    if isinstance(value, str) and value:
+        return value
+    return DEFAULT_BASE_BRANCH
+
+
+def branch_prefixes(config):
+    """branch_prefixes が空でない文字列だけの空でない list ならそのコピー、それ以外は既定のコピー。"""
+    value = config.get('branch_prefixes')
+    if (isinstance(value, list) and value
+            and all(isinstance(p, str) and p for p in value)):
+        return list(value)
+    return list(DEFAULT_BRANCH_PREFIXES)
+
+
+def has_branch_prefix(branch, prefixes):
+    return any(branch.startswith(p) for p in prefixes)
+
+
+def format_branch_prefixes(prefixes):
+    return ', '.join("'" + p + "'" for p in prefixes)
+
+
 def split_lines(content):
     """改行コードを保持したまま行に分割する(CRLF の tasks.md をそのまま書き戻すため)。"""
     return content.splitlines(keepends=True)
@@ -34,10 +72,15 @@ def strip_eol(line):
     return line.rstrip('\r\n')
 
 
+CHANGED_PATH_RE = re.compile(r'`([^`]+)`[(（]変更対象')
+CHANGED_LINENO_RE = re.compile(r':\d+(?:-\d+)?$')
+
+
 def parse_tasks(content):
     """tasks.md を解析し、出現順の [{'id','title','dep_raw','dep_line','group','group_raw','req_raw'}] を返す。
 
     req_raw は要件欄 '- **要件**: ...' の値(欄が無ければ None)。
+    changed は本文の `パス`(変更対象 ...) の行から取り出したパス(末尾の :行番号 は除く。出現順・重複なし)。
 
     dep_raw は依存欄の値(依存行が無ければ None)、dep_line は lines 上の行番号。
     group は所属グループ名: タスク見出しより前にある直近のグループ区切りの名前(区切りが
@@ -66,7 +109,7 @@ def parse_tasks(content):
                 if tid not in tasks:
                     order.append(tid)
                 current = {'id': tid, 'title': m.group(2).strip(), 'dep_raw': None, 'dep_line': None,
-                           'group': current_group, 'group_raw': None, 'req_raw': None}
+                           'group': current_group, 'group_raw': None, 'req_raw': None, 'changed': []}
                 tasks[tid] = current
             else:
                 current = None
@@ -85,6 +128,10 @@ def parse_tasks(content):
                 m = REQ_FIELD_RE.match(line)
                 if m:
                     current['req_raw'] = m.group(2)
+            for m in CHANGED_PATH_RE.finditer(line):
+                path = CHANGED_LINENO_RE.sub('', m.group(1))
+                if path not in current['changed']:
+                    current['changed'].append(path)
     # グループ欄による上書き(欄の名前が区切りに存在する場合のみ)
     for t in (tasks[tid] for tid in order):
         if t['group_raw'] is not None and t['group_raw'] in declared:

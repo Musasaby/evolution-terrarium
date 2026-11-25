@@ -2,10 +2,12 @@
 set -euo pipefail
 
 # yomiyasu(文章推敲 skill)への依頼文を config.json の text_refine から機械生成する(推敲そのものは親が行う)。
-# 引数: <target> <input> [--check]
+# 引数: <target> <input> [--check|--request]
 #       target は summary / confirm / commit / pr_body / task_done / tasks のいずれか
 #       --check は推敲済みファイルに対する yomiyasu の記録を探し、判断が要る候補を出す
+#       --request は text_refine.mode が dispatch でも依頼文を出す(PR 作成の子が使う)
 # stdout: 推敲しないとき "Refine: off"、(skill 未設定なら導入検出の "Found: <場所>" と "Hint: ..."、)"Next: continue"。
+#       text_refine.mode が dispatch で --check も --request も無く、場面が tasks でなければ "Refine: dispatch"、"Next: continue"。
 #       推敲するとき "Refine: <skill>"、"Output: <出力パス>"、"Request: <依頼文>"、"Next: refine"
 #       --check のとき: 推敲しない/yomiyasu 以外なら "Refine: off"/"Refine: <skill>"+"Check: skipped"、"Next: continue"。
 #       yomiyasu なら "Refine: <skill>"、"Output: <出力パス>"、"Record: <記録>"、"Candidates: N"、"Candidate: <キー> <抜粋>"...。
@@ -20,7 +22,7 @@ export PYTHONUTF8=1
 export PYTHONIOENCODING=utf-8
 export PYTHONDONTWRITEBYTECODE=1
 
-USAGE="Usage: text-refine.sh <summary|confirm|commit|pr_body|task_done|tasks> <input> [--check]"
+USAGE="Usage: text-refine.sh <summary|confirm|commit|pr_body|task_done|tasks> <input> [--check|--request]"
 
 if [ "$#" -ne 2 ] && [ "$#" -ne 3 ]; then
     echo "$USAGE" >&2
@@ -30,12 +32,16 @@ fi
 TARGET="$1"
 INPUT="$2"
 CHECK=0
+REQUEST=0
 if [ "$#" -eq 3 ]; then
-    if [ "$3" != "--check" ]; then
-        echo "$USAGE" >&2
-        exit 1
-    fi
-    CHECK=1
+    case "$3" in
+        --check) CHECK=1 ;;
+        --request) REQUEST=1 ;;
+        *)
+            echo "$USAGE" >&2
+            exit 1
+            ;;
+    esac
 fi
 
 case "$TARGET" in
@@ -60,13 +66,14 @@ to_py_path() {
     fi
 }
 
-python3 - "$TARGET" "$INPUT" "$(to_py_path "$ROOT")" "$(to_py_path "$CONFIG_PATH")" "$(to_py_path "$HOME")" "$CHECK" <<'PY'
+python3 - "$TARGET" "$INPUT" "$(to_py_path "$ROOT")" "$(to_py_path "$CONFIG_PATH")" "$(to_py_path "$HOME")" "$CHECK" "$REQUEST" <<'PY'
 import glob, hashlib, json, os, re, sys
 
 sys.stdout.reconfigure(newline='\n')
 
 target, input_path, root, config_path, home = sys.argv[1:6]
 check = sys.argv[6] == '1'
+request_opt = sys.argv[7] == '1'
 
 DEFAULT_TARGETS = ['summary', 'confirm', 'commit', 'pr_body', 'task_done', 'tasks']
 READERS = {
@@ -109,6 +116,7 @@ if not isinstance(targets, list):
 reader = cfg.get('reader')
 if reader not in READERS:
     reader = 'informed'
+mode = cfg.get('mode')
 
 skill_set = isinstance(skill, str) and skill.strip() != ''
 
@@ -186,6 +194,13 @@ def detect():
     return found
 
 
+def yomiyasu_dir():
+    for place in detect():
+        if place.endswith('skills/yomiyasu/SKILL.md'):
+            return place[:-len('/SKILL.md')]
+    return '.agents/skills/yomiyasu'
+
+
 if not skill_set or target not in targets:
     print('Refine: off')
     if not skill_set and not check:
@@ -197,13 +212,20 @@ if not skill_set or target not in targets:
     print('Next: continue')
     sys.exit(0)
 
+if not check and mode == 'dispatch' and target != 'tasks' and not request_opt:
+    print('Refine: dispatch')
+    print('Next: continue')
+    sys.exit(0)
+
 base, ext = os.path.splitext(input_path)
 output_path = base + '.refined' + ext
 decisions_path = base + '.decisions' + ext
 
 
-def unchecked(reason):
+def unchecked(reason, hint=None):
     print('Unchecked: ' + reason)
+    if hint:
+        print('Hint: ' + hint)
     print('Next: escalate reason=refine-unchecked')
     sys.exit(3)
 
@@ -320,7 +342,11 @@ def run_check():
         if best_key is None or key > best_key:
             best, best_key, best_path = rec, key, rec_path
     if best is None:
-        unchecked('no record for sha256:' + h[:12])
+        unchecked(
+            'no record for sha256:' + h[:12],
+            'run python3 %s/scripts/yomiyasu_check.py run --source %s --final %s, then run this check again'
+            % (yomiyasu_dir(), input_path, output_path),
+        )
     print('Record: ' + os.path.relpath(best_path, state).replace(os.sep, '/'))
 
     def find_report(name):
@@ -403,6 +429,13 @@ request = (
     inp=input_path, skill=skill, out=output_path, kind=KINDS[target],
     reader=READERS[reader], keep=KEEP_BASE + KEEP_EXTRA[target],
 )
+if skill.strip() in ('yomiyasu', 'yomiyasu:yomiyasu'):
+    request += (
+        '書いた後に python3 ' + yomiyasu_dir() +
+        '/scripts/yomiyasu_check.py run --source ' + input_path +
+        ' --final ' + output_path +
+        ' を実行して、検査の記録を残してください(記録が無いと次の確認で止まります)。'
+    )
 
 print('Refine: ' + skill)
 print('Output: ' + output_path)

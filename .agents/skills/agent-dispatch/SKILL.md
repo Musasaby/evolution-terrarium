@@ -31,9 +31,12 @@ description: タスクIDを引数に取り、子エージェント(OpenCode等�
 .agents/workflow/scripts/dispatch-start.sh T3
 ```
 
+サブエージェント機能を持つ親は `--subagent-capable` を付ける。
+
 stdout の最後の `Next:` 行で分岐する(exit code と reason は `.agents/workflow/README.md` の dispatch-start の節):
 
-- **`Next: wait`**: 起動できた。Run ID・`Log:`・`Watch:` の行をユーザーに報告して §2 へ
+- **`Next: subagent <ID> <N>`**: [サブエージェントでの起動](references/subagent.md)の手順に進む
+- **`Next: wait`**: 起動できた。Run ID・`Log:`・`Watch:` の行をユーザーに報告して §2 へ。`Watch all:` の行(1回起動すれば以後の run のログもまとめて流れる)も利用者に伝える
 - **`Next: switch-branch` / `Next: escalate`**: 起動していない。reason と stderr をユーザーに説明して中断する。
   `reason=launch` は state.json が `in_progress` のままなので、原因を直して同じ引数で再実行できる
 
@@ -101,7 +104,7 @@ stdout の最後の `Next:` 行で分岐する(exit code と reason は `.agents
 ### 3. 状態更新
 
 検証を通過したら `task-state <タスクID> review` で `in_review` に更新し、`/agent-review-commit` に引き継ぐ。
-完了報告は `dispatch-check` が `runs/<タスクID>-<試行回数>/report.md` に保存済み(手で保存しない)。
+完了報告は `dispatch-check` が `runs/<タスクID>-<試行回数>/report.md` に保存済み(手で保存しない。親が引き取った場合だけ [引き取り](references/troubleshooting.md#引き取り) の手順で書く)。
 `report.md` は後続タスクの `dispatch-prompt-gen` が引き継ぎ資料として結合するため削除しない。
 `output.log` も残す(リトライ時の比較や事後調査用)。
 
@@ -110,7 +113,7 @@ stdout の最後の `Next:` 行で分岐する(exit code と reason は `.agents
 報告は `agent-workflow/references/report-template.md` に従う(状況・起きたこと・次にすること)。
 この skill で使う場面:
 
-- **デタッチ起動直後**(「子の起動直後」): タスクID・試行回数(例: `T3-1`)、`output.log` のパス、`Watch:` 行
+- **デタッチ起動直後**(「子の起動直後」): タスクID・試行回数(例: `T3-1`)、`output.log` のパス、`Watch:` 行、`Watch all:` 行
 - **実行待ち**(「子の実行待ち」): 待ちが続く間は1行で経過を伝える
 - **完了検知後**(「子の完了検知後」): 子が正常に終わったかと `dispatch-check` の検証結果、テスト結果、
   次のフェーズ(レビュー/再dispatch/エスカレーション)、`Disabled checks:` が `none` 以外ならその内容

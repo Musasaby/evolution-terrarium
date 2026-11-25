@@ -5,7 +5,7 @@
     "tool_activity_pattern": "^\u001b\\[[0-9;]*m(\\$|→|←|✱|✗|⚙|!) \u001b\\[[0-9;]*m|^\\[tool_(use|result)\\]",
     "tool_call_pattern": "^\u001b\\[[0-9;]*m(\\$|→|←|✱|✗|⚙) \u001b\\[[0-9;]*m|^\\[tool_use\\]",
     "permission_denied_pattern": "^! permission requested: .*auto-rejecting",
-    "provider_error_pattern": "usage limit|rate limit|endpoint is unavailable|(^|[^0-9a-z])429([^0-9a-z]|$)",
+    "provider_error_pattern": "usage limit|rate limit|endpoint is unavailable|(^|[^0-9a-z])429([^0-9a-z]|$)|providerheadertimeouterror|provider response headers timed out|insufficient (account )?funds|insufficient (balance|quota|credits?)|quota exceeded|upstream request failed|ai_apicallerror",
     "agents_md_imports": false
   },
   "opencode": {
@@ -14,7 +14,7 @@
     "tool_activity_pattern": "^\u001b\\[[0-9;]*m(\\$|→|←|✱|✗|⚙|!) \u001b\\[[0-9;]*m",
     "tool_call_pattern": "^\u001b\\[[0-9;]*m(\\$|→|←|✱|✗|⚙) \u001b\\[[0-9;]*m",
     "permission_denied_pattern": "^! permission requested: .*auto-rejecting",
-    "provider_error_pattern": "usage limit|rate limit|endpoint is unavailable|(^|[^0-9a-z])429([^0-9a-z]|$)",
+    "provider_error_pattern": "usage limit|rate limit|endpoint is unavailable|(^|[^0-9a-z])429([^0-9a-z]|$)|providerheadertimeouterror|provider response headers timed out|insufficient (account )?funds|insufficient (balance|quota|credits?)|quota exceeded|upstream request failed|ai_apicallerror",
     "agents_md_imports": false
   },
   "claude-stream-json": {
@@ -23,7 +23,7 @@
     "tool_activity_pattern": "^\\[tool_(use|result)\\]",
     "tool_call_pattern": "^\\[tool_use\\]",
     "permission_denied_pattern": "",
-    "provider_error_pattern": "usage limit|rate limit|endpoint is unavailable|(^|[^0-9a-z])429([^0-9a-z]|$)",
+    "provider_error_pattern": "usage limit|rate limit|endpoint is unavailable|(^|[^0-9a-z])429([^0-9a-z]|$)|providerheadertimeouterror|provider response headers timed out|insufficient (account )?funds|insufficient (balance|quota|credits?)|quota exceeded|upstream request failed|ai_apicallerror",
     "agents_md_imports": true
   },
   "plain": {
@@ -34,5 +34,14 @@
     "permission_denied_pattern": "",
     "provider_error_pattern": "",
     "agents_md_imports": false
+  },
+  "subagent": {
+    "description": "親のサブエージェント機能(Claude Code の Agent ツール等)で実行した run。ツール実行のログが無いため、ログに依存する検知はすべて無効",
+    "output_format": "text",
+    "tool_activity_pattern": "",
+    "tool_call_pattern": "",
+    "permission_denied_pattern": "",
+    "provider_error_pattern": "",
+    "agents_md_imports": true
   }
 }
