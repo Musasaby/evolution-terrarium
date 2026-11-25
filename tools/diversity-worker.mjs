@@ -1,15 +1,18 @@
 // diversity-check.mjs の子プロセス側：1 シードを進めて結果を JSON で stdout へ出す
 import RAPIER from '@dimforge/rapier3d-compat';
-import { Sim, CFG, computeDiversity } from '../src/sim/index.js';
+import { Sim, CFG, SectionProfiler, computeDiversity } from '../src/sim/index.js';
 
 // 0.25 年ごとの区間（ステップ数）。既定 27000 ステップ = 3 年 = 12 区間
 const INTERVAL_STEPS = Math.round((CFG.YEAR / 4) / CFG.DT);
 const DIET_EDGE = [0.25, 0.75]; // diversity.js と同じ分類：<0.25=草, <0.75=葉, 以上=肉
 
-export async function runSeed(steps, seed, settings) {
+export async function runSeed(steps, seed, settings, opts = {}) {
   await RAPIER.init();
   const t0 = performance.now();
-  const sim = new Sim(RAPIER, seed, { settings });
+  const profiler = opts.profile ? new SectionProfiler() : undefined;
+  const sim = new Sim(RAPIER, seed, { settings, profiler });
+  opts.prepare?.(sim, RAPIER);
+  profiler?.take();
   const initMs = performance.now() - t0;
 
   // 移入・疫病はイベントログで数える（sim 本体には手を入れない）
@@ -33,12 +36,18 @@ export async function runSeed(steps, seed, settings) {
     t1 = performance.now();
     let plantSoft = 0, plantHard = 0;
     for (const p of sim.plants) { if (p.sp.soft) plantSoft++; else plantHard++; }
-    rows.push({
+    const row = {
       year, pop: div.living, species: div.species, plantSoft, plantHard,
       effSpecies: div.effSpecies, effDiet: div.effDiet, diet,
       invasions, plagues,
       msPerStep: intervalMs / n,
-    });
+    };
+    if (profiler) {
+      const taken = profiler.take();
+      row.sections = Object.fromEntries(Object.entries(taken).map(([name, { ms }]) => [name, ms / n]));
+    }
+    Object.assign(row, opts.sample?.(sim));
+    rows.push(row);
   };
 
   const tRun0 = performance.now();
@@ -49,5 +58,13 @@ export async function runSeed(steps, seed, settings) {
   }
   const runMs = performance.now() - tRun0;
 
-  return { seed, years: ((steps * CFG.DT) / CFG.YEAR), initMs, runMs, msPerStepAll: runMs / steps, elapsed: performance.now() - t0, rows };
+  const g = sim.geo;
+  const geo = {
+    size: g.size, maxPop: g.maxPop, minPop: g.minPop,
+    maxPlants: g.maxPlants, maxSoftPlants: g.maxSoftPlants, maxHardPlants: g.maxHardPlants,
+  };
+  return {
+    seed, years: ((steps * CFG.DT) / CFG.YEAR), initMs, runMs, msPerStepAll: runMs / steps, elapsed: performance.now() - t0,
+    rows, geo, counters: { ...sim.counters }, feedStats: { ...sim.feedStats },
+  };
 }
