@@ -1,7 +1,7 @@
 {
   "source": "https://github.com/Musasaby/evolution-terrarium/issues/18",
   "branch": "develop/scaling-study-C",
-  "updated_at": "2026-11-26T01:19:15+09:00",
+  "updated_at": "2026-11-26T01:24:26+09:00",
   "group": "C",
   "tasks": [
     {
@@ -84,9 +84,9 @@
     {
       "id": "T12",
       "title": "描画の上限を測る計測ページ(V6)",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "0bf43ab7fcc8e5c5b209e8f4a5139171aab42836"
     },
     {
       "id": "T13",
