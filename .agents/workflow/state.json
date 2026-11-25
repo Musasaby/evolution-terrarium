@@ -1,8 +1,8 @@
 {
   "source": "docs/plans/biodiversity.md",
-  "branch": "develop/workflow-update-1125",
-  "updated_at": "2026-11-25T10:19:04+09:00",
-  "group": "F",
+  "branch": "develop/biodiversity-E",
+  "updated_at": "2026-11-25T14:13:26+09:00",
+  "group": "E",
   "tasks": [
     {
       "id": "T1",
@@ -98,9 +98,9 @@
     {
       "id": "T14",
       "title": "構成メモの更新",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "6edd394bc87c7b4f90ff46eb02c1187345670aca"
     },
     {
       "id": "T15",
