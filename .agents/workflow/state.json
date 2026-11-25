@@ -1,7 +1,7 @@
 {
   "source": "https://github.com/Musasaby/evolution-terrarium/issues/18",
   "branch": "develop/scaling-study-C",
-  "updated_at": "2026-11-26T02:22:19+09:00",
+  "updated_at": "2026-11-26T02:37:56+09:00",
   "group": "C",
   "tasks": [
     {
@@ -105,9 +105,9 @@
     {
       "id": "T15",
       "title": "全案のまとめと採用案の提案",
-      "status": "pending",
-      "retries": 0,
-      "commit": null
+      "status": "done",
+      "retries": 1,
+      "commit": "b2b323c063db56ef5c9ed9edf96037fbc824c89d"
     },
     {
       "id": "T16",
