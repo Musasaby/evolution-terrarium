@@ -1,7 +1,7 @@
 {
   "source": "https://github.com/Musasaby/evolution-terrarium/issues/18",
   "branch": "develop/scaling-study-C",
-  "updated_at": "2026-11-26T01:24:26+09:00",
+  "updated_at": "2026-11-26T01:29:55+09:00",
   "group": "C",
   "tasks": [
     {
@@ -91,9 +91,9 @@
     {
       "id": "T13",
       "title": "sim を Web Worker に移す効果を測る計測ページ(V2)",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "f50420536ec3c2d66aebd4a65f2d6fe3606bab49"
     },
     {
       "id": "T14",
