@@ -1,0 +1,599 @@
+{
+  "date": "2026-11-25T15:54:23.228Z",
+  "seed": 1,
+  "warm": 900,
+  "runs": [
+    {
+      "size": 120,
+      "regions": 1,
+      "sync": "message",
+      "steps": 900,
+      "msPerStep": 6.565426111111113,
+      "computeMaxMs": 6.369496555555622,
+      "computeMeanMs": 6.369496555555622,
+      "syncMs": 0.19592955555549096,
+      "imbalance": 1,
+      "handoversPer1000": 0,
+      "handoverMsPerCreature": 0,
+      "countsStart": [
+        194
+      ],
+      "countsEnd": [
+        194
+      ],
+      "hash": "cf23937517d7ade8",
+      "hashMatch": true,
+      "repeat": 1
+    },
+    {
+      "size": 120,
+      "regions": 1,
+      "sync": "message",
+      "steps": 900,
+      "msPerStep": 6.475313777777778,
+      "computeMaxMs": 6.289022444444425,
+      "computeMeanMs": 6.289022444444425,
+      "syncMs": 0.18629133333335268,
+      "imbalance": 1,
+      "handoversPer1000": 0,
+      "handoverMsPerCreature": 0,
+      "countsStart": [
+        194
+      ],
+      "countsEnd": [
+        194
+      ],
+      "hash": "cf23937517d7ade8",
+      "hashMatch": true,
+      "repeat": 2
+    },
+    {
+      "size": 120,
+      "regions": 1,
+      "sync": "atomics",
+      "steps": 900,
+      "msPerStep": 6.386576666666668,
+      "computeMaxMs": 6.218012555555611,
+      "computeMeanMs": 6.218012555555611,
+      "syncMs": 0.16856411111105718,
+      "imbalance": 1,
+      "handoversPer1000": 0,
+      "handoverMsPerCreature": 0,
+      "countsStart": [
+        194
+      ],
+      "countsEnd": [
+        194
+      ],
+      "hash": "cf23937517d7ade8",
+      "hashMatch": true,
+      "repeat": 1
+    },
+    {
+      "size": 120,
+      "regions": 1,
+      "sync": "atomics",
+      "steps": 900,
+      "msPerStep": 6.573327222222223,
+      "computeMaxMs": 6.4047940000002805,
+      "computeMeanMs": 6.4047940000002805,
+      "syncMs": 0.16853322222194222,
+      "imbalance": 1,
+      "handoversPer1000": 0,
+      "handoverMsPerCreature": 0,
+      "countsStart": [
+        194
+      ],
+      "countsEnd": [
+        194
+      ],
+      "hash": "cf23937517d7ade8",
+      "hashMatch": true,
+      "repeat": 2
+    },
+    {
+      "size": 120,
+      "regions": 2,
+      "sync": "message",
+      "steps": 900,
+      "msPerStep": 4.047206888888888,
+      "computeMaxMs": 3.844745111111131,
+      "computeMeanMs": 3.2710627777778103,
+      "syncMs": 0.20246177777775687,
+      "imbalance": 1.1753810221040915,
+      "handoversPer1000": 168.88888888888889,
+      "handoverMsPerCreature": 0.566863157894946,
+      "countsStart": [
+        83,
+        111
+      ],
+      "countsEnd": [
+        85,
+        109
+      ],
+      "hash": "bbf4ffe3c714cb52",
+      "hashMatch": true,
+      "repeat": 1
+    },
+    {
+      "size": 120,
+      "regions": 2,
+      "sync": "message",
+      "steps": 900,
+      "msPerStep": 4.24858011111111,
+      "computeMaxMs": 4.041597777777771,
+      "computeMeanMs": 3.4151108888888646,
+      "syncMs": 0.2069823333333387,
+      "imbalance": 1.1834455481159323,
+      "handoversPer1000": 168.88888888888889,
+      "handoverMsPerCreature": 0.557646710525564,
+      "countsStart": [
+        83,
+        111
+      ],
+      "countsEnd": [
+        85,
+        109
+      ],
+      "hash": "bbf4ffe3c714cb52",
+      "hashMatch": true,
+      "repeat": 2
+    },
+    {
+      "size": 120,
+      "regions": 2,
+      "sync": "atomics",
+      "steps": 900,
+      "msPerStep": 4.242665333333337,
+      "computeMaxMs": 3.9906181111111314,
+      "computeMeanMs": 3.4103905555555603,
+      "syncMs": 0.2520472222222052,
+      "imbalance": 1.1701352223751542,
+      "handoversPer1000": 168.88888888888889,
+      "handoverMsPerCreature": 0.4577940789476519,
+      "countsStart": [
+        83,
+        111
+      ],
+      "countsEnd": [
+        85,
+        109
+      ],
+      "hash": "bbf4ffe3c714cb52",
+      "hashMatch": true,
+      "repeat": 1
+    },
+    {
+      "size": 120,
+      "regions": 2,
+      "sync": "atomics",
+      "steps": 900,
+      "msPerStep": 4.176282555555558,
+      "computeMaxMs": 3.940067666666655,
+      "computeMeanMs": 3.3577036666665867,
+      "syncMs": 0.2362148888889024,
+      "imbalance": 1.1734411543762644,
+      "handoversPer1000": 168.88888888888889,
+      "handoverMsPerCreature": 0.41521842105320456,
+      "countsStart": [
+        83,
+        111
+      ],
+      "countsEnd": [
+        85,
+        109
+      ],
+      "hash": "bbf4ffe3c714cb52",
+      "hashMatch": true,
+      "repeat": 2
+    },
+    {
+      "size": 120,
+      "regions": 4,
+      "sync": "message",
+      "steps": 900,
+      "msPerStep": 4.282854222222223,
+      "computeMaxMs": 4.062991222222141,
+      "computeMeanMs": 1.792875249999955,
+      "syncMs": 0.21986300000008185,
+      "imbalance": 2.266187355881143,
+      "handoversPer1000": 147.77777777777777,
+      "handoverMsPerCreature": 0.7834819548904368,
+      "countsStart": [
+        11,
+        0,
+        72,
+        111
+      ],
+      "countsEnd": [
+        17,
+        0,
+        67,
+        110
+      ],
+      "hash": "e86c7ca3fe0d5f13",
+      "hashMatch": true,
+      "repeat": 1
+    },
+    {
+      "size": 120,
+      "regions": 4,
+      "sync": "message",
+      "steps": 900,
+      "msPerStep": 4.48997544444445,
+      "computeMaxMs": 4.272184444444388,
+      "computeMeanMs": 1.8508121666666921,
+      "syncMs": 0.21779100000006224,
+      "imbalance": 2.308275535133628,
+      "handoversPer1000": 147.77777777777777,
+      "handoverMsPerCreature": 0.7078511278210992,
+      "countsStart": [
+        11,
+        0,
+        72,
+        111
+      ],
+      "countsEnd": [
+        17,
+        0,
+        67,
+        110
+      ],
+      "hash": "e86c7ca3fe0d5f13",
+      "hashMatch": true,
+      "repeat": 2
+    },
+    {
+      "size": 120,
+      "regions": 4,
+      "sync": "atomics",
+      "steps": 900,
+      "msPerStep": 4.228446666666666,
+      "computeMaxMs": 3.9770692222222555,
+      "computeMeanMs": 1.7645972777777692,
+      "syncMs": 0.25137744444441035,
+      "imbalance": 2.2538112646477297,
+      "handoversPer1000": 147.77777777777777,
+      "handoverMsPerCreature": 0.6527218045104979,
+      "countsStart": [
+        11,
+        0,
+        72,
+        111
+      ],
+      "countsEnd": [
+        17,
+        0,
+        67,
+        110
+      ],
+      "hash": "e86c7ca3fe0d5f13",
+      "hashMatch": true,
+      "repeat": 1
+    },
+    {
+      "size": 120,
+      "regions": 4,
+      "sync": "atomics",
+      "steps": 900,
+      "msPerStep": 4.338972000000003,
+      "computeMaxMs": 4.0775947777775094,
+      "computeMeanMs": 1.7867676388888383,
+      "syncMs": 0.26137722222249327,
+      "imbalance": 2.282106911401921,
+      "handoversPer1000": 147.77777777777777,
+      "handoverMsPerCreature": 0.6743714285689919,
+      "countsStart": [
+        11,
+        0,
+        72,
+        111
+      ],
+      "countsEnd": [
+        17,
+        0,
+        67,
+        110
+      ],
+      "hash": "e86c7ca3fe0d5f13",
+      "hashMatch": true,
+      "repeat": 2
+    },
+    {
+      "size": 160,
+      "regions": 1,
+      "sync": "message",
+      "steps": 900,
+      "msPerStep": 7.20286533333332,
+      "computeMaxMs": 7.003668888888933,
+      "computeMeanMs": 7.003668888888933,
+      "syncMs": 0.19919644444438678,
+      "imbalance": 1,
+      "handoversPer1000": 0,
+      "handoverMsPerCreature": 0,
+      "countsStart": [
+        202
+      ],
+      "countsEnd": [
+        202
+      ],
+      "hash": "159cc1378c53fb82",
+      "hashMatch": true,
+      "repeat": 1
+    },
+    {
+      "size": 160,
+      "regions": 1,
+      "sync": "message",
+      "steps": 900,
+      "msPerStep": 7.072069777777765,
+      "computeMaxMs": 6.87734277777757,
+      "computeMeanMs": 6.87734277777757,
+      "syncMs": 0.19472700000019483,
+      "imbalance": 1,
+      "handoversPer1000": 0,
+      "handoverMsPerCreature": 0,
+      "countsStart": [
+        202
+      ],
+      "countsEnd": [
+        202
+      ],
+      "hash": "159cc1378c53fb82",
+      "hashMatch": true,
+      "repeat": 2
+    },
+    {
+      "size": 160,
+      "regions": 1,
+      "sync": "atomics",
+      "steps": 900,
+      "msPerStep": 7.003964777777776,
+      "computeMaxMs": 6.829132666667073,
+      "computeMeanMs": 6.829132666667073,
+      "syncMs": 0.17483211111070318,
+      "imbalance": 1,
+      "handoversPer1000": 0,
+      "handoverMsPerCreature": 0,
+      "countsStart": [
+        202
+      ],
+      "countsEnd": [
+        202
+      ],
+      "hash": "159cc1378c53fb82",
+      "hashMatch": true,
+      "repeat": 1
+    },
+    {
+      "size": 160,
+      "regions": 1,
+      "sync": "atomics",
+      "steps": 900,
+      "msPerStep": 7.254802555555555,
+      "computeMaxMs": 7.0860172222222255,
+      "computeMeanMs": 7.0860172222222255,
+      "syncMs": 0.16878533333332957,
+      "imbalance": 1,
+      "handoversPer1000": 0,
+      "handoverMsPerCreature": 0,
+      "countsStart": [
+        202
+      ],
+      "countsEnd": [
+        202
+      ],
+      "hash": "159cc1378c53fb82",
+      "hashMatch": true,
+      "repeat": 2
+    },
+    {
+      "size": 160,
+      "regions": 2,
+      "sync": "message",
+      "steps": 900,
+      "msPerStep": 4.9803772222222245,
+      "computeMaxMs": 4.7634838888895725,
+      "computeMeanMs": 3.677666555555916,
+      "syncMs": 0.21689333333265193,
+      "imbalance": 1.2952462701365064,
+      "handoversPer1000": 123.33333333333334,
+      "handoverMsPerCreature": 0.7125792792801082,
+      "countsStart": [
+        60,
+        142
+      ],
+      "countsEnd": [
+        81,
+        121
+      ],
+      "hash": "ab8b1d8fa41f41a2",
+      "hashMatch": true,
+      "repeat": 1
+    },
+    {
+      "size": 160,
+      "regions": 2,
+      "sync": "message",
+      "steps": 900,
+      "msPerStep": 4.992456999999995,
+      "computeMaxMs": 4.782397777777628,
+      "computeMeanMs": 3.7172334444443873,
+      "syncMs": 0.21005922222236695,
+      "imbalance": 1.2865476030097567,
+      "handoversPer1000": 123.33333333333334,
+      "handoverMsPerCreature": 0.7074387387384614,
+      "countsStart": [
+        60,
+        142
+      ],
+      "countsEnd": [
+        81,
+        121
+      ],
+      "hash": "ab8b1d8fa41f41a2",
+      "hashMatch": true,
+      "repeat": 2
+    },
+    {
+      "size": 160,
+      "regions": 2,
+      "sync": "atomics",
+      "steps": 900,
+      "msPerStep": 5.108662000000008,
+      "computeMaxMs": 4.866212555555539,
+      "computeMeanMs": 3.770657333333422,
+      "syncMs": 0.24244944444446848,
+      "imbalance": 1.2905475426093942,
+      "handoversPer1000": 123.33333333333334,
+      "handoverMsPerCreature": 0.6510414414427417,
+      "countsStart": [
+        60,
+        142
+      ],
+      "countsEnd": [
+        81,
+        121
+      ],
+      "hash": "ab8b1d8fa41f41a2",
+      "hashMatch": true,
+      "repeat": 1
+    },
+    {
+      "size": 160,
+      "regions": 2,
+      "sync": "atomics",
+      "steps": 900,
+      "msPerStep": 4.937268555555542,
+      "computeMaxMs": 4.695910555555585,
+      "computeMeanMs": 3.615130500000046,
+      "syncMs": 0.24135799999995644,
+      "imbalance": 1.2989601773865496,
+      "handoversPer1000": 123.33333333333334,
+      "handoverMsPerCreature": 0.6125477477433559,
+      "countsStart": [
+        60,
+        142
+      ],
+      "countsEnd": [
+        81,
+        121
+      ],
+      "hash": "ab8b1d8fa41f41a2",
+      "hashMatch": true,
+      "repeat": 2
+    },
+    {
+      "size": 160,
+      "regions": 4,
+      "sync": "message",
+      "steps": 900,
+      "msPerStep": 3.114000111111123,
+      "computeMaxMs": 2.909507777777908,
+      "computeMeanMs": 2.030658055555792,
+      "syncMs": 0.20449233333321493,
+      "imbalance": 1.4327906019517278,
+      "handoversPer1000": 168.88888888888889,
+      "handoverMsPerCreature": 0.9147243421039571,
+      "countsStart": [
+        19,
+        76,
+        41,
+        66
+      ],
+      "countsEnd": [
+        26,
+        69,
+        50,
+        57
+      ],
+      "hash": "1dc0a889f8cb7cc5",
+      "hashMatch": true,
+      "repeat": 1
+    },
+    {
+      "size": 160,
+      "regions": 4,
+      "sync": "message",
+      "steps": 900,
+      "msPerStep": 3.0287801111111183,
+      "computeMaxMs": 2.844818777777513,
+      "computeMeanMs": 1.9763067777778875,
+      "syncMs": 0.1839613333336052,
+      "imbalance": 1.4394621370353038,
+      "handoversPer1000": 168.88888888888889,
+      "handoverMsPerCreature": 0.7498901315857917,
+      "countsStart": [
+        19,
+        76,
+        41,
+        66
+      ],
+      "countsEnd": [
+        26,
+        69,
+        50,
+        57
+      ],
+      "hash": "1dc0a889f8cb7cc5",
+      "hashMatch": true,
+      "repeat": 2
+    },
+    {
+      "size": 160,
+      "regions": 4,
+      "sync": "atomics",
+      "steps": 900,
+      "msPerStep": 3.1051561111111208,
+      "computeMaxMs": 2.843415444444367,
+      "computeMeanMs": 1.9973096666668264,
+      "syncMs": 0.2617406666667539,
+      "imbalance": 1.4236227320671555,
+      "handoversPer1000": 168.88888888888889,
+      "handoverMsPerCreature": 0.6912500000019607,
+      "countsStart": [
+        19,
+        76,
+        41,
+        66
+      ],
+      "countsEnd": [
+        26,
+        69,
+        50,
+        57
+      ],
+      "hash": "1dc0a889f8cb7cc5",
+      "hashMatch": true,
+      "repeat": 1
+    },
+    {
+      "size": 160,
+      "regions": 4,
+      "sync": "atomics",
+      "steps": 900,
+      "msPerStep": 3.0680958888888643,
+      "computeMaxMs": 2.810462888889112,
+      "computeMeanMs": 1.9635328055555308,
+      "syncMs": 0.2576329999997524,
+      "imbalance": 1.4313297343122129,
+      "handoversPer1000": 168.88888888888889,
+      "handoverMsPerCreature": 0.6336177631549761,
+      "countsStart": [
+        19,
+        76,
+        41,
+        66
+      ],
+      "countsEnd": [
+        26,
+        69,
+        50,
+        57
+      ],
+      "hash": "1dc0a889f8cb7cc5",
+      "hashMatch": true,
+      "repeat": 2
+    }
+  ]
+}
