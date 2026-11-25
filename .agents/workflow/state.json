@@ -1,7 +1,7 @@
 {
   "source": "https://github.com/Musasaby/evolution-terrarium/issues/18",
   "branch": "develop/scaling-study-B",
-  "updated_at": "2026-11-26T00:51:34+09:00",
+  "updated_at": "2026-11-26T01:06:31+09:00",
   "group": "B",
   "tasks": [
     {
@@ -77,9 +77,9 @@
     {
       "id": "T11",
       "title": "V3・V4・V5 の結果と判断をまとめる",
-      "status": "pending",
-      "retries": 0,
-      "commit": null
+      "status": "done",
+      "retries": 1,
+      "commit": "509345a0c14de522d0502681b64b78d270c68ba0"
     },
     {
       "id": "T12",
