@@ -1,7 +1,7 @@
 {
   "source": "https://github.com/Musasaby/evolution-terrarium/issues/18",
   "branch": "develop/scaling-study-C",
-  "updated_at": "2026-11-26T01:50:19+09:00",
+  "updated_at": "2026-11-26T01:59:29+09:00",
   "group": "C",
   "tasks": [
     {
@@ -119,9 +119,9 @@
     {
       "id": "T17",
       "title": "計測ページの URL パラメータで既定値が使われない問題を直す",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "bc16e197e8473450ccebcd5a4dec21db5df72df4"
     }
   ]
 }
