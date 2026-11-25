@@ -1,176 +1,113 @@
 {
-  "source": "docs/plans/biodiversity.md",
-  "branch": "develop/biodiversity-E",
-  "updated_at": "2026-11-25T14:13:26+09:00",
-  "group": "E",
+  "source": "https://github.com/Musasaby/evolution-terrarium/issues/18",
+  "branch": "develop/scaling-study",
+  "group": "A",
+  "updated_at": "2026-11-25T19:34:36+09:00",
   "tasks": [
     {
       "id": "T1",
-      "title": "feature 取り込み後のベースライン取り直し",
+      "title": "検証記録の雛形と出力先の用意",
       "status": "done",
-      "retries": 1,
-      "commit": "c19597c"
+      "retries": 0,
+      "commit": "d9dcd79750fade60fef5ab7938c668f5c317b7f6"
     },
     {
       "id": "T2",
-      "title": "多様性指標を diversity.js へ切り出して拡張",
+      "title": "条件を差し替えて多様性を測る実行スクリプト(V0 用)",
       "status": "done",
       "retries": 0,
-      "commit": "e46b81a"
+      "commit": "72b0f0fddf511dc80900569f9946977c74c761f7"
     },
     {
       "id": "T3",
-      "title": "長時間・複数シードの多様性計測ツール",
+      "title": "V0 の結果を表と結論にまとめる",
       "status": "done",
-      "retries": 0,
-      "commit": "630809c"
+      "retries": 1,
+      "commit": "624f40e8c6504281bb4418bbb1d5c10f6fee6ff5"
     },
     {
       "id": "T4",
-      "title": "山と湖の数をシードで変える",
+      "title": "V1 の差し替え案と、動きの指標",
       "status": "done",
-      "retries": 1,
-      "commit": "a97c672"
+      "retries": 0,
+      "commit": "c2dd8ee30151f2147648768e7e2d5e458967a933"
     },
     {
       "id": "T5",
-      "title": "土壌の場と植物の土壌適性",
+      "title": "物理の所要時間を交互に測る A/B 計測",
       "status": "done",
       "retries": 0,
-      "commit": "c9bffc2"
+      "commit": "26dfe61ae46f38c2e7fcedfd77802a0a0d8ef882"
     },
     {
       "id": "T6",
-      "title": "川(任意機能)",
+      "title": "V1 の結果と採用の判断をまとめる",
       "status": "done",
       "retries": 0,
-      "commit": "716a3bd"
+      "commit": "301ba1d8dc6ee43643deca4cbdd68cfbc3a830ab"
     },
     {
       "id": "T7",
-      "title": "耐温幅 tTol と気温の感覚入力",
-      "status": "done",
+      "title": "領域分割の試作(postMessage による毎ステップ同期)",
+      "status": "pending",
       "retries": 0,
-      "commit": "800698d0b16935e3335364030adb9201a175de7b"
+      "commit": null
     },
     {
       "id": "T8",
-      "title": "水棲適応 aqua",
-      "status": "done",
+      "title": "領域分割の SharedArrayBuffer 同期と決定性の確認",
+      "status": "pending",
       "retries": 0,
-      "commit": "ebbb0fa8577c6d5854fa91f1a3ffd54f5bf7907a"
+      "commit": null
     },
     {
       "id": "T9",
-      "title": "肉食の祖先",
-      "status": "done",
+      "title": "島モデルの試作(独立した世界と、ときどきの移住)",
+      "status": "pending",
       "retries": 0,
-      "commit": "24710a58d7184fbdd3d7b06ece29848254dbcd03"
+      "commit": null
     },
     {
       "id": "T10",
-      "title": "生態的種分化と係数の調整",
-      "status": "done",
+      "title": "物理の詳細度の切り替え(LOD)の実現性を測る",
+      "status": "pending",
       "retries": 0,
-      "commit": "5349eda66ec0f46a46dd541bfb8d2523b6bd414d"
+      "commit": null
     },
     {
       "id": "T11",
-      "title": "ヘッダーと操作ヒントの簡素化",
-      "status": "done",
+      "title": "V3・V4・V5 の結果と判断をまとめる",
+      "status": "pending",
       "retries": 0,
-      "commit": "babb4ecfa1f95e6488f134183b21ab2ab994351e"
+      "commit": null
     },
     {
       "id": "T12",
-      "title": "右パネルの縮小と折りたたみ・統計タブの整理",
-      "status": "done",
+      "title": "描画の上限を測る計測ページ(V6)",
+      "status": "pending",
       "retries": 0,
-      "commit": "0c985727b3ed7333a36bebdca5d74e2750bafd71"
+      "commit": null
     },
     {
       "id": "T13",
-      "title": "個体タブ・系統樹タブの整理",
-      "status": "done",
+      "title": "sim を Web Worker に移す効果を測る計測ページ(V2)",
+      "status": "pending",
       "retries": 0,
-      "commit": "c55d09e5967e713b7fd29542ac2bba1ce5f0fc2c"
+      "commit": null
     },
     {
       "id": "T14",
-      "title": "構成メモの更新",
-      "status": "done",
+      "title": "V2・V6 の結果をまとめる",
+      "status": "pending",
       "retries": 0,
-      "commit": "6edd394bc87c7b4f90ff46eb02c1187345670aca"
+      "commit": null
     },
     {
       "id": "T15",
-      "title": "世界の設定を Sim に渡せるようにする(地形・土壌・気候)",
-      "status": "done",
+      "title": "全案のまとめと採用案の提案",
+      "status": "pending",
       "retries": 0,
-      "commit": "a128e4c766c25a515c240fe8c77f6061e112da66"
-    },
-    {
-      "id": "T16",
-      "title": "世界の広さを設定できるようにする",
-      "status": "done",
-      "retries": 0,
-      "commit": "e108d32f0443405e77c590c7688834e595598a04"
-    },
-    {
-      "id": "T17",
-      "title": "タイトル画面と世界の設定画面",
-      "status": "done",
-      "retries": 0,
-      "commit": "54995c4d652736f48e3c8a01932d0818b59983cc"
-    },
-    {
-      "id": "T18",
-      "title": "ばらつきに強い判定を計測ツールに加える",
-      "status": "done",
-      "retries": 0,
-      "commit": "df78d84a2ac2d1986520f1a5ca6de1c0d4d6e40a"
-    },
-    {
-      "id": "T19",
-      "title": "草類と木類で植物の枠を分ける",
-      "status": "done",
-      "retries": 0,
-      "commit": "e332bf1f19cab3d34e4372fafdc2f9e92d7fcbac"
-    },
-    {
-      "id": "T20",
-      "title": "木の葉が食べられない原因を調べる",
-      "status": "done",
-      "retries": 0,
-      "commit": "556147cae0114987f449963f66e9baf48ace5eeb"
-    },
-    {
-      "id": "T21",
-      "title": "湖の面積を CFG に移し、陸の植物とのつり合いを取る",
-      "status": "done",
-      "retries": 0,
-      "commit": "accad7b23c6d8c442c81ebe646c0261084f0e2c1"
-    },
-    {
-      "id": "T22",
-      "title": "Issue #10 の結果を計画の文書に書く",
-      "status": "done",
-      "retries": 0,
-      "commit": "162812be437a4d5be48cbc8c4d63bcac7db8a625"
-    },
-    {
-      "id": "T23",
-      "title": "木の葉に届く高さ CANOPY を下げる",
-      "status": "done",
-      "retries": 0,
-      "commit": "9a888c7552d66583b68bf2ae7d8541e35bdb8129"
-    },
-    {
-      "id": "T24",
-      "title": "個体タブの記録表を 1 項目 1 行に戻す",
-      "status": "done",
-      "retries": 0,
-      "commit": "144a36656cf48f583e3f18f0767a0ad1b850ab1e"
+      "commit": null
     }
   ]
 }

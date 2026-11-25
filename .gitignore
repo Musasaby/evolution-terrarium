@@ -15,3 +15,6 @@ node_modules/
 
 # yomiyasu(日本語の推敲)の検査記録
 .yomiyasu/
+
+# 試運転の出力先
+tools/scaling/.out/
