@@ -1,341 +1,303 @@
-# タスク一覧: docs/plans/biodiversity.md
+# タスク一覧: Issue #18(https://github.com/Musasaby/evolution-terrarium/issues/18)
 
-計画の正本は `docs/plans/biodiversity.md`。設計・成功基準・性能の判定方法はそちらを参照すること。
-計画の P0〜E1 は、ここでは T1〜T14 に対応する(P0=T1, A1=T2, A2=T3, B1=T4, B2=T5, B3=T6,
-C1=T7, C2=T8, C3=T9, C4=T10, D1=T11, D2=T12, D3=T13, F1=T15, F2=T16, F3=T17, E1=T14)。
-グループ F(世界の設定とタイトル画面)は計画への追加分で、D と E の間で実行する。
+## 要件
+- R1: V0 個体数・面積を増やすと多様性が上がるかを確かめ、条件ごとの表と、仮説を支持するかどうかの結論を記録する
+- R2: V1 物理の軽量化(a 衝突グループ・b ソルバー反復数・c 接触イベントの絞り込み)ごとに、物理 ms/ステップの中央値・9000 ステップ seed 1〜2 の多様性指標・採用してよいかの判断を記録する
+- R3: V2 sim を Web Worker に移す前後の fps・実効速度・転送コストを表にする
+- R4: V3 領域分割の、区画数と速くなる比率の表・同期方式の比較・決定性を保てるかの結論を記録する
+- R5: V4 島モデルと単一の世界(V0)の、多様性と処理時間の比較表を作る
+- R6: V5 物理の詳細度の切り替えについて、相関係数・切り替え 1 回の費用・採用できるかの判断を記録する
+- R7: V6 個体数ごとの描画の所要時間の表と、WebGPU を検討すべきかの結論を記録する
+- R8: 全案の「速くなる比率 / 多様性への効果 / 実装の手間 / 決定性」を 1 つの表にまとめ、採用する案を提案する
+- R9: 試作は `tools/` に置き、既定の設定での sim の振る舞いを変えない(`npm run check:sim` の状態ハッシュが変わらない)
 
-<!-- グループ P: 既存成果の取り込み -->
+## 前提・解釈
+- 結果の記録先は `docs/plans/scaling-study.md`(1 ファイル。節ごとに書き足す)。計測の生データ(JSON)は `docs/plans/scaling-data/` に置いてコミットする
+- **本計測は親が実行する**。子は計測スクリプトの作成と短い試運転(数分以内)までを行う。親は文書化タスクを dispatch する前に、目的欄の「親の事前作業」のコマンドを実行し、JSON をコミットしておく。文書化タスクの参照ファイルにその JSON を挙げてあるため、JSON が無いと dispatch-prompt-gen がエラーで止まる
+- **ブラウザでしか測れない V2・V6 は利用者が実行する**。子は URL パラメータで条件を選べる計測ページ(`tools/bench/`)を作る。利用者が `npm run serve` で開き、画面に出る JSON を `docs/plans/scaling-data/` に保存する
+- **V3・V4 は Node の `worker_threads` で試作する**(ブラウザの Worker と同じ仕組みで、ヘッドレスで測れる。V2 には依存しない)。Node 23 の worker_threads で Rapier の初期化と `Atomics.wait` が使えることは計画時に確かめた
+- V3 の試作は物理と運動(脳・関節モーター)だけを区画に分ける。植物・採食・捕食・繁殖・感覚の更新は行わず、感覚は開始時の値に固定する。壁と重なり帯(影)は作らない
+- V0 は 5 条件(120 m 既定 / 160 m 既定 / 120 m・maxPop×2 / 120 m・maxPop×4 / 120 m・maxPop×2・植物の上限×2)。上限は `Sim` を作った後に `sim.geo` と `sim.flora.geo` を差し替えて上書きする(初期の個体数・植物数は変わらない)。広さの上限が 160 m のため、それより広い条件は作らない
+- V1 の各案は `src/sim/` を変えず、`tools/scaling/variants.mjs` が `Sim` を作った後に差し替える。衝突グループ案が `colliderOwner.set` の差し替えで動き、600 ステップで物理が 7.39 → 6.43 ms になることは計画時に試した
+- `tools/scaling/` の調査用スクリプトに限り、`src/sim/index.js` 以外の sim 内部(`body.js` `brain.js` `creatures.js` `founder.js` `config.js`)を直接 import してよい(AGENTS.md の規則の例外。調査用で本番に使わないため)
+- V4 は 80 m の島 4 つ(総面積は 160 m の単一の世界と同じ)。比較相手は V0 の 160 m 条件
+- 現在の基準値(計画時に実行): `npm run check:sim` の状態ハッシュは `0e7801998fe70d04`(seed 20261007・600 ステップ)。`node tools/diversity-check.mjs 600 1` の 0.07 年の行は「個体数 181・現存種 15・実効種数 14.2・食性実効 2.7」
+- 判断の基準は計画時に決めておき、各文書化タスクの目的欄に書く(子は基準に当てはめて判断する)
 
-## T1: feature 取り込み後のベースライン取り直し
-- **目的**: `origin/feature/biodiversity`(93af57d)は親エージェントが dispatch 前に `develop/biodiversity` へマージ済み。その状態で以降のタスクの比較基準(状態ハッシュ・性能・世界の生成時間)を確定し、生成時間が 4.9 s → 6.9 s に増えた原因を調べる
-- **対象**: `docs/plans/biodiversity.md`(計測結果の追記のみ)。計測用の一時スクリプトはコミットしない
+## 対象外
+- 本番コードへの採用(このIssueの結果を見て別のIssueで決める)
+- V3 の重なり帯(影)と、区画をまたぐ採食・繁殖
+- V2 の、本物の画面(`WorldView`・パネル)での Worker 化。試作は簡易な描画で、主スレッドで動かす場合と Worker で動かす場合を同じ描画で比べる
+- Playwright などによるブラウザ計測の自動化
+
+<!-- グループ A: 計測の土台と V0(仮説の確認)・V1(物理の軽量化) -->
+
+## T1: 検証記録の雛形と出力先の用意
+- **目的**: 結果を書き足していく `docs/plans/scaling-study.md` の雛形を作る。見出しは次の順にする: `# 個体数と土地を増やす案の検証(Issue #18)`、`## 目的と進め方`、`## 計測の方法`、`## 現状の計測(2026-11-25、seed 1)`、`## V0. 仮説の確認`、`## V1. 物理の軽量化`、`## V2. sim を Web Worker に移す`、`## V3. 領域分割`、`## V4. 島モデル`、`## V5. 物理の詳細度の切り替え`、`## V6. 描画の上限`、`## まとめと提案`。「目的と進め方」と「現状の計測」は Issue #18 の本文(`gh issue view 18 --json body --jq .body` で読める)の「目的」「現状の計測」を要約して書く。「計測の方法」には、比較は交互に 3 回ずつ測った中央値で行うこと、生データは `docs/plans/scaling-data/` に置くことを書く。V0〜まとめの各節の本文は `(未記入)` の 1 行にする。あわせて、試運転の出力先 `tools/scaling/.out/` を `.gitignore` に足す
+- **対象**: `docs/plans/scaling-study.md`(新規)、`.gitignore`
+- **要件**: なし
+- **参照ファイル**:
+  - `docs/plans/biodiversity.md:1-20`(計画文書の書き方)
+  - `.gitignore`(変更対象。末尾に `tools/scaling/.out/` を足す)
 - **受け入れ基準**:
-  - [ ] `npm run check:sim` が完走し、状態ハッシュ(seed・ステップ数つき)を `docs/plans/biodiversity.md` に新設する「ベースライン(T1)」節に記録している
-  - [ ] 「性能の判定方法」1 の基準値(`npm run check:sim` を 3 回実行した 1 ステップ平均の中央値と、物理以外の区間の合計の中央値)と、3 の基準値(世界の生成時間の中央値)を同じ節に記録している
-  - [ ] `spawnFounderGroup` / `evolvedFounder` の所要時間を測り、生成時間の増加が「乱数の消費順の変化」か「計算量の増加」かを結論づけて同じ節に書いている(計算量の増加なら T10 の調整対象になる旨も書く)
-  - [ ] `src/` 配下のファイルは変更していない(`git diff --stat` で確認)
+  - [ ] `docs/plans/scaling-study.md` に、目的欄の 12 個の見出しがこの順で並んでいる(`grep -n '^#' docs/plans/scaling-study.md` で確かめる)
+  - [ ] 「現状の計測」の節に、Issue #18 の表の 2 行(標準 120 m: 194 体・12.24 ms・9.78 ms、広い 150 m: 297 体・16.87 ms・13.41 ms)が載っている
+  - [ ] `git check-ignore tools/scaling/.out/x.json` が `tools/scaling/.out/x.json` を出力する
 - **依存**: なし
 
-<!-- グループ A: 計測 -->
-
-## T2: 多様性指標を diversity.js へ切り出して拡張
-- **目的**: feature が `stats.js` に書いた多様性の計算を純粋関数として分離し、食性ニッチの実効数と形質のばらつきを加える。T1 で記録した状態ハッシュを比較基準にする
-- **対象**: `src/sim/diversity.js`(新規)、`src/sim/stats.js`、`src/sim/index.js`
+## T2: 条件を差し替えて多様性を測る実行スクリプト(V0 用)
+- **目的**: 既存の多様性計測(`tools/diversity-worker.mjs` の `runSeed`)に、条件の差し替えと区間計測のための引数を足し、V0 の条件で実行して JSON に残すスクリプトを作る。設計は次のとおり(この形で作る)。
+  1. `tools/diversity-worker.mjs`: `runSeed(steps, seed, settings, opts = {})` に引数を足す。`opts.prepare?.(sim, RAPIER)` を `Sim` を作った直後に呼ぶ。`opts.profile` が true なら `SectionProfiler`(`src/sim/index.js` から import)を `new Sim(RAPIER, seed, { settings, profiler })` に渡し、各行に `sections`(区間名 → その区間の ms/ステップ。`prof.take()` の `ms / n` ではなく `ms / 区間のステップ数`)を足す。各行に `Object.assign(row, opts.sample?.(sim))` を足す。戻り値に `geo`(`prepare` 後の `sim.geo` の `size` `maxPop` `minPop` `maxPlants` `maxSoftPlants` `maxHardPlants`)・`counters`(`{ ...sim.counters }`)・`feedStats`(`{ ...sim.feedStats }`)を足す。opts を渡さないときの既存の値は変えない
+  2. `tools/scaling/variants.mjs`: `export const VARIANTS = { base, pop2, pop4, pop2plants2 }`。各要素は `{ desc: '説明', prepare(sim, R) {} }`。`overrideGeo(sim, patch)` は `sim.geo = Object.freeze({ ...sim.geo, ...patch }); sim.flora.geo = sim.geo;`。pop2 は `maxPop` を 2 倍、pop4 は 4 倍、pop2plants2 は `maxPop` と `maxPlants` `maxSoftPlants` `maxHardPlants` を 2 倍にする(`Math.round`)。`export function getVariant(name)` は知らない名前で `Error`(メッセージに使える名前の一覧を入れる)を投げる
+  3. `tools/scaling/run.mjs`: `node tools/scaling/run.mjs --variant <名> [--steps 27000] [--seeds 1,2,3] [--settings <値>] [--out <path>]`。`--settings` は `tools/settings-arg.mjs` の `extractSettings` で取り除いて解釈する。親プロセスはシードごとに `process.execPath` で自分自身を `--worker <名> <ステップ数> <シード>`(と `--settings`)付きで起動して並行に走らせ(`tools/diversity-check.mjs` の `runWorker` と同じ形)、子は `runSeed(steps, seed, settings, { prepare, sample, profile: true })` の結果を JSON で stdout に出す。親は `{ variant, desc, steps, seeds, settingsText, date, results, summary }` を作り、`--out` があれば親ディレクトリを作ってから書き出し、要約を表で表示する。知らない条件名は exit 1
+  4. `tools/scaling/summarize.mjs`: `export function summarizeRun(run, window)` は、シードごとに `window = [from, to]`(年)に入る行の中央値(`pop` `species` `effSpecies` `effDiet` `msPerStep` `sections['物理']`)と、その中央値のシード平均を返す。`window` を省くと `[年数 × 2/3, 年数]`(年数 = `steps × CFG.DT / CFG.YEAR`。27000 ステップなら `[2, 3]`)。CLI `node tools/scaling/summarize.mjs <json...>` は 1 ファイル 1 行の Markdown の表(列: 条件・広さ・maxPop・maxPlants・個体数・現存種・実効種数・食性実効・ms/ステップ・物理 ms)を出す
+- **対象**: `tools/diversity-worker.mjs`、`tools/scaling/variants.mjs`(新規)、`tools/scaling/run.mjs`(新規)、`tools/scaling/summarize.mjs`(新規)
+- **要件**: R1, R9
+- **参照ファイル**:
+  - `tools/diversity-worker.mjs`(変更対象。runSeed に opts を足す)
+  - `tools/diversity-check.mjs:74-104`(子プロセスの起動と --worker の形を真似る)
+  - `tools/settings-arg.mjs`(--settings の解釈に使う)
+  - `src/sim/world-settings.js:20-38`(geo の項目)
 - **受け入れ基準**:
-  - [ ] `computeDiversity(sim)` が `{ living, species, shannon, effSpecies, dominance, effDiet, traitSd }` を返す。`effDiet` は `diet` < 0.25 = 草、< 0.75 = 木の葉、それ以上 = 肉 の 3 分類の exp(H)。`traitSd` は体積・体節数・`diet`・`topt`・`tTol`・`aqua` の標準偏差(`tTol` `aqua` はまだ無いので 0)
-  - [ ] `recordStats` は `computeDiversity` の結果を記録し、`sim.stats` の既存キー(`shannon` `effSpecies` `dominance`)はそのまま残る
-  - [ ] `computeDiversity` が `src/sim/index.js` から export されている
-  - [ ] `npm run check:sim` の状態ハッシュが T1 で記録した値と一致する
+  - [ ] `node tools/scaling/run.mjs --variant pop2plants2 --steps 600 --seeds 1 --out tools/scaling/.out/t2.json` が exit 0 で、JSON の `results[0].geo.maxPop` が 400、`maxPlants` が 4000、`results[0].rows[0].sections` に `物理` がある
+  - [ ] `node tools/scaling/run.mjs --variant base --steps 600 --seeds 1 --settings '{"size":160}' --out tools/scaling/.out/t2b.json` の `results[0].geo.maxPop` が 356
+  - [ ] `node tools/scaling/summarize.mjs tools/scaling/.out/t2.json tools/scaling/.out/t2b.json` が、`pop2plants2` と `base` の 2 行を含む Markdown の表を出す
+  - [ ] `node tools/scaling/run.mjs --variant nosuch --steps 10 --seeds 1` が exit 1 で、メッセージに `pop2plants2` を含む
+  - [ ] `npm run check:sim` の状態ハッシュが `0e7801998fe70d04` のまま、`node tools/diversity-check.mjs 600 1` の 0.07 年の行が「個体数 181・現存種 15・実効種数 14.2・食性実効 2.7」のまま
 - **依存**: T1
 
-## T3: 長時間・複数シードの多様性計測ツール
-- **目的**: 規則変更の効果を数値で判定できるようにする。T2 の `computeDiversity` を使う
-- **対象**: `tools/diversity-check.mjs`(新規)、`package.json`(`check:diversity` スクリプト)
+## T3: V0 の結果を表と結論にまとめる
+- **目的**: V0 の計測結果を `docs/plans/scaling-study.md` の「V0. 仮説の確認」節に書く。**親の事前作業**(dispatch の前に親が実行して JSON をコミットする): `node tools/scaling/run.mjs --variant <条件> --steps 27000 --seeds 1,2,3 --out docs/plans/scaling-data/v0-<条件>.json` を `base`・`pop2`・`pop4`・`pop2plants2` で実行し、さらに `--variant base --settings '{"size":160}'` を `v0-size160.json` に出す。子は `node tools/scaling/summarize.mjs docs/plans/scaling-data/v0-*.json` の出力を元に、条件ごとの表(2〜3 年の中央値のシード平均。シードごとの値も別表で)を書く。結論は次の基準で判断する: 「160 m 既定」または「maxPop×2・植物×2」の実効種数が「120 m 既定」より 20% 以上高く、かつ 3 シード中 2 シード以上で高ければ「仮説を支持する」。どちらも 5% 未満の差なら「支持しない」。その間は「弱く支持する」。maxPop だけ上げた条件で個体数が増えたか(餌が律速か)も一文で書く。所要時間(ms/ステップ)と個体数の関係も表に載せる
+- **対象**: `docs/plans/scaling-study.md`
+- **要件**: R1
+- **参照ファイル**:
+  - `docs/plans/scaling-study.md`(変更対象。V0 の節を書く)
+  - `docs/plans/scaling-data/v0-base.json`(親が置く結果)
+  - `docs/plans/scaling-data/v0-pop2plants2.json`(親が置く結果)
+  - `tools/scaling/summarize.mjs`(表の作り方)
 - **受け入れ基準**:
-  - [ ] `node tools/diversity-check.mjs [ステップ数] [シード,...]`(既定 18000、`1,2,3`)が、シードごとに 0.5 年ごとの 個体数・現存種・実効種数・食性ニッチの実効数・食性 3 分類の個体数・移入回数・疫病回数 と、区間ごとの ms/ステップ を表で出す
-  - [ ] シードは子プロセスで並行実行される
-  - [ ] `npm run check:diversity` で同じものが実行できる
-  - [ ] `node tools/diversity-check.mjs 18000 2` の 2 年時点が、計画の「実測」の表と同程度(個体数 30 前後、実効種数 7〜8)になる。結果の表を報告に貼る
+  - [ ] V0 の節に 5 条件(120 m 既定・160 m 既定・maxPop×2・maxPop×4・maxPop×2+植物×2)の行がある表があり、列に個体数・現存種・実効種数・食性実効・ms/ステップがある
+  - [ ] 表の数値が `node tools/scaling/summarize.mjs docs/plans/scaling-data/v0-*.json` の出力と一致する
+  - [ ] 目的欄の基準に当てはめた結論(支持する / 弱く支持する / 支持しない)と、その根拠の数値が書かれている
+  - [ ] 節の本文から `(未記入)` が消えている
 - **依存**: T2
 
-<!-- グループ B: 地形の多様化 -->
-
-## T4: 山と湖の数をシードで変える
-- **目的**: 地形の単調さを解消し、標高による気温差の幅を世界ごとに変える
-- **対象**: `src/sim/terrain.js`(`generate`)。`terrain.mtn` `terrain.lake` を参照している箇所
+## T4: V1 の差し替え案と、動きの指標
+- **目的**: V1 の 3 案を `tools/scaling/variants.mjs` の条件として足し、動きの崩れと衝突しなくなる組を測る指標を足す。状態ハッシュは `tools/sim-check.mjs` から共通の関数に切り出し、各実行の最後に記録する。設計は次のとおり。
+  1. `tools/scaling/variants.mjs` に補助関数 `onCreatureCollider(sim, fn)` を作る: すでにある `sim.colliderOwner` の `kind === 'c'` の項目すべてに `fn(sim.world.getCollider(handle), owner)` を呼び、さらに `sim.colliderOwner.set` を差し替えて、以後に登録される `kind === 'c'` にも呼ぶ(元の `set` は `bind` して呼び、戻り値を返す)
+  2. 条件を足す: `groups16`(`bit = 1 << (owner.obj.id % 16)`、`col.setCollisionGroups(((bit << 16) | (0xFFFF ^ bit)) >>> 0)`、`col.setActiveHooks(R.ActiveHooks.NONE)`)、`iter2` / `iter3`(`sim.world.numSolverIterations = 2` / `3`。既定は 4)、`events-lean`(生物の体節を `col.setActiveEvents(R.ActiveEvents.CONTACT_FORCE_EVENTS)` にして `COLLISION_EVENTS` を外す。柔らかい植物の側が `COLLISION_EVENTS` を持つので採食は続く)、`events-root`(`events-lean` に加え、`owner.part > 0` の体節を `R.ActiveEvents.NONE` にする)
+  3. すべての条件に共通の `sample(sim)` を付ける。生きている個体(`c.alive && !c.dead`)について、速さ `Math.hypot(c.vx || 0, c.vz || 0)` の 10・50・90 パーセンタイルを `speedP10` `speedP50` `speedP90`、根の体節の高さ `c.pos[0].y - sim.heightAt(c.pos[0].x, c.pos[0].z)` が 3 を超えるか有限でない個体の数を `broken`、`sim.world.numSolverIterations` を `iters` として返す。`groups16` だけは加えて、根の体節どうしの距離が 3 m 未満の個体の組の数 `nearPairs` と、そのうち `id % 16` が等しい組の数 `sameGroupPairs` を返す
+  4. `tools/state-hash.mjs` に `export function stateHash(sim)` を作り、`tools/sim-check.mjs` の状態ハッシュの計算(`createHash('sha1')` から `digest('hex').slice(0, 16)` まで)をそのまま移して使う。`runSeed` の戻り値に `hash: stateHash(sim)` を足す
+- **対象**: `tools/scaling/variants.mjs`、`tools/state-hash.mjs`(新規)、`tools/sim-check.mjs`、`tools/diversity-worker.mjs`
+- **要件**: R2, R9
+- **参照ファイル**:
+  - `tools/scaling/variants.mjs`(変更対象。条件を足す)
+  - `tools/sim-check.mjs:29-41`(変更対象。ハッシュの計算を切り出す)
+  - `tools/diversity-worker.mjs`(変更対象。戻り値に hash を足す)
+  - `src/sim/body.js:36-45`(当たり判定に付けているイベントとフック)
+  - `src/sim/sim.js:85-100`(filterContactPair の呼び返し)
 - **受け入れ基準**:
-  - [ ] `terrain.mtns`(1〜3 個、高さ・裾野の広さもばらつく)と `terrain.lakes`(1〜3 個)を持ち、seed 1〜10 で (山の数, 湖の数) の組み合わせが 3 通り以上現れる(確認スクリプトの出力を報告に貼る)
-  - [ ] seed 1〜10 のどれでも、陸地(初期の湖面より高い格子)の割合が 55〜85%
-  - [ ] `terrain.mtn` `terrain.lake` の参照が残っていない(`grep -rn "\.mtn\b\|\.lake\b" src tools` が空)
-  - [ ] 世界の生成時間の増加が T1 の基準値の 10% 以内
-  - [ ] `npm run check:sim` が完走する(地形が変わるのでハッシュは変わってよい。その旨を報告する)
-- **依存**: T1
+  - [ ] `npm run check:sim` の状態ハッシュが `0e7801998fe70d04` のまま
+  - [ ] `node tools/scaling/run.mjs --variant groups16 --steps 600 --seeds 1 --out tools/scaling/.out/t4.json` が exit 0 で、`results[0].rows[0]` に `nearPairs` `sameGroupPairs` `speedP50` `broken` があり、`results[0].hash` が 16 桁の 16 進数
+  - [ ] `groups16` `iter2` `iter3` `events-lean` `events-root` のそれぞれを `--steps 300 --seeds 1` で実行すると exit 0 になり、`iter2` の行の `iters` が 2
+  - [ ] `base` と `events-lean` を `--steps 600 --seeds 1` で実行したときの `results[0].hash` が一致するかどうかを報告に書いている(一致しなくても不合格にしない)
+- **依存**: T2
 
-## T5: 土壌の場と植物の土壌適性
-- **目的**: 同じ気温・湿り気でも場所ごとに生える植物を変え、草食と木の葉食の住み分けを場所で起こす。T4 の新しい地形の上に土壌を載せる
-- **対象**: `src/sim/terrain.js`、`src/sim/plant-species.js`、`src/sim/environment.js`(または `flora.js`)、`src/render/terrain-view.js`
+## T5: 物理の所要時間を交互に測る A/B 計測
+- **目的**: 条件ごとの物理 ms/ステップを、条件を交互に入れ替えながら測って中央値を出すスクリプト `tools/scaling/ab-bench.mjs` を作る。CLI は `node tools/scaling/ab-bench.mjs --variants base,groups16 [--steps 1800] [--seed 1] [--rounds 3] [--settings <値>] [--out <path>]`。親プロセスは回ごとに条件の並びを 1 つずつ回した順(1 回目は指定順、2 回目は 1 つ左に回した順…)で、子プロセス `--worker <条件> <ステップ数> <シード>` を**1 つずつ順に**起動する(並行にしない。負荷が揺れるため)。各回の実行順をログに出す。子は `Sim` を `SectionProfiler` 付きで作り、`getVariant(名).prepare(sim, RAPIER)` の後に `prof.take()` で生成分を捨て、ステップを進めて `{ variant, physMs, totalMs, sections, living }`(`physMs` は `物理` 区間の ms/ステップ、`totalMs` は全体の ms/ステップ)を JSON で出す。親は条件ごとに `physMs` と `totalMs` の中央値と、先頭の条件に対する比を表にし、`{ date, steps, seed, rounds, settingsText, runs, medians }` を `--out` に書く
+- **対象**: `tools/scaling/ab-bench.mjs`(新規)
+- **要件**: R2
+- **参照ファイル**:
+  - `tools/scaling/variants.mjs`(getVariant を使う)
+  - `tools/scaling/run.mjs`(子プロセスの起動と --settings の扱いを真似る)
+  - `tools/sim-check.mjs:16-27`(SectionProfiler の使い方)
 - **受け入れ基準**:
-  - [ ] `terrain.soilAt(x, z)` が 0〜3(岩場・砂地・肥沃・泥炭)を返し、生成時に決まる 65×65 の静的な格子を引くだけである。陸地で 4 種すべてが 5% 以上を占める(seed 1〜3 の割合を報告に貼る)
-  - [ ] 各植物種に `soil`(4 要素の係数)があり、植物の適性(`suitability`)に掛かる。計算は植物の更新時の表引き 1 回だけ
-  - [ ] seed 1 で 1500 ステップ後、少なくとも 2 種の植物について「最も多い土壌」が異なる(確認方法と結果を報告に書く)
-  - [ ] 地形の色に土壌がわずかに反映される(ブラウザ確認。できない場合はその旨を報告する)
-  - [ ] 「性能の判定方法」1 を満たす(T1 の基準値と比較)
+  - [ ] `node tools/scaling/ab-bench.mjs --variants base,iter2 --steps 300 --rounds 2 --out tools/scaling/.out/t5.json` が exit 0 で、ログの実行順が 1 回目「base, iter2」、2 回目「iter2, base」になっている
+  - [ ] 出力 JSON の `runs` が 4 件で、`medians.base.physMs` と `medians.iter2.physMs` が正の数
+  - [ ] 表に、条件ごとの物理 ms の中央値と base に対する比が出ている
+  - [ ] `--variants base,nosuch` が exit 1 になる
 - **依存**: T4
 
-## T6: 川(任意機能)
-- **目的**: 陸生には障壁、水棲には通り道となる水路で地理的隔離を生む。効果の判定と既定値の決定は T10 で行う
-- **対象**: `src/sim/terrain.js`、`src/sim/config.js`(有効・無効のフラグ)
+## T6: V1 の結果と採用の判断をまとめる
+- **目的**: V1 の結果を `docs/plans/scaling-study.md` の「V1. 物理の軽量化」節に書く。**親の事前作業**: `node tools/scaling/ab-bench.mjs --variants base,groups16,iter2,iter3,events-lean,events-root --steps 1800 --seed 1 --rounds 3 --out docs/plans/scaling-data/v1-ab.json` と、6 条件それぞれの `node tools/scaling/run.mjs --variant <条件> --steps 9000 --seeds 1,2 --out docs/plans/scaling-data/v1-<条件>.json` を実行してコミットする。子は `v1-ab.json` の中央値と、`node tools/scaling/summarize.mjs docs/plans/scaling-data/v1-*.json` の出力、各 JSON の `results[].counters`(births・matings・predations)・`rows[]` の `speedP50`・`broken`、`groups16` の `sameGroupPairs / nearPairs` を使って表にする。案ごとの判断の基準: 物理 ms の中央値が base より 10% 以上短く、かつ実効種数・食性実効・個体数(9000 ステップの区間の中央値のシード平均)が base の ±15% 以内、births・matings・predations が ±20% 以内、`broken` の割合が base より 1 ポイント以上増えていなければ「採用してよい」。物理が 10% 以上短いが他の基準を外れたものは「条件付き」(外れた指標を書く)、それ以外は「採用しない」
+- **対象**: `docs/plans/scaling-study.md`
+- **要件**: R2
+- **参照ファイル**:
+  - `docs/plans/scaling-study.md`(変更対象。V1 の節を書く)
+  - `docs/plans/scaling-data/v1-ab.json`(親が置く結果)
+  - `docs/plans/scaling-data/v1-base.json`(親が置く結果)
+  - `tools/scaling/summarize.mjs`(表の作り方)
 - **受け入れ基準**:
-  - [ ] `CFG` のフラグで川の有無を切り替えられる
-  - [ ] 湖が 2 つ以上ある世界で、湖どうしをつなぐ幅 1〜2 格子・湖面より低い水路ができる
-  - [ ] 侵食で 1 年以内に埋まらない(川ありの seed で 9000 ステップ後も水路の格子の 70% 以上が湖面より低い。確認結果を報告に貼る)
-  - [ ] フラグ無効時の `npm run check:sim` の状態ハッシュが、この変更の直前と一致する
-- **依存**: T4
+  - [ ] V1 の節に、6 条件の物理 ms の中央値・base に対する比・実効種数・食性実効・個体数・births・matings・predations・speedP50・broken の表がある
+  - [ ] 物理 ms の数値が `v1-ab.json` の `medians` と一致する
+  - [ ] `groups16` で別の個体なのに衝突しなくなる組の割合(`sameGroupPairs / nearPairs`)が書かれている
+  - [ ] 5 つの案それぞれに、目的欄の基準による判断(採用してよい / 条件付き / 採用しない)と根拠が書かれている
+- **依存**: T3, T5
 
-<!-- グループ C: 生物のニッチ形質 -->
+<!-- グループ B: 並列化(V3 領域分割・V4 島モデル)と V5 物理の詳細度の切り替え(Node) -->
 
-## T7: 耐温幅 tTol と気温の感覚入力
-- **目的**: 適温 `topt` に加え、快適帯の幅を遺伝させ、「自分にとって寒いか暑いか」を感じさせる
-- **対象**: `src/sim/genetics.js`、`src/sim/creatures.js`、`src/sim/config.js`
+## T7: 領域分割の試作(postMessage による毎ステップ同期)
+- **目的**: 1 つの世界を区画ごとの worker_threads に分けて、物理と運動を並列に進める試作を作る。設計は次のとおり。
+  1. `tools/scaling/region-snapshot.mjs`: `export async function takeSnapshot({ seed, size, warm })` は `RAPIER.init()` の後、`new Sim(RAPIER, seed, { settings: { size } })` を `warm` ステップ進め、`{ size: sim.size, grid: sim.grid, H: Array.from(sim.H), creatures }` を返す。`creatures` は生きている個体(`c.alive && !c.dead`)ごとの `encodeCreature(c)`。`encodeCreature` は `{ id, genome, energy, maxE, phase, mem: Array.from(c.mem), hidden: Array.from(c.hidden), sense: { ...c.sense }, bodies: [{ p, q, v, w }] }`(`p` `q` は `translation()` `rotation()`、`v` `w` は `linvel()` `angvel()` をそれぞれ `{x,y,z(,w)}` の素のオブジェクトにしたもの)。`genome` は `{ ...genome, brain: Array.from(genome.brain), marks: Array.from(genome.marks) }`(JSON にできる形)。同じファイルに `export function decodeGenome(g)` を置き、`brain` を `Float32Array.from`、`marks` を `Int32Array.from` に戻す
+  2. `tools/scaling/region-worker.mjs`: `workerData` で `{ index, bounds: { x0, x1, z0, z1 }, size, grid, H }` を受け取る。`RAPIER.init()` の後、重力 `{x:0, y:-9.81, z:0}`・`timestep = CFG.DT` の World を作り、`R.ColliderDesc.heightfield(grid, grid, new Float32Array(H), { x: size, y: 1, z: size }).setFriction(1.0)` の地形を置く(壁は作らない)。個体の復元 `restore(e)` は `buildBody(R, world, decodeGenome(e.genome), e.bodies[0].p.x, e.bodies[0].p.z, () => 0, 0)` の後、各剛体に `setTranslation` `setRotation` `setLinvel` `setAngvel`(いずれも wake = true)で写し、`{ id, genome, energy, maxE, phase, mem: Float32Array.from, hidden: Float32Array.from, out: new Float32Array(NO), inp: new Float32Array(NI), angles: new Float32Array(MAXJ), sense, ate: 0, hurt: 0, ...body }` を作って `readPose` する。1 ステップは、全個体に `readJointAngles` → `think(c, CFG.DT)` → `driveMotors(c)`、`world.step()`、偶数ステップなら全個体に `clampVel`、全個体に `readPose`。その後、根の体節 `c.pos[0]` が `bounds` の外に出た個体を `encodeCreature` 相当で書き出して剛体を `world.removeRigidBody` で消し、出ていく個体の一覧にする。メッセージ `{ type: 'step', immigrants }` を受けたら、`immigrants` を id の昇順に `restore` し(その所要時間を `handoverMs` に足す)、1 ステップ進めて `{ type: 'done', emigrants, computeMs, handoverMs, count }` を返す。`{ type: 'hash' }` には `[id, 根の x, y, z(1e-4 で丸める)]` の配列を返す
+  3. `tools/scaling/region-bench.mjs`: `node tools/scaling/region-bench.mjs [--regions 1,2,4] [--sizes 120] [--steps 900] [--warm 900] [--seed 1] [--sync message] [--out <path>]`。区画は 1 = 全体、2 = `x < 0` と `x >= 0`、4 = x・z の符号で 4 象限。広さごとに `takeSnapshot` を 1 回取り、区画数ごとに、根の位置で個体を振り分けて worker を起動する。毎ステップ、全 worker に `step`(前のステップで出ていった個体を、根の位置で決めた行き先の worker の `immigrants` に入れる)を送り、全員の `done` を待つ。区画数 1 も worker で測る。1 回の実行(広さ × 区画数)ごとに `{ size, regions, sync, steps, msPerStep(全体の壁時間 / ステップ数), computeMaxMs(各ステップの computeMs の最大の平均), computeMeanMs(平均の平均), syncMs(msPerStep − computeMaxMs), imbalance(computeMaxMs / computeMeanMs), handoversPer1000, handoverMsPerCreature, countsStart, countsEnd, hash }` を作る。`hash` は全 worker の `hash` の結果を id 順に並べた JSON の sha1 の先頭 16 桁。表を表示し、`{ date, seed, warm, runs }` を `--out` に書く
+- **対象**: `tools/scaling/region-snapshot.mjs`(新規)、`tools/scaling/region-worker.mjs`(新規)、`tools/scaling/region-bench.mjs`(新規)
+- **要件**: R4
+- **参照ファイル**:
+  - `src/sim/body.js:13-60`(buildBody と剛体の作り方)
+  - `src/sim/founder.js:23-30`(試走で個体を動かす手順 tick を真似る)
+  - `src/sim/brain.js:11-20`(think が読む値)
+  - `src/sim/sim.js:101-114`(地形の当たり判定の作り方)
 - **受け入れ基準**:
-  - [ ] `tTol` が `randomGenome` で生成され、`cloneGenome` `recombine` `mutate` で扱われる(4〜18 にクランプ。`tTol` を持たない古いゲノムは `CFG.COMFORT` を既定値にする)
-  - [ ] 快適帯が `topt ± tTol` になり、`tTol` に比例して基礎代謝が増える(係数は `CFG` に置く)
-  - [ ] 気温の感覚入力が `(気温 - topt) / 15` になり、入力の数(`NI`)は変わらない
-  - [ ] `nicheDistance` に `tTol` の差が加わる
-  - [ ] `npm run check:sim` が完走する(規則が変わるのでハッシュは変わってよい。その旨を報告する)
-- **依存**: T1
+  - [ ] `node tools/scaling/region-bench.mjs --regions 1,2 --steps 60 --warm 60 --out tools/scaling/.out/t7.json` が exit 0 で、`runs` が 2 件、各件に目的欄の項目がすべてある
+  - [ ] 区画数 2 の実行で `countsStart` の合計と `countsEnd` の合計が等しい(個体が消えたり増えたりしない)
+  - [ ] 区画数 4 を `--regions 4 --steps 60 --warm 60` で実行すると exit 0 になり、`msPerStep` と `handoversPer1000` が表に出る
+- **依存**: なし
 
-## T8: 水棲適応 aqua
-- **目的**: 湖を「誰にとっても不利な場所」から一つのニッチにする。T7 と同じ関数を触るので T7 の後に行う
-- **対象**: `src/sim/genetics.js`、`src/sim/creatures.js`、`src/sim/config.js`
+## T8: 領域分割の SharedArrayBuffer 同期と決定性の確認
+- **目的**: T7 の領域分割に、`SharedArrayBuffer` と `Atomics` による毎ステップの同期を足し、決定性を確かめる。設計は次のとおり。`--sync message,atomics` で両方を測れるようにする。atomics のとき、main は `ctrl = new Int32Array(new SharedArrayBuffer(8))`(`ctrl[0]` = 世代、`ctrl[1]` = 終わった worker の数)と、worker ごとに受け取り箱・送り出し箱(各 `new SharedArrayBuffer(4 + 2 ** 20)`。先頭 4 バイトに長さ、その後に JSON を UTF-8 で書く)を `workerData` で渡す。各ステップで main は受け取り箱に行き先ごとの `immigrants` の JSON を書き、`Atomics.store(ctrl, 1, 0)`、`Atomics.add(ctrl, 0, 1)`、`Atomics.notify(ctrl, 0)` の後、`ctrl[1]` が区画数になるまで `Atomics.wait(ctrl, 1, 現在値)` で待ち、送り出し箱を読む。worker は `Atomics.wait(ctrl, 0, 前の世代)` で待ち、受け取り箱を読んで 1 ステップ進め、送り出し箱に `{ emigrants, computeMs, handoverMs, count }` の JSON を書き、`Atomics.add(ctrl, 1, 1)` と `Atomics.notify(ctrl, 1)` をする。共有メモリから読むときは `slice` で複製してから `TextDecoder` に渡す。最後の `hash` は message と同じく postMessage で取る(そのため worker は終了の合図で待ちを抜ける)。あわせて `--repeat 2` で同じ条件を 2 回実行し、各実行に `hashMatch`(1 回目と同じハッシュか)を記録する
+- **対象**: `tools/scaling/region-worker.mjs`、`tools/scaling/region-bench.mjs`
+- **要件**: R4
+- **参照ファイル**:
+  - `tools/scaling/region-worker.mjs`(変更対象。atomics の待ちを足す)
+  - `tools/scaling/region-bench.mjs`(変更対象。--sync と --repeat を足す)
 - **受け入れ基準**:
-  - [ ] `aqua` が `randomGenome` で生成され、`cloneGenome` `recombine` `mutate` で扱われる(0〜1 にクランプ。古いゲノムは 0)
-  - [ ] 水中の費用が `aqua` に応じて下がり(最大 80% 減)、水中での減衰も下がる
-  - [ ] `aqua` に応じて陸上の基礎代謝が増える(係数は `CFG` に置く)
-  - [ ] `nicheDistance` に `aqua` の差が加わる
-  - [ ] 1 個体あたりの剛体・当たり判定の数が変わらない(`physicsCounts()` ÷ 生物数を変更前後で報告する)
-  - [ ] `npm run check:sim` が完走する
+  - [ ] `node tools/scaling/region-bench.mjs --regions 2 --sync message,atomics --steps 60 --warm 60 --out tools/scaling/.out/t8.json` が exit 0 で、`runs` に `sync` が `message` と `atomics` の 2 件がある
+  - [ ] 同じ条件の message と atomics の `hash` が一致する(同期の方法で結果が変わらない)
+  - [ ] `--regions 2 --sync atomics --repeat 2 --steps 60 --warm 60` の 2 件目の `hashMatch` が true
+  - [ ] 実行後にプロセスが残らずに終わる(コマンドが戻る)
 - **依存**: T7
 
-## T9: 肉食の祖先
-- **目的**: 肉食のニッチが成立しない問題(feature の問題 2)に対し、まず創始集団に肉食を用意する。維持の調整は T10 で行う
-- **対象**: `src/sim/genetics.js`(`randomGenome`)、`src/sim/creatures.js`(`spawnFounderGroup`)、必要に応じて `src/sim/founder.js`
-- **受け入れ基準**:
-  - [ ] `randomGenome` の `diet` が 0〜1 の全域から生成される
-  - [ ] 初期の 14 種のうち、`diet` ≥ 0.75 の創始集団が seed 1〜3 のそれぞれで 1 つ以上ある(確認結果を報告に貼る)
-  - [ ] `npm run check:sim` が完走する(この時点では肉食が維持されなくてよい)
-- **依存**: T1
-
-## T10: 生態的種分化と係数の調整
-- **目的**: T3 の計測ツールで、計画の「成功基準」をすべて満たすまで係数を調整する。T5(土壌)・T6(川)・T8(`tTol` `aqua`)・T9(肉食の祖先)がそろった状態で行う。T1 で生成時間の増加が計算量によると判明していれば、その削減もここで行う
-- **対象**: `src/sim/config.js`(`DIET_*` `CROWD_*` `PLAGUE_*`・ニッチ距離の重み・`tTol` `aqua` の代償)、必要に応じて `src/sim/interactions.js`(捕食の係数・死骸のエネルギー)、`src/sim/genetics.js`
-- **受け入れ基準**:
-  - [ ] `nicheDistance` の重みが `CFG` に移っている
-  - [ ] `npm run check:diversity`(seed 1, 2, 3、18000 ステップ)で、2 年時点の実効種数の平均 6 以上かつ各シード 5 以上、個体数が各シード 80 以上、食性ニッチの実効数の平均 2.2 以上、1〜2 年の間に移入が起きないシードが過半。最終的な係数と表を報告に貼る
-  - [ ] 個体数の減りすぎの主因(密集・疫病・食性)を、係数を 1 つずつ戻した計測で切り分けて報告している
-  - [ ] 川あり・なしの実効種数を比較し、改善がなければ川を既定で無効にしている(比較の表を報告に貼る)
-  - [ ] 「性能の判定方法」の 3 点を T1 の基準値に対して満たす(数値を報告に貼る)
-- **依存**: T3, T5, T6, T8, T9
-
-<!-- グループ D: UI の簡素化 -->
-
-## T11: ヘッダーと操作ヒントの簡素化
-- **目的**: 文章量と画面占有率を減らし、3D 画面を広く見せる
-- **対象**: `index.html`、`src/styles.css`、`src/ui/header.js`、`src/app/store.js`(性能表示の既定)
-- **受け入れ基準**:
-  - [ ] 副題 `EVOLUTION TERRARIUM` が削除され、計器が単位と短いラベルになっている(例: `2.3年 夏 18.4℃ 湖+0.3 晴 個体182 種11 世代34`)
-  - [ ] 操作ボタンの説明が `title` 属性にあり、ボタン横の説明文は無い
-  - [ ] ヘッダーが幅 1280px で 1 行に収まる(ブラウザ確認。できない場合はその旨を報告する)
-  - [ ] `#hint` が初回のみ数秒表示して消える
-  - [ ] 性能表示の既定が非表示になり、保存済みの設定があればそれに従う
-- **依存**: T1
-
-## T12: 右パネルの縮小と折りたたみ・統計タブの整理
-- **目的**: 右パネルの占有を減らし、feature で増えた「多様性」節を既存のグラフへ統合する。T2 の `computeDiversity` の値を使う
-- **対象**: `index.html`、`src/styles.css`、`src/ui/panels/stats-panel.js`、`src/ui/controls.js`、`src/app/store.js`
-- **受け入れ基準**:
-  - [ ] 右パネルの幅が 280px 以下。折りたたみボタン(とキー操作)で 3D 画面が全幅になり、状態がページ再読み込み後も保たれる
-  - [ ] 「多様性」節が無くなり、「個体数と種数」のグラフに実効種数の線がある。最大の種と疫病が 1 行で表示される。「繁殖」の表が 2 列の小さな表になっている
-  - [ ] `index.html` の静的な表示文字数(タグ・属性を除いたテキスト)が T1 時点(`git show <T1のコミット>:index.html`)より 40% 以上少ない。数え方のコマンドと前後の数値を報告に含める
-  - [ ] ブラウザでの表示確認の結果を報告する(できない場合はその旨を報告する)
-- **依存**: T2
-
-## T13: 個体タブ・系統樹タブの整理
-- **目的**: 個体タブの文章を図に置き換え、縦の長さを縮める。T7・T8 で追加した `tTol` `aqua` も図で見せる
-- **対象**: `index.html`、`src/styles.css`、`src/ui/panels/inspector-panel.js`、`src/ui/panels/tree-panel.js`
-- **受け入れ基準**:
-  - [ ] 記録表が 2 列グリッドになっている
-  - [ ] 食性(3 本の小さな帯)、適温(`topt ± tTol` の帯)、水棲度(小さなバー)が図で表示され、効率の数値を並べた文章は無い
-  - [ ] 費用の 5 列(基礎・運動・寒暖・水中・密集)が 1 本の積み上げ帯になっている
-  - [ ] 系統樹タブの説明が 1 行以内になり、詳細は `title` 属性(ホバー)で読める
-  - [ ] ブラウザでの表示確認の結果(個体タブの縦の長さが T1 時点より短いこと)を報告する(できない場合はその旨を報告する)
-- **依存**: T8
-
-<!-- グループ F: 世界の設定とタイトル画面 -->
-
-## T15: 世界の設定を Sim に渡せるようにする(地形・土壌・気候)
-- **目的**: タイトル画面で選ぶ「世界の設定」を sim が受け取れるようにする。設定を省略したときの世界は今までとまったく同じにする
-- **対象**: `src/sim/world-settings.js`(新規)、`src/sim/sim.js`、`src/sim/terrain.js`、`src/sim/climate.js`、`src/sim/index.js`、`tools/sim-check.mjs`、`tools/diversity-check.mjs`(と `tools/diversity-worker.mjs`)
-- **受け入れ基準**:
-  - [ ] `world-settings.js` に `DEFAULT_SETTINGS`、`normalizeSettings(partial)`(欠けた項目を既定値で埋め、範囲外をクランプして凍結した新しいオブジェクトを返す。引数は書き換えない)、カテゴリ別のテンプレート `SETTING_PRESETS` がある。`src/sim/index.js` から export されている
-  - [ ] 設定項目と範囲: 山の数 `mtnCount`(`null`=シード任せの 1〜3、または 0〜5)、山の高さ `mtnHeight`(倍率 0.4〜1.8)、湖の数 `lakeCount`(`null`=1〜3、または 0〜4)、湖の広さ `lakeSize`(湖の面積合計の倍率 0.4〜2.0)、土壌の傾向 `soil`(岩場・砂地・肥沃・泥炭の重み 4 要素、各 0〜1、合計 0 は均等扱い)、気温の傾向 `tempOffset`(平均気温のずれ -8〜+8℃)、季節の振れ幅 `seasonAmp`(倍率 0.5〜1.5)、降水の傾向 `wetness`(-1〜1。雨・干ばつの起こりやすさ)
-  - [ ] テンプレートは少なくとも 地形(標準・山岳・湖沼・平原)、土壌(標準・肥沃・荒れ地・湿地)、気候(標準・温暖・寒冷・乾燥・多雨)の 3 カテゴリで、各テンプレートは自分のカテゴリの項目だけを持つ(`{ id, name, desc, values }`)
-  - [ ] `new Sim(RAPIER, seed, { settings })` で設定を受け取り、正規化した値を `sim.settings` に持つ。土壌は重みの累積で分位点を決め、既定(均等)では今までと同じ 4 等分になる
-  - [ ] 設定を省略した場合と `DEFAULT_SETTINGS` を渡した場合の両方で、`npm run check:sim` の状態ハッシュがこの変更の直前と一致する(既定値のときは乱数の消費順を変えない)
-  - [ ] `node tools/sim-check.mjs <ステップ数> <シード> --settings <テンプレートID|JSON>` と `node tools/diversity-check.mjs ... --settings <...>` で設定を指定できる(例: `--settings terrain:mountain` や `--settings '{"lakeCount":4}'`)
-  - [ ] すべてのテンプレート(単独適用)と、各項目の最小値・最大値で、seed 1〜3 の世界が生成でき、陸地の割合が 40〜90% に収まる。600 ステップが例外なく完走する(確認スクリプトの出力を報告に貼る。確認スクリプトはコミットしない)
-  - [ ] 地形・気候の極端なテンプレート(山岳・湖沼・寒冷・乾燥)で `node tools/diversity-check.mjs 9000 1 --settings <ID>` を実行し、1 年時点の個体数・実効種数・移入回数を表で報告する。移入が 3 回を超えるテンプレートは値を穏やかにする
-- **依存**: T6, T10, T21
-
-## T16: 世界の広さを設定できるようにする
-- **目的**: `CFG.WORLD` `CFG.GRID` と、それから求める `EDGE` を世界ごとの値にし、タイトル画面で広さを選べるようにする。既定の広さ(120)の世界は今までとまったく同じにする
-- **対象**: `src/sim/world-settings.js`、`src/sim/config.js`、`src/sim/sim.js`、`src/sim/terrain.js`、`src/sim/flora.js`、`src/sim/creatures.js`、`src/sim/interactions.js`、`src/render/terrain-view.js`、`src/render/environment-view.js`、`src/render/scene.js`(カメラの初期位置・霧)
-- **受け入れ基準**:
-  - [ ] 設定に広さ `size`(一辺 80〜160 m、既定 120)が加わり、テンプレートに 広さ(狭い 90・標準 120・広い 150)のカテゴリがある
-  - [ ] 格子の分割数は 1 格子の大きさ(120/64)を保つように広さから決まり、`sim.size` `sim.grid` `sim.edge`(または同等の値)として sim から読める。`src/` と `tools/` で `CFG.WORLD` `CFG.GRID` と `config.js` の `EDGE` を直接参照している箇所が無い(`grep -rn "CFG\.WORLD\|CFG\.GRID\|\bEDGE\b" src tools` の結果を報告に貼る)
-  - [ ] 山・湖・隆起の置き場所の範囲が広さに比例する。`MAX_POP` `MIN_POP` `MAX_PLANTS` は面積に比例して増減する(既定の広さでは今までと同じ値)
-  - [ ] 既定の広さで `npm run check:sim` の状態ハッシュがこの変更の直前と一致する
-  - [ ] 広さ 80・120・160 のそれぞれで seed 1〜3 が 600 ステップ完走し、陸地の割合が 40〜90%。広さ 150 の 1 ステップ平均を既定と並べて報告する(性能予算の判定は既定の広さだけで行う)
-  - [ ] ブラウザで広さ 90 と 150 の世界を作り、地形・水面・植物・カメラの初期位置が広さに合っていることを確認する(できない場合はその旨を報告する)
-- **依存**: T15
-
-## T17: タイトル画面と世界の設定画面
-- **目的**: 起動するとまずタイトル画面を出し、テンプレートか詳細設定で世界を決めてから始められるようにする
-- **対象**: `index.html`、`src/styles.css`、`src/ui/title-screen.js`(新規)、`src/app/main.js`、`src/app/store.js`、`src/ui/controls.js`、`src/ui/header.js`
-- **受け入れ基準**:
-  - [ ] 起動直後はタイトル画面が表示され、「はじめる」を押すまで世界を生成しない(物理エンジンの読み込みはタイトル画面の表示中に裏で始める)
-  - [ ] カテゴリ(広さ・地形・土壌・気候)ごとに `SETTING_PRESETS` のテンプレートがボタン(または選択肢)で並び、カテゴリごとに 1 つ選べる。各テンプレートの説明は 1 行または `title` 属性にある
-  - [ ] 「詳細設定」を展開すると、少なくとも シード値(数値入力と乱数で決め直すボタン)、広さ、山の高さ・数、湖の広さ・数、土壌の傾向、気候の傾向(気温・季節の振れ幅・降水)を個別に変えられる。テンプレートを選ぶと詳細設定の値がそれに合わせて変わり、詳細設定を手で変えるとそのカテゴリの表示が「カスタム」になる
-  - [ ] 画面の入力を設定オブジェクトに変換する処理は DOM に依存しない関数に分け、Node から呼べる(テンプレート選択→詳細値、詳細値→設定、設定→`normalizeSettings` の往復を確かめる確認スクリプトの出力を報告に貼る)
-  - [ ] 「新しい世界」ボタンでタイトル画面に戻り、前回の設定が残っている(シードは決め直す)。戻ったあと「キャンセル」で今の世界に戻れる。最後に使った設定はブラウザに保存され、保存できない環境でも動く
-  - [ ] 実行中の世界のシードと設定名(テンプレート名または「カスタム」)を画面上で確認できる(ヘッダーの `title` 属性やログでよい)。同じシード・同じ設定で始めると同じ世界になる
-  - [ ] ブラウザで、テンプレートを変えて 2 回世界を作り、地形が変わることと、詳細設定を開閉できることを確認する(できない場合はその旨を報告する)
-- **依存**: T11, T16
-
-<!-- グループ E: 文書 -->
-
-## T14: 構成メモの更新
-- **目的**: 追加した仕組みと計測ツールを、次の作業者が辿れるようにする
-- **対象**: `ARCHITECTURE.md`、`AGENTS.md`(テスト・検証の注意の節)
-- **受け入れ基準**:
-  - [ ] `ARCHITECTURE.md` に `diversity.js`、土壌、ニッチ形質(`diet` `topt` `tTol` `aqua`)、密集と疫病の説明、「ニッチ形質を増やす」の変更の入口が書かれている
-  - [ ] `AGENTS.md` の動作確認の節に `npm run check:diversity` の使い方(引数・所要時間の目安)が書かれている
-  - [ ] `ARCHITECTURE.md` に世界の設定(`world-settings.js`・テンプレート・広さに応じて変わる値)とタイトル画面の説明、「設定項目・テンプレートを増やす」の変更の入口が書かれ、`AGENTS.md` に `--settings` の使い方が書かれている
-- **依存**: T5, T10, T12, T13, T17, T22
-
-<!-- Issue #10 の追加分(グループ C に属する) -->
-
-## T18: ばらつきに強い判定を計測ツールに加える
-- **目的**: Issue #10 の「計測」。2 年時点の 1 点で判定すると結果が大きくばらつくため、2〜3 年の区間を 0.25 年ごとに集計し、その中央値で成功基準を判定する。基準の値(実効種数の平均 6 以上かつ各シード 5 以上、個体数が各シード 80 以上、食性ニッチの実効数の平均 2.2 以上、移入が起きないシードが過半)は変えない。移入の基準は判定区間に合わせて「2〜3 年の間に移入が起きない」と読み替える。sim には手を入れない
-- **対象**: `tools/diversity-check.mjs`、`tools/diversity-worker.mjs`
-- **実装の骨格**:
-  - worker: 集計の間隔を `INTERVAL_STEPS = Math.round((CFG.YEAR / 4) / CFG.DT)`(0.25 年)にする。各行に植物の数 `plantSoft`(`p.sp.soft` が真)と `plantHard`(偽)を加える
-  - check: 既定のステップ数を 27000(3 年)にする。表に「草類」「木類」の列を加える。全シードの表の後に「判定」の節を出す
-  - 判定: 各シードについて `2 - 1e-6 <= row.year <= 3 + 1e-6` の行を取り、個体数・実効種数・食性実効の中央値を求める(`median(xs)`: 並べ替えて、要素数が奇数なら中央、偶数なら中央 2 つの平均)。2〜3 年の移入は「区間の最後の行の `invasions` − 区間の最初の行の `invasions`」。該当する行が無いときは「判定: 2〜3 年の区間が無いため省略」とだけ出す
-  - 判定の出力: シードごとに 1 行(seed・個体数・実効種数・食性実効・2〜3 年の移入の中央値と回数)、平均の行、続けて 5 つの基準ごとに `○` か `×` と実測値を 1 行ずつ出す
-- **受け入れ基準**:
-  - [ ] `npm run check:diversity` が既定で 27000 ステップを実行し、シードごとの表が 0.25 年ごとの 12 行で、「草類」「木類」の列を持つ
-  - [ ] 表の後に「判定」の節が出て、シードごとの中央値・平均と、5 つの基準の `○` / `×` が表示される。`node tools/diversity-check.mjs 9000 1` のように区間が無いときは省略の 1 行だけが出る
-  - [ ] sim に手を入れていないので、`npm run check:sim` の状態ハッシュが `237360e724599b4f` のまま
-  - [ ] 現在のコードで `npm run check:diversity` を実行した出力の全体を報告に貼る(以降のタスクの比較基準になる)
+## T9: 島モデルの試作(独立した世界と、ときどきの移住)
+- **目的**: 80 m の島 4 つを worker_threads で並行に動かし、一定の間隔で少数の個体を移す試作を作る。設計は次のとおり。
+  1. `tools/scaling/island-worker.mjs`: `workerData` で `{ index, seed, size }` を受け取り、`new Sim(RAPIER, seed, { settings: { size } })` を作る。メッセージ: `{ type: 'run', steps }` は進めて `{ computeMs }` を返す。`{ type: 'stats' }` は `{ living, speciesCounts: [[sp.id, 数]], dietCounts: [草, 葉, 肉], div: computeDiversity(sim) の effSpecies と effDiet }` を返す(食性の分け方は `tools/diversity-worker.mjs` の `DIET_EDGE` と同じ)。`{ type: 'emigrate', k, rngSeed }` は `makeRng(rngSeed)` で、生きている個体を id 順に並べた中から重複なく k 体選び、`{ genome: cloneGenome(genome), energyFrac: energy / maxE }` を書き出し、`c.species.count--` の後に `removeCreature(sim, c)` して、その一覧を返す。`{ type: 'immigrate', migrants, rngSeed }` は `makeRng(rngSeed)` で各個体の置き場所を `±(sim.edge − 10)` から最大 20 回引き(`sim.isWater` を避ける。置けなければその個体は捨てて数える)、生きている個体がいる種のうち `sim.interfertile(sp.rep, genome)` が真で個体数が最大の種に入れ、無ければ `newSpecies(sim, genome, null, true)` を作り、`spawnCreature(sim, genome, x, z, { species, energyFrac, gen: 0 })` で置く。`{ placed, dropped }` を返す
+  2. `tools/scaling/island-run.mjs`: `node tools/scaling/island-run.mjs [--islands 4] [--size 80] [--steps 27000] [--seeds 1] [--conditions 0x0,1500x2] [--out <path>]`。条件 `<間隔>x<人数>` の間隔 0 は移住なし。島 i のシードは `seed * 100 + i`。1 回の実行(シード × 条件)では、`gcd(間隔, 2250)`(間隔 0 なら 2250)ステップずつ全島に `run` を送って待つ。進んだステップ数が間隔の倍数なら、全島に `emigrate`(`k = 人数`、`rngSeed = seed * 1e6 + 進んだステップ数 + i`)を送り、島 i の個体を島 `(i + 1) % 島数` に `immigrate` する。2250 ステップ(0.25 年)ごとに全島の `stats` を集め、島ごとの値と、群島全体の値(種は `島番号:sp.id` を別の種として数えた実効種数 exp(H)、食性は `dietCounts` の合計から求めた実効数、個体数の合計、種数の合計)を行に記録する。行には壁時間の ms/ステップと、それを全体の個体数で割った値も入れる。シードは並行に、条件は順に実行する。結果 `{ date, islands, size, steps, runs: [{ seed, interval, migrants, rows, migrated, dropped, summary }] }` を `--out` に書き、`summary` には `[年数 × 2/3, 年数]` の区間の中央値を入れる
+- **対象**: `tools/scaling/island-worker.mjs`(新規)、`tools/scaling/island-run.mjs`(新規)
+- **要件**: R5
 - **参照ファイル**:
-  - `tools/diversity-check.mjs`(変更対象。表の出力と子プロセスの起動)
-  - `tools/diversity-worker.mjs`(変更対象。集計の間隔と各行の値)
-  - `docs/plans/biodiversity.md:287-295`(成功基準)
-- **依存**: T10
-- **グループ**: C
-
-## T19: 草類と木類で植物の枠を分ける
-- **目的**: Issue #10 の「植物の枠」。植物の数が上限 `MAX_PLANTS`(2000)に張り付き、寿命の長い木が枠を占めて草が減っていく。草類(`soft` が真の草・花・葦・苔)と木類(偽の低木・広葉樹・針葉樹・サボテン)で上限を分け、互いの枠を奪わないようにする。合計は 2000 のまま(性能の予算を守る)。T18 の判定で配分を決める
-- **対象**: `src/sim/config.js`、`src/sim/flora.js`
-- **実装の骨格**:
-  - `CFG` に `MAX_SOFT_PLANTS` と `MAX_HARD_PLANTS` を足す。合計が `MAX_PLANTS` と等しいことをコメントに書く
-  - `Flora` に数 `this.nSoft` `this.nHard` を持たせ、`add` で増やし、`remove` で減らす(毎回数え直さない)。`full(sp)` = `sp.soft ? this.nSoft >= CFG.MAX_SOFT_PLANTS : this.nHard >= CFG.MAX_HARD_PLANTS`
-  - `trySeed`: 既存の `plants.length >= CFG.MAX_PLANTS` の早期 return は残す。`sp` が無いときの種の選択ループでは `full(s)` の種を飛ばす。`sp` が与えられたときは `full(sp)` なら `null` を返す
-  - 配分の候補は 草類:木類 = 1400:600、1200:800、1000:1000 の 3 通り。それぞれ T18 の `npm run check:diversity` で判定し、満たす基準が最も多い案を採る(同数なら実効種数の平均が高い案)
+  - `tools/diversity-worker.mjs`(行の作り方と食性の分け方を真似る)
+  - `src/sim/creatures.js:34-48`(spawnCreature と newSpecies)
+  - `src/sim/creatures.js:99-104`(removeCreature)
+  - `src/sim/speciation.js:6-8`(interfertile)
 - **受け入れ基準**:
-  - [ ] `CFG.MAX_SOFT_PLANTS + CFG.MAX_HARD_PLANTS === CFG.MAX_PLANTS`(2000)で、`Flora` が草類と木類の数を `add` / `remove` で保っている
-  - [ ] 採用した配分の `npm run check:diversity` で、全シードの全行で「草類」≤ `MAX_SOFT_PLANTS`、「木類」≤ `MAX_HARD_PLANTS` になっている
-  - [ ] 3 通りの配分の「判定」の節を並べて報告に貼り、採用した配分と理由を書く
-  - [ ] 「性能の判定方法」1 を満たす(変更の直前と交互に 3 回ずつ `npm run check:sim` を実行した中央値を報告に貼る)
-  - [ ] 規則を変えたので状態ハッシュが変わる。新しいハッシュを報告に書く
-- **参照ファイル**:
-  - `src/sim/flora.js:30-72`(変更対象。`trySeed` `add` `remove`)
-  - `src/sim/config.js:17`(変更対象。`MAX_PLANTS`)
-  - `src/sim/plant-species.js`(植物の種類ごとの `soft`)
-  - `docs/plans/biodiversity.md:279-285`(性能の判定方法)
-- **依存**: T18
-- **グループ**: C
+  - [ ] `node tools/scaling/island-run.mjs --steps 2250 --seeds 1 --conditions 750x2 --out tools/scaling/.out/t9.json` が exit 0 で、`runs[0].rows` が 1 行、`migrated` が 24(3 回 × 4 島 × 2 体)から `dropped` を引いた数と矛盾しない
+  - [ ] `--conditions 0x0` の実行で `migrated` が 0
+  - [ ] 同じコマンドを 2 回実行したとき、`runs[0].rows[0]` の群島全体の実効種数と個体数が一致する
+  - [ ] 行に、島ごとの値と群島全体の値(個体数・種数・実効種数・食性実効・ms/ステップ・個体あたりの ms)がある
+- **依存**: なし
 
-## T20: 木の葉が食べられない原因を調べる
-- **目的**: Issue #10 の「餌の見つけやすさ」。木の葉のエネルギーは余っているのに、個体は飢える。その原因を、届く高さ `CANOPY`、感知の条件 `DIET_SENSE`、行動の 3 つの観点から切り分けて報告する。**調査と報告だけを行い、sim の振る舞いは変えない**(直し方は結果を見て利用者が決める)
-- **対象**: `src/sim/interactions.js`、`src/sim/sim.js`
-- **実装の骨格**:
-  - `sim.js` のコンストラクタで `this.feedStats = { graze: 0, browseHigh: 0, browseLow: 0, browseHighN: 0, browseLowN: 0, meat: 0 }` を作る。状態ハッシュの対象(`sim.counters`)には入れない
-  - `interactions.js` の `graze` `browse` `applyHit` で、`feed` に渡したエネルギーを `feedStats` の該当する項目に足す。`browse` では `high` の真偽で `browseHigh` / `browseLow` と回数 `browseHighN` / `browseLowN` を分ける。`applyHit` の生きた獲物と死骸の両方を `meat` に足す
-  - 調査のスクリプトはスクラッチに置き、コミットしない。`Sim` を seed 1〜3 で 18000 ステップ進め、0.25 年ごとに `feedStats` の差分と個体の状態を読む
+## T10: 物理の詳細度の切り替え(LOD)の実現性を測る
+- **目的**: 遠くの個体を点として動かす案の前提を測るスクリプト `tools/scaling/lod-check.mjs` を作る。CLI は `node tools/scaling/lod-check.mjs [--seed 1] [--warm 9000] [--window 600] [--sample 60] [--out <path>]`。手順は次のとおり。
+  1. `new Sim(RAPIER, seed)` を `warm` ステップ進める。生きている個体の根の位置を控え、さらに `window` ステップ進め、その間ずっと生きていた個体の水平の移動距離を `window × CFG.DT` で割って「本来の物理での速さ」にする
+  2. その個体を id 順に並べた先頭 `sample` 体について、`trialDistance(sim, c.genome, 6) / (6 − 40 × CFG.DT)`(`founder.js` の試走。i = 40 から測るため)を「試走の速さ」にする。両者のピアソンの相関係数とスピアマンの順位相関係数を求める
+  3. 同じ個体について、外す(全体節の `sim.colliderOwner.delete(col.handle)` と `sim.world.removeRigidBody(b)`)のと、付け直す(`buildBody(sim.R, sim.world, c.genome, x, z, (a, b) => sim.heightAt(a, b), Math.atan2(h.z, h.x))`。`x` `z` は外す前の根の位置、`h = heading(外す前の c.rot[0])`。体を `c` に入れ直し、`colliderOwner` に `{ kind: 'c', obj: c, part: i }` を登録し、`readPose(c)` する)のにかかった時間を個体ごとに測り、中央値を出す(向きの一致は確かめない)
+  4. 付け直した後に sim を 30 ステップ進め、その間に「いずれかの体節の `pos.y` が `sim.heightAt(x, z) − 0.2` を下回った」個体の割合を `sinkRate`、「根の体節の速さ `linvel()` が 6 m/s を超えた」個体の割合を `spikeRate` とする
+  結果 `{ date, seed, warm, window, n, pearson, spearman, pairs: [[試走, 本来]], detachMs, attachMs, sinkRate, spikeRate }` を表示し、`--out` に書く
+- **対象**: `tools/scaling/lod-check.mjs`(新規)
+- **要件**: R6
+- **参照ファイル**:
+  - `src/sim/founder.js:32-51`(trialDistance)
+  - `src/sim/body.js:13-14`(buildBody の引数)
+  - `src/sim/body.js:130-137`(heading)
+  - `src/sim/creatures.js:34-44`(体の登録のしかた)
+  - `src/sim/creatures.js:99-104`(体の外し方)
 - **受け入れ基準**:
-  - [ ] 振る舞いを変えないので、`npm run check:sim` の状態ハッシュが変更の直前(T19 の後)と一致する
-  - [ ] 食性の 3 分類(草・葉・肉。`diet` < 0.25、< 0.75、それ以上)ごとに、`graze` `browseHigh` `browseLow` `meat` から得たエネルギーの個体・秒あたりの値と、`browse` のうち高い位置で食べた割合を、seed 1〜3 の表で報告する
-  - [ ] 届く高さ: 各個体の体の部分の最も高い位置(`c.pos[i]` の y − 足元の地面の高さ)の分布と、木の `CANOPY * p.size`(約 0.8〜1.4 m)を比べ、葉に届く個体の割合を報告する
-  - [ ] 感知: `diet` 0, 0.25, 0.5, 0.75, 1 の `dietEfficiency` の `hard` と `DIET_SENSE`(0.8)を比べた表と、葉の分類の個体のうち `c.sense.plant` が木類である割合を報告する
-  - [ ] 原因の順位と、考えられる直し方(変える値・規則と、見込まれる効果)を報告にまとめる
-- **参照ファイル**:
-  - `src/sim/interactions.js:34-90`(変更対象。`feed` `graze` `browse` `applyHit`)
-  - `src/sim/sim.js:28-60`(変更対象。コンストラクタ)
-  - `src/sim/creatures.js:125-165`(`sense`。感知の条件)
-  - `src/sim/genetics.js:217-221`(`dietEfficiency`)
-- **依存**: T19
-- **グループ**: C
+  - [ ] `node tools/scaling/lod-check.mjs --warm 600 --window 300 --sample 20 --out tools/scaling/.out/t10.json` が exit 0 で、JSON に目的欄の項目がすべてある
+  - [ ] `n` が 10 以上で、`pearson` と `spearman` が −1〜1 の数
+  - [ ] `detachMs` `attachMs` が正の数、`sinkRate` `spikeRate` が 0〜1 の数
+- **依存**: なし
 
-## T21: 湖の面積を CFG に移し、陸の植物とのつり合いを取る
-- **目的**: Issue #10 の「湖の多い地形」。T4 で湖が増えたため、水の費用が重い。湖の面積の割合 `LAKE_FRAC` を `CFG` に移し、陸の植物の量とのつり合いを見て調整する。湖の数(1〜3 個)は変えない(T15 の `lakeCount` が前提にしている)。最後に、Issue #10 の対策をそろえた状態で成功基準を判定する。**基準を満たさない場合は、ほかの値を追加で変えず、未達として報告する**(利用者が判断する)
-- **対象**: `src/sim/config.js`、`src/sim/terrain.js`
-- **実装の骨格**:
-  - `terrain.js` の `const LAKE_FRAC = 0.15` を消し、参照を `CFG.LAKE_FRAC` に置き換える。`CFG` には `LAKE_FRAC: 0.15` を足す(この段階で振る舞いは変わらない)
-  - 陸地の割合は、`EDGE` の範囲を 64×64 の格子で `terrain.heightAt(x, z) > sim.climate.water` を数えて求める(調べるスクリプトはコミットしない)
-  - 候補は `LAKE_FRAC` = 0.15、0.11、0.08 の 3 通り。T18 の判定で満たす基準が最も多い案を採る(同数なら実効種数の平均が高い案)
+## T11: V3・V4・V5 の結果と判断をまとめる
+- **目的**: V3・V4・V5 の結果を `docs/plans/scaling-study.md` の各節に書く。**親の事前作業**: `node tools/scaling/region-bench.mjs --regions 1,2,4 --sizes 120,160 --sync message,atomics --steps 900 --warm 900 --repeat 2 --out docs/plans/scaling-data/v3.json`、`node tools/scaling/island-run.mjs --steps 27000 --seeds 1,2,3 --conditions 0x0,1500x2,1500x8,6000x2,6000x8 --out docs/plans/scaling-data/v4-islands.json`、`node tools/scaling/lod-check.mjs --out docs/plans/scaling-data/v5-lod.json` を実行してコミットする。書く内容と判断の基準:
+  - V3: 広さ・同期方式ごとに、区画数と速くなる比率(区画数 1 の `msPerStep` ÷ その区画数の `msPerStep`)・syncMs・imbalance・handoversPer1000・handoverMsPerCreature の表。同期方式の比較(syncMs の差)。決定性は、`--repeat 2` の `hashMatch` がすべて true で、message と atomics の hash が一致すれば「保てる」。区画数 1 と区画数 2 以上の hash は一致しない(区画の境界で衝突しなくなる)ことも書く
+  - V4: 条件ごとに、群島全体と島ごと(平均)の実効種数・食性実効・個体数・ms/ステップ・個体あたりの ms と、V0 の 160 m 条件(`v0-size160.json`)の同じ値を並べた表。群島全体の実効種数が 160 m より 20% 以上高い条件があれば「多様性に効果あり」
+  - V5: n・ピアソン・スピアマン・外す/付け直す時間・sinkRate・spikeRate の表。ピアソンが 0.7 以上、外す+付け直すの中央値の合計が 0.5 ms 以下、sinkRate が 0.05 以下をすべて満たせば「採用できる」、そうでなければ満たさない項目を書いて「このままでは採用できない」
+- **対象**: `docs/plans/scaling-study.md`
+- **要件**: R4, R5, R6
+- **参照ファイル**:
+  - `docs/plans/scaling-study.md`(変更対象。V3・V4・V5 の節を書く)
+  - `docs/plans/scaling-data/v3.json`(親が置く結果)
+  - `docs/plans/scaling-data/v4-islands.json`(親が置く結果)
+  - `docs/plans/scaling-data/v5-lod.json`(親が置く結果)
+  - `docs/plans/scaling-data/v0-size160.json`(V4 の比較相手)
 - **受け入れ基準**:
-  - [ ] `LAKE_FRAC` を `CFG` に移しただけの段階で、`npm run check:sim` の状態ハッシュが変更の直前と一致する
-  - [ ] 3 通りの値について、seed 1〜3 の陸地の割合と、0 年時点の草類・木類の数を表で報告する。どの案も陸地の割合が 40〜90% に収まる
-  - [ ] 3 通りの値の「判定」の節を並べて報告に貼り、採用した値と理由を書く。値を変えた場合は新しい状態ハッシュを書く
-  - [ ] 採用した値で 5 つの基準をすべて満たすかを報告に明記する。1 つでも `×` が残る場合は、未達としてタスクを完了せずに報告する
-- **参照ファイル**:
-  - `src/sim/terrain.js:1-80`(変更対象。`LAKE_FRAC` と湖の生成)
-  - `src/sim/config.js`(変更対象)
-  - `docs/plans/biodiversity.md:142-208`(T10 の結果。水の費用の分析)
-- **依存**: T19, T20, T23
-- **グループ**: C
+  - [ ] V3 の節に、区画数と速くなる比率の表・同期方式の比較・決定性の結論がある
+  - [ ] V4 の節に、5 条件と 160 m の単一の世界を並べた表と、目的欄の基準による結論がある
+  - [ ] V5 の節に、目的欄の項目の表と、基準による判断がある
+  - [ ] 表の数値が各 JSON の値と一致する
+  - [ ] 3 つの節の本文から `(未記入)` が消えている
+- **依存**: T3, T8, T9, T10
 
-## T22: Issue #10 の結果を計画の文書に書く
-- **目的**: T18〜T21 の結果を、次の作業者が辿れるように計画の文書に残す
-- **対象**: `docs/plans/biodiversity.md`
+<!-- グループ C: ブラウザでの計測(V2 Worker 化・V6 描画の上限)とまとめ -->
+
+## T12: 描画の上限を測る計測ページ(V6)
+- **目的**: 個体数を変えて描画の所要時間を測るページを作る。設計は次のとおり。
+  1. `src/render/creature-view.js`: コンストラクタを `constructor(scene, { markerColor, maxParts = MAX_PARTS })` にし、`this.maxParts = maxParts` を InstancedMesh の数(胴は `maxParts`、球は `maxParts * 2`)と `update` のループの上限 `kb < MAX_PARTS` に使う。既定の値は変えない
+  2. `src/render/world-view.js`: コンストラクタを `constructor(container, { markerColor, maxParts })` にし、`new CreatureView(scene, { markerColor, maxParts })` に渡す
+  3. `tools/bench/render-bench.html`: `index.html` の import map(three・three/addons/・rapier)を写し、全画面の描画領域と結果表示(`<pre id="out">` と `<textarea id="json">`)を置き、`render-bench.js` を module で読む
+  4. `tools/bench/render-bench.js`: URL パラメータ `counts`(既定 `200,500,1000,2000`)・`frames`(既定 300)・`warm`(既定 60)・`seed`(既定 1)。`RAPIER.init()` の後 `new Sim(RAPIER, seed)` を作るが進めない。`new WorldView(container, { markerColor: '#ffcc00', maxParts: 最大の個体数 × CFG.MAXP })` に `attach(sim)` する。生きている個体を雛形にし、個体数 N ごとに、雛形を順に使い回して `{ alive: true, dead: false, genome, species, bodies: 雛形の bodies, pos: 雛形の pos を x・z に ±sim.edge の一様乱数(`makeRng(seed)`)でずらした写し, rot: 雛形の rot }` を N 体作って `sim.creatures` に入れる。毎フレーム、各個体の `pos[*].x` に `Math.sin(now / 500 + k) * 0.001` を足し(行列の更新を起こすため)、`view.update(1 / 60, now, { selected: null, follow: false })` と `view.render()` の所要時間とフレーム間隔を測る。`warm` フレームを捨て、`frames` フレームの中央値と 90 パーセンタイルを N ごとに求め、`view.renderInfo()` の calls・triangles と、取れれば `WEBGL_debug_renderer_info` の GPU 名を添えて表と JSON を出す
+- **対象**: `src/render/creature-view.js`、`src/render/world-view.js`、`tools/bench/render-bench.html`(新規)、`tools/bench/render-bench.js`(新規)
+- **要件**: R7, R9
+- **参照ファイル**:
+  - `src/render/creature-view.js`(変更対象。maxParts を引数にする)
+  - `src/render/world-view.js`(変更対象。maxParts を渡す)
+  - `index.html:10-18`(import map)
+  - `src/app/main.js:41`(WorldView の作り方)
+  - `src/render/scene.js:50-53`(renderInfo)
 - **受け入れ基準**:
-  - [ ] 「成功基準」の節が、2〜3 年の区間を 0.25 年ごとに集計した中央値で判定する方法(27000 ステップ・移入は 2〜3 年)に書き換えられている
-  - [ ] 「T10 の結果」の節の後に「Issue #10 の結果」の節があり、植物の枠の配分、`LAKE_FRAC` の値、最終的な「判定」の表、新しい状態ハッシュ、性能の判定の数値が書かれている
-  - [ ] T20 の調査で分かった、木の葉が食べられない原因と直し方の候補が、同じ節に要約されている
-  - [ ] 「T10 の結果」の「残課題」の節に、Issue #10 で扱ったことと、その節への参照が書き足されている
-- **参照ファイル**:
-  - `docs/plans/biodiversity.md:142-208`(変更対象。T10 の結果)
-  - `docs/plans/biodiversity.md:279-295`(変更対象。性能の判定方法・成功基準)
-- **依存**: T18, T19, T20, T21, T23
-- **グループ**: C
+  - [ ] `npm run check:sim` の状態ハッシュが `0e7801998fe70d04` のまま
+  - [ ] `node --check tools/bench/render-bench.js` が exit 0
+  - [ ] `CreatureView` を `maxParts` なしで作ったとき、胴の InstancedMesh の数が 2400 のまま(コードを読んで確かめ、報告に該当行を書く)
+  - [ ] ブラウザでの確認をしていない場合は、その旨と、確認の手順(`npm run serve` → http://localhost:8000/tools/bench/render-bench.html)を報告に書く
+- **依存**: なし
 
-## T23: 木の葉に届く高さ CANOPY を下げる
-- **目的**: T20 の調査で、木の葉が食べられない主因は届く高さだと分かった(`browse` の 97〜99% が低い位置の幹削りで、葉食の個体のうち中央値の木の葉に届くのは seed 1 で 19.5%、seed 2 で 10.0%、seed 3 で 0%)。`CFG.CANOPY` を下げて葉に届く個体を増やし、T18 の判定で値を決める。低い位置の係数(0.015)と高さの判定の方法は変えない
-- **対象**: `src/sim/config.js`
-- **実装の骨格**:
-  - `CFG.CANOPY` の値だけを変える(`interactions.js` の `browse` はすでに `CFG.CANOPY * p.size` を使っている)
-  - 候補は `CANOPY` = 0.9、0.7、0.6 の 3 通り。今の 1.1 の判定は T19 の報告(草類:木類 = 1000:1000 の「判定」の節)を使い、計測し直さない
-  - それぞれ `npm run check:diversity` で判定し、1.1 を含む 4 通りのうち満たす基準が最も多い値を採る(同数なら実効種数の平均が高い値)。1.1 が最も良ければ値を変えない
-  - 採用した値で、`sim.feedStats` から `browse` のうち高い位置で食べた割合(回数とエネルギー)を seed 1〜3 で求める。調べるスクリプトはスクラッチに置き、コミットしない(T20 の `.agents/workflow/runs/T20-1/tmp/` のスクリプトを流用してよい)
+## T13: sim を Web Worker に移す効果を測る計測ページ(V2)
+- **目的**: 同じ簡易な描画で、sim を主スレッドで動かす場合と Worker で動かす場合を比べるページを作る。設計は次のとおり。
+  1. `tools/bench/pack-poses.js`(three に依存しない): `export const STRIDE = 9`、`export function packPoses(sim)` は、生きている個体(`alive`)のすべての体節について `[x, y, z, qx, qy, qz, qw, 半径 genome.parts[i].r, 色相 species?.hue ?? 0]` を詰めた `Float32Array` と体節数 `n` を `{ buf, n }` で返す
+  2. `tools/bench/sim-worker.js`(module Worker): `import RAPIER from 'https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.21.0/dist/rapier.mjs'`(Worker では import map が効かないため直接 URL を書く)と、`Sim`(`../../src/sim/index.js`)・`SimRunner`(`../../src/app/sim-runner.js`)・`packPoses` を読む。`{ type: 'init', seed, speed }` で sim を作り、ループを始める。ループは、前回からの実時間で `runner.advance(sim, dtr, speed)` を呼び、`packPoses` の結果を `postMessage({ type: 'poses', buf, n, steps, simSeconds, sentAt: performance.timeOrigin + performance.now() }, [buf.buffer])` で送り、前回の開始から 16 ms 後に `setTimeout` で次を呼ぶ。`{ type: 'speed', speed }` で速度を変える
+  3. `tools/bench/worker-bench.js`: 簡易な描画(地面の平面 1 枚と、体節を描く `SphereGeometry(1, 10, 6)` の InstancedMesh(最大 8000、色は `setHSL(色相, 0.6, 0.5)`)、固定カメラ、環境光と平行光)。URL パラメータ `modes`(既定 `main,worker`)・`speeds`(既定 `1,8`)・`secs`(既定 20)・`seed`(既定 1)。モードと速度の組ごとに新しい sim(または Worker)を作り、3 秒捨ててから `secs` 秒測る。main モードは毎フレーム主スレッドで `runner.advance` → `packPoses` → 描画、worker モードは毎フレーム受け取った最新の `buf` を描画する。測るもの: fps、フレーム間隔の中央値と 90 パーセンタイル、実効速度(進んだシム秒 ÷ 実時間の秒)、worker モードでは 1 回の転送の大きさ(`buf.byteLength`)の平均・1 秒あたりの転送回数・転送の遅れ(受け取った時刻 `performance.timeOrigin + performance.now()` − `sentAt`)の中央値。組ごとの結果を表と JSON で出す
+  4. `tools/bench/worker-bench.html`: `index.html` の import map を写し、描画領域と結果表示(`<pre id="out">` と `<textarea id="json">`)を置き、`worker-bench.js` を module で読む
+- **対象**: `tools/bench/pack-poses.js`(新規)、`tools/bench/sim-worker.js`(新規)、`tools/bench/worker-bench.js`(新規)、`tools/bench/worker-bench.html`(新規)
+- **要件**: R3
+- **参照ファイル**:
+  - `src/app/sim-runner.js`(SimRunner を Worker と主スレッドの両方で使う)
+  - `src/app/main.js:148-175`(Sim の作り方)
+  - `index.html:10-18`(import map)
 - **受け入れ基準**:
-  - [ ] 3 通りの値の「判定」の節を、1.1 の判定と並べて報告に貼り、採用した値と理由を書く
-  - [ ] 採用した値で、`browse` のうち高い位置で食べた割合(回数とエネルギー)を seed 1〜3 の表で報告し、T20 の値(回数で 0.3〜4.0%)と比べる
-  - [ ] 値を変えた場合は、規則を変えたので状態ハッシュが変わる。新しいハッシュを報告に書く。変えなかった場合は `da9bbfb7600ded5b` のままであることを書く
+  - [ ] `node --check` が `tools/bench/pack-poses.js` `tools/bench/sim-worker.js` `tools/bench/worker-bench.js` のすべてで exit 0
+  - [ ] Node で `Sim` を seed 1 で作って 30 ステップ進め、`packPoses(sim)` の `n` が生きている個体の体節数の合計と等しく、`buf.length` が `n * 9` 以上になる(確かめたコマンドを報告に書く)
+  - [ ] `src/` 配下のファイルを変えていない(`git diff --stat main -- src` に T12 以外の変更が無い)
+  - [ ] ブラウザでの確認をしていない場合は、その旨と、確認の手順(`npm run serve` → http://localhost:8000/tools/bench/worker-bench.html)を報告に書く
+- **依存**: なし
+
+## T14: V2・V6 の結果をまとめる
+- **目的**: ブラウザでの計測結果を `docs/plans/scaling-study.md` の「V2」「V6」節に書く。**利用者の事前作業**(親は dispatch の前に、利用者に計測を頼んで JSON を受け取り、コミットする): `npm run serve` の後、http://localhost:8000/tools/bench/worker-bench.html と http://localhost:8000/tools/bench/render-bench.html を開き、画面の JSON をそれぞれ `docs/plans/scaling-data/v2-worker.json` と `docs/plans/scaling-data/v6-render.json` に保存する。書く内容と判断の基準:
+  - V2: 速度 ×1・×8 ごとに、main と worker の fps・フレーム間隔・実効速度の表と、worker の 1 回の転送の大きさ・1 秒あたりの回数・遅れの表。実効速度と fps が何倍になったかを書く
+  - V6: 個体数ごとに、描画更新とレンダリングの ms(中央値・90 パーセンタイル)・fps・calls・triangles の表と、計測した GPU 名。描画がボトルネックになる個体数を「描画更新 + レンダリングの中央値が 8 ms を超えるか、fps が 50 を下回る最小の個体数」と定める。それが 1000 体以下なら「WebGPU の検討が必要」、2000 体でも超えなければ「当面不要」、その間なら「1000 体を超える規模を目指すなら検討する」と結論する
+- **対象**: `docs/plans/scaling-study.md`
+- **要件**: R3, R7
 - **参照ファイル**:
-  - `src/sim/config.js:26`(変更対象。`CANOPY`)
-  - `src/sim/interactions.js:77-93`(`browse`。高さの判定と食べる量)
-  - `.agents/workflow/runs/T20-1/report.md`(T20 の調査結果)
-  - `.agents/workflow/runs/T19-1/report.md`(1000:1000 の「判定」の節)
-- **依存**: T20
-- **グループ**: C
-
-<!-- PR #13 のレビュー指摘の追加分(グループ D に属する) -->
-
-## T24: 個体タブの記録表を 1 項目 1 行に戻す
-- **目的**: PR #13 のレビュー指摘。T13 で個体タブの記録表(`dl#i-dl`)を 4 列のグリッド(`dl.two`)にしたため、値の幅が狭く、全角 2 文字ほどで折り返す。1 項目につき 1 行(ラベルと値の 2 列。共通の `dl` の書式)に戻し、値の幅を確保する。T13 の受け入れ基準「記録表が 2 列グリッド」は、この指摘で取り消す
-- **対象**: `index.html`、`src/styles.css`
-- **実装の骨格**:
-  - `index.html` の `<dl id="i-dl" class="two">` から `class="two"` を外す
-  - `src/styles.css` の `dl.two` と `dl.two dd` の 2 つの規則を消す(ほかに `two` クラスを使う箇所が無いことを grep で確かめる)
+  - `docs/plans/scaling-study.md`(変更対象。V2・V6 の節を書く)
+  - `docs/plans/scaling-data/v2-worker.json`(利用者が置く結果)
+  - `docs/plans/scaling-data/v6-render.json`(利用者が置く結果)
 - **受け入れ基準**:
-  - [ ] `dl#i-dl` に `two` クラスが無く、`src/styles.css` に `dl.two` の規則が無い。`grep -rn "dl.two|class=\"two\"" index.html src` の出力が空
-  - [ ] sim に手を入れていないので、`npm run check:sim` の状態ハッシュが変更前と同じ(変更前後の値を報告に書く)
-  - [ ] ブラウザでの表示確認の結果(記録表の値が 1 行で読めること)を報告する(できない場合はその旨を報告する)
+  - [ ] V2 の節に、main と worker の前後比較の表(fps・実効速度・転送の大きさ・回数・遅れ)がある
+  - [ ] V6 の節に、個体数ごとの表と、目的欄の基準による WebGPU の結論がある
+  - [ ] 表の数値が 2 つの JSON の値と一致する
+  - [ ] 2 つの節の本文から `(未記入)` が消えている
+- **依存**: T6, T11, T12, T13
+
+## T15: 全案のまとめと採用案の提案
+- **目的**: `docs/plans/scaling-study.md` の「まとめと提案」節に、V0〜V6 を 1 つの表にまとめ、採用する案を提案する。表の列は「案・速くなる比率・多様性への効果・実装の手間・決定性・判断」。値は各節の結果から写す(速くなる比率が無い V0 は「—」)。実装の手間は、試作の大きさから「小 = 本番では src/sim の 1〜2 ファイルの変更」「中 = 3〜5 ファイルか新しいモジュール」「大 = 世界の持ち方やループの構造を変える」で付ける。提案は、各節で「採用してよい」「採用できる」「効果あり」と判断した案を、速くなる比率の大きい順に並べ、次の Issue の候補として 1 案ずつ 1〜2 文で書く。V0 の結論が「支持しない」だった場合は、その旨を提案の冒頭に書く。あわせて `ARCHITECTURE.md` の「動作確認」節に、`tools/scaling/`(Node の調査用スクリプト)と `tools/bench/`(ブラウザの計測ページ)を 2〜3 行で紹介し、結果は `docs/plans/scaling-study.md` にあると書く
+- **対象**: `docs/plans/scaling-study.md`、`ARCHITECTURE.md`
+- **要件**: R8
 - **参照ファイル**:
-  - `index.html`(変更対象。`i-dl` の行)
-  - `src/styles.css`(変更対象。`dl.two` の規則)
-- **依存**: T13
-- **グループ**: D
+  - `docs/plans/scaling-study.md`(変更対象。まとめと提案を書く)
+  - `ARCHITECTURE.md:148-161`(変更対象。動作確認の節に足す)
+- **受け入れ基準**:
+  - [ ] 「まとめと提案」節に、V0〜V6 の 7 行と目的欄の 6 列を持つ表がある
+  - [ ] 表の値が各節の結果と食い違っていない
+  - [ ] 提案に、目的欄の規則で選んだ案が速くなる比率の大きい順に並んでいる
+  - [ ] `ARCHITECTURE.md` の「動作確認」節に `tools/scaling/` と `tools/bench/` の説明がある
+  - [ ] `docs/plans/scaling-study.md` に `(未記入)` が残っていない
+- **依存**: T14
