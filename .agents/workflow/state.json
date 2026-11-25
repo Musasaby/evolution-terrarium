@@ -1,8 +1,8 @@
 {
   "source": "https://github.com/Musasaby/evolution-terrarium/issues/18",
   "branch": "develop/scaling-study-B",
+  "updated_at": "2026-11-26T00:36:37+09:00",
   "group": "B",
-  "updated_at": "2026-11-26T00:05:23+09:00",
   "tasks": [
     {
       "id": "T1",
@@ -105,6 +105,13 @@
     {
       "id": "T15",
       "title": "全案のまとめと採用案の提案",
+      "status": "pending",
+      "retries": 0,
+      "commit": null
+    },
+    {
+      "id": "T16",
+      "title": "領域分割の atomics 同期で共有箱があふれる問題を直す",
       "status": "pending",
       "retries": 0,
       "commit": null

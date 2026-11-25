@@ -226,7 +226,7 @@
   - [ ] V5 の節に、目的欄の項目の表と、基準による判断がある
   - [ ] 表の数値が各 JSON の値と一致する
   - [ ] 3 つの節の本文から `(未記入)` が消えている
-- **依存**: T3, T8, T9, T10
+- **依存**: T3, T8, T9, T10, T16
 
 <!-- グループ C: ブラウザでの計測(V2 Worker 化・V6 描画の上限)とまとめ -->
 
@@ -301,3 +301,19 @@
   - [ ] `ARCHITECTURE.md` の「動作確認」節に `tools/scaling/` と `tools/bench/` の説明がある
   - [ ] `docs/plans/scaling-study.md` に `(未記入)` が残っていない
 - **依存**: T14
+
+## T16: 領域分割の atomics 同期で共有箱があふれる問題を直す
+- **グループ**: B
+- **目的**: `region-bench.mjs` の atomics 同期は、最初のステップで区画の全個体を受け取り箱に JSON で書く。160 m・区画数 1 では 2.5 MB ほどになり、箱の大きさ(`2 ** 20` バイト)を超えて `共有箱があふれました` で止まる。箱の大きさを `2 ** 24` バイト(16 MiB)に広げ、main と worker の両方で、書く前に箱の大きさ(`sab.byteLength - 4`)を超えないかを確かめ、超えたら箱の大きさと書こうとした長さを含むエラーで止める(worker 側は今は確かめていない)。worker は箱の大きさを定数で持たず、渡された `SharedArrayBuffer` の大きさから求める。message 同期と、同じ条件の hash は変えない
+- **対象**: `tools/scaling/region-bench.mjs`、`tools/scaling/region-worker.mjs`
+- **要件**: R4
+- **参照ファイル**:
+  - `tools/scaling/region-bench.mjs`(変更対象。箱の大きさと書く前の確認)
+  - `tools/scaling/region-worker.mjs`(変更対象。書く前の確認)
+- **受け入れ基準**:
+  - [ ] `node tools/scaling/region-bench.mjs --regions 1,2 --sizes 160 --sync message,atomics --steps 30 --warm 30 --out tools/scaling/.out/t16.json` が exit 0 で終わり、`runs` が 4 件ある
+  - [ ] 上の結果で、同じ区画数の message と atomics の `hash` が一致する
+  - [ ] `node tools/scaling/region-bench.mjs --regions 2 --sync message,atomics --steps 60 --warm 60 --out tools/scaling/.out/t16b.json` の message と atomics の `hash` が、変更前の同じコマンドの結果と一致する(変更前の値は作業前に実行して控える)
+  - [ ] worker 側の書き込みにも大きさの確認がある(コードで確かめる)
+  - [ ] 実行後にプロセスが残らずに終わる(コマンドが戻る)
+- **依存**: T8
