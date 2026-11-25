@@ -1,7 +1,7 @@
 {
   "source": "https://github.com/Musasaby/evolution-terrarium/issues/18",
   "branch": "develop/scaling-study-C",
-  "updated_at": "2026-11-26T01:59:29+09:00",
+  "updated_at": "2026-11-26T02:22:19+09:00",
   "group": "C",
   "tasks": [
     {
@@ -98,9 +98,9 @@
     {
       "id": "T14",
       "title": "V2・V6 の結果をまとめる",
-      "status": "pending",
-      "retries": 0,
-      "commit": null
+      "status": "done",
+      "retries": 1,
+      "commit": "7fd0d97b5df5597df4c708e580543a36e0997fc1"
     },
     {
       "id": "T15",
