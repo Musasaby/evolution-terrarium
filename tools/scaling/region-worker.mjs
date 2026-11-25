@@ -6,7 +6,7 @@ import { think } from '../../src/sim/brain.js';
 import { decodeGenome, encodeCreature } from './region-snapshot.mjs';
 
 const MAXJ = CFG.MAXP - 1;
-const { index, bounds, size, grid, H } = workerData;
+const { index, bounds, size, grid, H, atomics } = workerData;
 
 await RAPIER.init();
 const R = RAPIER;
@@ -86,27 +86,67 @@ function emitOutside() {
 
 const round4 = (v) => Math.round(v * 1e4) / 1e4;
 
+function processStep(immigrants) {
+  const t0 = performance.now();
+  const sorted = [...(immigrants || [])].sort((a, b) => a.id - b.id);
+  for (const e of sorted) restore(e);
+  handoverMs += performance.now() - t0;
+
+  const t1 = performance.now();
+  stepOnce();
+  const computeMs = performance.now() - t1;
+
+  const emigrants = emitOutside();
+  return { emigrants, computeMs, handoverMs, count: creatures.length };
+}
+
+function hashEntries() {
+  return creatures.map((c) => {
+    const p = c.pos[0];
+    return [c.id, round4(p.x), round4(p.y), round4(p.z)];
+  });
+}
+
 parentPort.on('message', (msg) => {
   if (!msg) return;
   if (msg.type === 'step') {
-    const t0 = performance.now();
-    const immigrants = [...(msg.immigrants || [])].sort((a, b) => a.id - b.id);
-    for (const e of immigrants) restore(e);
-    handoverMs += performance.now() - t0;
-
-    const t1 = performance.now();
-    stepOnce();
-    const computeMs = performance.now() - t1;
-
-    const emigrants = emitOutside();
-    parentPort.postMessage({ type: 'done', emigrants, computeMs, handoverMs, count: creatures.length });
+    parentPort.postMessage({ type: 'done', ...processStep(msg.immigrants) });
   } else if (msg.type === 'hash') {
-    const entries = creatures.map((c) => {
-      const p = c.pos[0];
-      return [c.id, round4(p.x), round4(p.y), round4(p.z)];
-    });
-    parentPort.postMessage({ type: 'hash', entries });
+    parentPort.postMessage({ type: 'hash', entries: hashEntries() });
   }
 });
 
 parentPort.postMessage({ type: 'ready', index });
+
+if (atomics) {
+  const { ctrl, inbox, outbox } = atomics;
+  const decoder = new TextDecoder();
+  const encoder = new TextEncoder();
+  const headerOf = (sab) => new Int32Array(sab, 0, 1);
+
+  const readBox = (sab) => {
+    const len = Atomics.load(headerOf(sab), 0);
+    const bytes = new Uint8Array(sab, 4, len).slice();
+    return JSON.parse(decoder.decode(bytes));
+  };
+  const writeBox = (sab, value) => {
+    const bytes = encoder.encode(JSON.stringify(value));
+    new Uint8Array(sab, 4, bytes.length).set(bytes);
+    Atomics.store(headerOf(sab), 0, bytes.length);
+  };
+
+  let generation = 0;
+  for (;;) {
+    let current;
+    while ((current = Atomics.load(ctrl, 0)) === generation) {
+      Atomics.wait(ctrl, 0, generation);
+    }
+    if (current < 0) break;
+    generation = current;
+    const immigrants = readBox(inbox);
+    const result = processStep(immigrants);
+    writeBox(outbox, result);
+    Atomics.add(ctrl, 1, 1);
+    Atomics.notify(ctrl, 1);
+  }
+}
