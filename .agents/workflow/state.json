@@ -2,14 +2,14 @@
   "source": "https://github.com/Musasaby/evolution-terrarium/issues/18",
   "branch": "develop/scaling-study",
   "group": "A",
-  "updated_at": "2026-11-25T14:52:56+09:00",
+  "updated_at": "2026-11-25T14:59:22+09:00",
   "tasks": [
     {
       "id": "T1",
       "title": "検証記録の雛形と出力先の用意",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "d9dcd79750fade60fef5ab7938c668f5c317b7f6"
     },
     {
       "id": "T2",
