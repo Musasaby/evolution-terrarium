@@ -7,12 +7,12 @@ import { CreatureView } from './creature-view.js';
 import { PlantView } from './plant-view.js';
 
 export class WorldView {
-  constructor(container, { markerColor }) {
+  constructor(container, { markerColor, maxParts }) {
     this.stage = createStage(container);
     const { scene, controls } = this.stage;
     this.terrain = new TerrainView(scene);
     this.env = new EnvironmentView(scene, controls);
-    this.creatures = new CreatureView(scene, { markerColor });
+    this.creatures = new CreatureView(scene, { markerColor, maxParts });
     this.plants = new PlantView(scene);
     this.canvas = this.stage.renderer.domElement;
   }

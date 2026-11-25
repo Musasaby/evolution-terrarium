@@ -285,7 +285,7 @@
   - [ ] V6 の節に、個体数ごとの表と、目的欄の基準による WebGPU の結論がある
   - [ ] 表の数値が 2 つの JSON の値と一致する
   - [ ] 2 つの節の本文から `(未記入)` が消えている
-- **依存**: T6, T11, T12, T13
+- **依存**: T6, T11, T12, T13, T17
 
 ## T15: 全案のまとめと採用案の提案
 - **目的**: `docs/plans/scaling-study.md` の「まとめと提案」節に、V0〜V6 を 1 つの表にまとめ、採用する案を提案する。表の列は「案・速くなる比率・多様性への効果・実装の手間・決定性・判断」。値は各節の結果から写す(速くなる比率が無い V0 は「—」)。実装の手間は、試作の大きさから「小 = 本番では src/sim の 1〜2 ファイルの変更」「中 = 3〜5 ファイルか新しいモジュール」「大 = 世界の持ち方やループの構造を変える」で付ける。提案は、各節で「採用してよい」「採用できる」「効果あり」と判断した案を、速くなる比率の大きい順に並べ、次の Issue の候補として 1 案ずつ 1〜2 文で書く。V0 の結論が「支持しない」だった場合は、その旨を提案の冒頭に書く。あわせて `ARCHITECTURE.md` の「動作確認」節に、`tools/scaling/`(Node の調査用スクリプト)と `tools/bench/`(ブラウザの計測ページ)を 2〜3 行で紹介し、結果は `docs/plans/scaling-study.md` にあると書く
@@ -317,3 +317,25 @@
   - [ ] worker 側の書き込みにも大きさの確認がある(コードで確かめる)
   - [ ] 実行後にプロセスが残らずに終わる(コマンドが戻る)
 - **依存**: T8
+
+## T17: 計測ページの URL パラメータで既定値が使われない問題を直す
+- **グループ**: C
+- **目的**: `tools/bench/render-bench.js` と `tools/bench/worker-bench.js` の `num(v, fallback)` は、パラメータが無いとき `params.get()` の `null` を `Number(null)` で `0` に変えてしまう。`0` は有限の値なので既定値が使われない。そのため render-bench は `frames=1`・`warm=0`・`seed=0`、worker-bench は `secs=0.5`・`seed=0` で計測されていた。両方のファイルの `num` を次の形に直す(ほかの関数と呼び出し側は変えない)。
+  ```js
+  function num(v, fallback) {
+    if (v === null || v === '') return fallback;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : fallback;
+  }
+  ```
+- **対象**: `tools/bench/render-bench.js`、`tools/bench/worker-bench.js`
+- **要件**: R3, R7
+- **参照ファイル**:
+  - `tools/bench/render-bench.js:12-15`(変更対象。num の定義)
+  - `tools/bench/worker-bench.js:17-20`(変更対象。num の定義)
+- **受け入れ基準**:
+  - [ ] `node --check` が `tools/bench/render-bench.js` と `tools/bench/worker-bench.js` の両方で exit 0
+  - [ ] 両方のファイルから `num` の定義を正規表現で取り出して `node -e` で評価し、`num(null, 300)` が 300、`num('', 300)` が 300、`num('5', 300)` が 5、`num('abc', 300)` が 300 になる(確かめたコマンドを報告に書く)
+  - [ ] `npm run check:sim` の状態ハッシュが `0e7801998fe70d04` のまま
+  - [ ] ブラウザでの確認をしていない場合は、その旨を報告に書く
+- **依存**: T12, T13

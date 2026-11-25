@@ -10,7 +10,8 @@ import { speciesColor, CORPSE_COLOR } from './palette.js';
 const MAX_PARTS = 2400;
 
 export class CreatureView {
-  constructor(scene, { markerColor }) {
+  constructor(scene, { markerColor, maxParts = MAX_PARTS }) {
+    this.maxParts = maxParts;
     const mat = new THREE.MeshStandardMaterial({ roughness: 0.55, metalness: 0.05 });
     const mk = (geo, n) => {
       const m = new THREE.InstancedMesh(geo, mat, n);
@@ -21,8 +22,8 @@ export class CreatureView {
       scene.add(m);
       return m;
     };
-    this.body = mk(new THREE.CylinderGeometry(1, 1, 1, 12, 1, true), MAX_PARTS);   // 胴（両端は開いている）
-    this.caps = mk(new THREE.SphereGeometry(1, 10, 6), MAX_PARTS * 2);             // 両端の半球（球で代用）
+    this.body = mk(new THREE.CylinderGeometry(1, 1, 1, 12, 1, true), maxParts);    // 胴（両端は開いている）
+    this.caps = mk(new THREE.SphereGeometry(1, 10, 6), maxParts * 2);              // 両端の半球（球で代用）
     this.marker = new THREE.Mesh(new THREE.ConeGeometry(0.35, 0.8, 4), new THREE.MeshBasicMaterial({ color: markerColor }));
     this.marker.rotation.x = Math.PI; this.marker.visible = false;
     scene.add(this.marker);
@@ -41,7 +42,7 @@ export class CreatureView {
     for (const cr of this.sim.creatures) {
       if (!cr.alive) continue;
       const parts = cr.genome.parts;
-      for (let i = 0; i < cr.bodies.length && kb < MAX_PARTS; i++) {
+      for (let i = 0; i < cr.bodies.length && kb < this.maxParts; i++) {
         const t = cr.pos[i], r = cr.rot[i];   // 物理ステップ直後に sim が写した姿勢
         const part = parts[i], h = capsuleHalf(part);
         if (cr.dead) c.set(CORPSE_COLOR);

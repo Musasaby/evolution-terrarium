@@ -159,3 +159,5 @@ node tools/sim-check.mjs 600 1 --settings terrain:mountain # 世界の設定を�
 同じシード・同じステップ数なら状態ハッシュは常に同じです。**振る舞いを変えないつもりの変更（リファクタリング）では、前後でハッシュが一致すること**を確かめてください。パラメータや規則を変えた場合はハッシュが変わるのが正常です。
 
 `--settings` は `sim-check` と `diversity-check` の両方で使えます。`<カテゴリ>:<ID>`（例 `terrain:mountain`）をカンマ区切りで重ねるか、`'{"lakeCount":4}'` のような JSON を渡します。カテゴリは `size` `terrain` `soil` `climate` です。詳細は `AGENTS.md` の「テスト・検証の注意」を参照してください。
+
+個体数と土地を増やす案の調査用に、`tools/scaling/`(Node で動く調査用スクリプト。`run.mjs`・`ab-bench.mjs`・`region-bench.mjs`・`island-run.mjs`・`lod-check.mjs` など)と `tools/bench/`(ブラウザの計測ページ。`npm run serve` のあと `worker-bench.html`・`render-bench.html` を開く)があります。結果は `docs/plans/scaling-study.md` にまとめてあります。

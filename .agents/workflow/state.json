@@ -1,8 +1,8 @@
 {
   "source": "https://github.com/Musasaby/evolution-terrarium/issues/18",
-  "branch": "develop/scaling-study-B",
-  "updated_at": "2026-11-26T01:06:31+09:00",
-  "group": "B",
+  "branch": "develop/scaling-study-C",
+  "updated_at": "2026-11-26T02:37:56+09:00",
+  "group": "C",
   "tasks": [
     {
       "id": "T1",
@@ -84,30 +84,30 @@
     {
       "id": "T12",
       "title": "描画の上限を測る計測ページ(V6)",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "0bf43ab7fcc8e5c5b209e8f4a5139171aab42836"
     },
     {
       "id": "T13",
       "title": "sim を Web Worker に移す効果を測る計測ページ(V2)",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "f50420536ec3c2d66aebd4a65f2d6fe3606bab49"
     },
     {
       "id": "T14",
       "title": "V2・V6 の結果をまとめる",
-      "status": "pending",
-      "retries": 0,
-      "commit": null
+      "status": "done",
+      "retries": 1,
+      "commit": "7fd0d97b5df5597df4c708e580543a36e0997fc1"
     },
     {
       "id": "T15",
       "title": "全案のまとめと採用案の提案",
-      "status": "pending",
-      "retries": 0,
-      "commit": null
+      "status": "done",
+      "retries": 1,
+      "commit": "b2b323c063db56ef5c9ed9edf96037fbc824c89d"
     },
     {
       "id": "T16",
@@ -115,6 +115,13 @@
       "status": "done",
       "retries": 1,
       "commit": "5f28895403a74bde18fd30239f8b9a5384723a0e"
+    },
+    {
+      "id": "T17",
+      "title": "計測ページの URL パラメータで既定値が使われない問題を直す",
+      "status": "done",
+      "retries": 0,
+      "commit": "bc16e197e8473450ccebcd5a4dec21db5df72df4"
     }
   ]
 }

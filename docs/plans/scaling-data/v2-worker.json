@@ -1,0 +1,54 @@
+[
+  {
+    "mode": "main",
+    "speed": 1,
+    "fps": 163.74029400321305,
+    "frameMedianMs": 6.100000023841858,
+    "frameP90Ms": 8.300000071525574,
+    "effectiveSpeed": 0.9993304486006365,
+    "segments": 811,
+    "transferBytesAvg": null,
+    "transfersPerSec": null,
+    "transferDelayMedianMs": null,
+    "error": null
+  },
+  {
+    "mode": "main",
+    "speed": 8,
+    "fps": 37.00485407806887,
+    "frameMedianMs": 26.600000023841858,
+    "frameP90Ms": 30.200000047683716,
+    "effectiveSpeed": 3.6105950740140176,
+    "segments": 942,
+    "transferBytesAvg": null,
+    "transfersPerSec": null,
+    "transferDelayMedianMs": null,
+    "error": null
+  },
+  {
+    "mode": "worker",
+    "speed": 1,
+    "fps": 164.77554020892882,
+    "frameMedianMs": 6.100000023841858,
+    "frameP90Ms": 6.100000023841858,
+    "effectiveSpeed": 1.0001550240299246,
+    "segments": 811,
+    "transferBytesAvg": 23307.56834532374,
+    "transfersPerSec": 62.55969675307131,
+    "transferDelayMedianMs": -0.699951171875,
+    "error": null
+  },
+  {
+    "mode": "worker",
+    "speed": 8,
+    "fps": 164.7747162074311,
+    "frameMedianMs": 6.100000023841858,
+    "frameP90Ms": 6.199999928474426,
+    "effectiveSpeed": 3.022119984664399,
+    "segments": 930,
+    "transferBytesAvg": 30895.3728,
+    "transfersPerSec": 31.254688203230486,
+    "transferDelayMedianMs": -0.699951171875,
+    "error": null
+  }
+]
