@@ -1,6 +1,7 @@
 // diversity-check.mjs の子プロセス側：1 シードを進めて結果を JSON で stdout へ出す
 import RAPIER from '@dimforge/rapier3d-compat';
 import { Sim, CFG, SectionProfiler, computeDiversity } from '../src/sim/index.js';
+import { stateHash } from './state-hash.mjs';
 
 // 0.25 年ごとの区間（ステップ数）。既定 27000 ステップ = 3 年 = 12 区間
 const INTERVAL_STEPS = Math.round((CFG.YEAR / 4) / CFG.DT);
@@ -65,6 +66,6 @@ export async function runSeed(steps, seed, settings, opts = {}) {
   };
   return {
     seed, years: ((steps * CFG.DT) / CFG.YEAR), initMs, runMs, msPerStepAll: runMs / steps, elapsed: performance.now() - t0,
-    rows, geo, counters: { ...sim.counters }, feedStats: { ...sim.feedStats },
+    rows, geo, counters: { ...sim.counters }, feedStats: { ...sim.feedStats }, hash: stateHash(sim),
   };
 }
