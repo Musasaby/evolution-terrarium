@@ -13,7 +13,7 @@
   - `src/render/` — three.js による 3D 描画(sim を読むだけ)
   - `src/ui/` — ヘッダー・右パネル・操作ボタン(ストアを読み書きする)
   - `src/perf/` — パフォーマンス計測と表示
-  - `tools/` — ブラウザ不要の動作確認(`sim-check.mjs`)
+  - `tools/` — ブラウザ不要の動作確認(`sim-check.mjs`・`diversity-check.mjs`)
 - 構成・依存の向き・よくある変更の入口は `ARCHITECTURE.md` を参照すること
 
 ## エージェント共通ルール
@@ -26,6 +26,8 @@
 ## テスト・検証の注意(子エージェント向け)
 
 - 動作確認は `npm install` 後に `npm run check:sim`(600 ステップ進めて状態ハッシュと区間ごとの所要時間を表示)。`node tools/sim-check.mjs <ステップ数> <シード>` で指定も可
+- 多様性の長時間計測は `npm run check:diversity`(既定 27000 ステップ = 3 年・シード 1,2,3 を並行実行)。`node tools/diversity-check.mjs <ステップ数> <シード,...>` で指定する(シードはカンマ区切り)。所要時間の目安は 1 シード 18000 ステップで約 3 分、既定の 27000 ステップ・3 シード並行で 4〜5 分程度(記録は `docs/plans/biodiversity.md`)。調整中は 9000 ステップ・2 シードに縮めてよい。係数や規則を変えない変更では実行しなくてよい
+- 世界の設定を変えて確かめるときは、`sim-check` と `diversity-check` の両方に `--settings` を渡す。`--settings terrain:mountain`(`<カテゴリ>:<ID>`。カテゴリは `size` `terrain` `soil` `climate`)をカンマ区切りで重ねるか、`--settings '{"lakeCount":4}'` のように JSON で項目を直接指定する。例: `node tools/sim-check.mjs 600 1 --settings terrain:mountain,climate:cold`
 - 同じシード・同じステップ数なら状態ハッシュは常に同じ。**振る舞いを変えないつもりの変更(リファクタリング)では、変更前後でハッシュが一致すること**を確認して報告する。パラメータや規則を変えた場合はハッシュが変わるのが正常(その旨を報告に書く)
 - sim を外から使うときは `src/sim/index.js` からだけ import する。依存は一方向(下の層は上の層を知らない)を守る
 - 剛体の姿勢は `c.pos[i]` `c.rot[i]` `c.angv[i]` の写しを読む(`translation()` 等を直接呼ばない)
