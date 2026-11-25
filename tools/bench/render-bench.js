@@ -10,6 +10,7 @@ import { WorldView } from '../../src/render/world-view.js';
 const params = new URLSearchParams(location.search);
 
 function num(v, fallback) {
+  if (v === null || v === '') return fallback;
   const n = Number(v);
   return Number.isFinite(n) ? n : fallback;
 }

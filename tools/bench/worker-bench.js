@@ -15,6 +15,7 @@ const WORKER_TIMEOUT_MS = 30000;
 const params = new URLSearchParams(location.search);
 
 function num(v, fallback) {
+  if (v === null || v === '') return fallback;
   const n = Number(v);
   return Number.isFinite(n) ? n : fallback;
 }
