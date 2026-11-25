@@ -1,11 +1,26 @@
 ﻿param(
     [string]$TaskId,
     [int]$Attempt = 1,
-    [switch]$Pr
+    [switch]$Pr,
+    [switch]$Review,
+    [string]$Launcher = ''
 )
 Set-Location $PSScriptRoot\..\..\..
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $OutputEncoding = [System.Text.Encoding]::UTF8
+
+$PrUsage = "Usage: dispatch-prompt-gen.ps1 -TaskId <TaskId> [-Attempt <n>] | dispatch-prompt-gen.ps1 -Pr [-Launcher <cli|subagent>] | dispatch-prompt-gen.ps1 -Review -TaskId <TaskId> -Attempt <n> [-Launcher <cli|subagent>]"
+if ($Pr -and $Review) {
+    [Console]::Error.WriteLine($PrUsage)
+    exit 1
+}
+# -Launcher: -Pr / -Review のときだけ使える。prompt.md を書いた後、runs/<run>/launcher へこの値を書く
+if ($PSBoundParameters.ContainsKey('Launcher')) {
+    if ((-not $Pr -and -not $Review) -or ($Launcher -cne 'cli' -and $Launcher -cne 'subagent')) {
+        [Console]::Error.WriteLine($PrUsage)
+        exit 1
+    }
+}
 
 $Root = Get-Location
 $TasksPath = "$Root/.agents/workflow/tasks.md"
@@ -14,13 +29,159 @@ $ConfigPath = "$Root/.agents/workflow/config.json"
 $RunsBase = "$Root/.agents/workflow/runs"
 . "$PSScriptRoot/tasklib.ps1"
 
+# runs/<ID>-<N>/worktree.txt がある run は、prompt.md の末尾に worktree 用の節を足す
+function Add-WorktreeSection {
+    param([string]$RunDirPath)
+    $wtFile = Join-Path $RunDirPath 'worktree.txt'
+    if (-not (Test-Path -LiteralPath $wtFile -PathType Leaf)) { return }
+    $workdir = ''
+    foreach ($l in (Get-Content -LiteralPath $wtFile -Encoding UTF8)) {
+        if ($l -match '^path (.+)$') { $workdir = $Matches[1].Trim(); break }
+    }
+    if (-not $workdir) { return }
+    $workdir = $workdir.Replace('\', '/').TrimEnd('/')
+    $mainRoot = "$Root".Replace('\', '/').TrimEnd('/')
+    $section = Get-Content "$PSScriptRoot/dispatch-worktree-template.md" -Raw -Encoding UTF8
+    $section = $section.Replace('{workdir}', $workdir)
+    $section = $section.Replace('{main_root}', $mainRoot)
+    $promptFile = Join-Path $RunDirPath 'prompt.md'
+    $text = [System.IO.File]::ReadAllText($promptFile, [System.Text.Encoding]::UTF8)
+    $text = $text.TrimEnd("`n", "`r") + "`n`n" + $section.Replace("`r`n", "`n")
+    [System.IO.File]::WriteAllText($promptFile, $text, [System.Text.UTF8Encoding]::new($false))
+}
+
+# runs/review-<ID>-<N>/worktree.txt がある run は、prompt.md の末尾に worktree でレビューする節を足す
+function Add-ReviewWorktreeSection {
+    param([string]$RunDirPath, [string]$WorktreePath)
+    if (-not $WorktreePath) { return }
+    $workdir = $WorktreePath.Replace('\', '/').TrimEnd('/')
+    $mainRoot = "$Root".Replace('\', '/').TrimEnd('/')
+    $section = Get-Content "$PSScriptRoot/dispatch-review-worktree-template.md" -Raw -Encoding UTF8
+    $section = $section.Replace('{workdir}', $workdir)
+    $section = $section.Replace('{main_root}', $mainRoot)
+    $promptFile = Join-Path $RunDirPath 'prompt.md'
+    $text = [System.IO.File]::ReadAllText($promptFile, [System.Text.Encoding]::UTF8)
+    $text = $text.TrimEnd("`n", "`r") + "`n`n" + $section.Replace("`r`n", "`n")
+    [System.IO.File]::WriteAllText($promptFile, $text, [System.Text.UTF8Encoding]::new($false))
+}
+
+# runs/<ID>-<N>/launcher が subagent の run は、prompt.md の末尾にサブエージェント用の節を足す
+function Add-SubagentSection {
+    param([string]$RunDirPath)
+    $launcherPath = Join-Path $RunDirPath 'launcher'
+    if (-not (Test-Path -LiteralPath $launcherPath -PathType Leaf)) { return }
+    if ((Get-Content -LiteralPath $launcherPath -Raw -Encoding UTF8).Trim() -ne 'subagent') { return }
+    $workdir = "$Root"
+    $wtFile = Join-Path $RunDirPath 'worktree.txt'
+    if (Test-Path -LiteralPath $wtFile -PathType Leaf) {
+        foreach ($l in (Get-Content -LiteralPath $wtFile -Encoding UTF8)) {
+            if ($l -match '^path (.+)$') { $workdir = $Matches[1].Trim(); break }
+        }
+    }
+    $workdir = $workdir.Replace('\', '/').TrimEnd('/')
+    $runDirFwd = "$RunDirPath".Replace('\', '/').TrimEnd('/')
+    $runName = $runDirFwd.Substring($runDirFwd.LastIndexOf('/') + 1)
+    $section = Get-Content "$PSScriptRoot/dispatch-subagent-template.md" -Raw -Encoding UTF8
+    $section = $section.Replace('{workdir}', $workdir)
+    $section = $section.Replace('{tmp_dir}', "$workdir/.agents/workflow/runs/$runName/tmp")
+    $section = $section.Replace('{output_log}', "$runDirFwd/output.log")
+    $promptFile = Join-Path $RunDirPath 'prompt.md'
+    $text = [System.IO.File]::ReadAllText($promptFile, [System.Text.Encoding]::UTF8)
+    $text = $text.TrimEnd("`n", "`r") + "`n`n" + $section.Replace("`r`n", "`n")
+    [System.IO.File]::WriteAllText($promptFile, $text, [System.Text.UTF8Encoding]::new($false))
+}
+
+# --- Review mode: 子の実装をレビューするプロンプトを生成する ---
+# 出力先は runs/review-<ID>-<N>/prompt.md。stdout に "RunId: review-<ID>" を出す。
+# report.md が無いとレビューできないため exit 2、tasks.md にタスクの節が無ければ exit 1。
+if ($Review) {
+    if (-not $TaskId) {
+        [Console]::Error.WriteLine($PrUsage)
+        exit 1
+    }
+    if ($TaskId -cnotmatch '^[A-Za-z0-9_-]+$' -or $Attempt -lt 1) {
+        [Console]::Error.WriteLine("Invalid TaskId/Attempt: '$TaskId' '$Attempt'")
+        exit 1
+    }
+    $reportRel = ".agents/workflow/runs/$TaskId-$Attempt/report.md"
+    $reportPath = "$Root/$reportRel"
+    if (-not (Test-Path -LiteralPath $TasksPath -PathType Leaf) -or
+        -not (Select-String -LiteralPath $TasksPath -Pattern "^## ${TaskId}:" -Quiet)) {
+        [Console]::Error.WriteLine("Task '$TaskId' not found in $TasksPath")
+        exit 1
+    }
+    if (-not (Test-Path -LiteralPath $reportPath -PathType Leaf)) {
+        [Console]::Error.WriteLine("Report not found: $reportRel")
+        exit 2
+    }
+    # タスクの節をそのまま取り出す(通常モードと同じ規則)
+    $reviewSectionLines = @()
+    $reviewInSection = $false
+    foreach ($line in ((Get-Content $TasksPath -Raw -Encoding UTF8) -split "`n")) {
+        if ($line -match '^## ') {
+            if ($reviewInSection) { break }
+            if ($line -match "^## ${TaskId}:") { $reviewInSection = $true }
+        }
+        if ($reviewInSection) { $reviewSectionLines += $line }
+    }
+    $reviewTaskSection = ($reviewSectionLines -join "`n").TrimEnd("`r", "`n")
+    # worktree の中でレビューする run は、材料のパスを本体の絶対パスにする
+    $reviewRunDir = "$RunsBase/review-$TaskId-$Attempt"
+    $reviewWt = ''
+    $reviewWtFile = "$reviewRunDir/worktree.txt"
+    if (Test-Path -LiteralPath $reviewWtFile -PathType Leaf) {
+        foreach ($l in (Get-Content -LiteralPath $reviewWtFile -Encoding UTF8)) {
+            if ($l -match '^path (.+)$') { $reviewWt = $Matches[1].Trim(); break }
+        }
+    }
+    $pathPrefix = ''
+    if ($reviewWt) {
+        $pathPrefix = "$Root".Replace('\', '/').TrimEnd('/') + '/'
+    }
+    # 理解確認の指示: config の comprehension_check.enabled で切り替える
+    $ccEnabled = $false
+    $ccCount = 3
+    try {
+        $cc = (Get-Content $ConfigPath -Raw -Encoding UTF8 -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop).comprehension_check
+        if ($cc -is [pscustomobject] -and $cc.enabled -is [bool] -and $cc.enabled) {
+            $ccEnabled = $true
+            $qv = $cc.questions_per_task
+            if (($qv -is [int] -or $qv -is [long]) -and $qv -ge 1) { $ccCount = [int]$qv }
+        }
+    } catch {}
+    if ($ccEnabled) {
+        $comprehensionInstruction = 'pass のときだけ、`' + $pathPrefix + '.agents/skills/agent-review-commit/references/comprehension-questions.md` の手順4の観点で ' + $ccCount + ' 問の質問を作り、`' + $pathPrefix + '.agents/skills/agent-comprehension-check/SKILL.md` の「質問ファイルのフォーマット」に従って ' + '`' + $pathPrefix + '.agents/workflow/comprehension/' + $TaskId + '.md` に書く。`## 解説` 見出しは含めない'
+    } else {
+        $comprehensionInstruction = '質問ファイルは作らない(完了報告の理解確認は なし)'
+    }
+    $reviewPromptPath = "$reviewRunDir/prompt.md"
+    $fixNotesRel = ".agents/workflow/runs/$TaskId-$($Attempt + 1)/fix-notes.md"
+    $null = New-Item -ItemType Directory -Force $reviewRunDir
+    $reviewTemplate = Get-Content "$PSScriptRoot/dispatch-review-template.md" -Raw -Encoding UTF8
+    $reviewText = $reviewTemplate.Replace('{task_id}', $TaskId)
+    $reviewText = $reviewText.Replace('{attempt}', "$Attempt")
+    $reviewText = $reviewText.Replace('{task_section}', $reviewTaskSection)
+    $reviewText = $reviewText.Replace('{report_path}', "$pathPrefix$reportRel")
+    $reviewText = $reviewText.Replace('{fix_notes_path}', "$pathPrefix$fixNotesRel")
+    $reviewText = $reviewText.Replace('{comprehension_instruction}', $comprehensionInstruction)
+    [System.IO.File]::WriteAllText($reviewPromptPath, $reviewText, [System.Text.UTF8Encoding]::new($false))
+    if ($Launcher) {
+        [System.IO.File]::WriteAllText("$reviewRunDir/launcher", "$Launcher`n", [System.Text.UTF8Encoding]::new($false))
+    }
+    Add-ReviewWorktreeSection $reviewRunDir $reviewWt
+    Add-SubagentSection $reviewRunDir
+    Write-Output "Generated: $reviewPromptPath"
+    Write-Output "RunId: review-$TaskId"
+    exit 0
+}
+
 # --- PR mode: PR作成を子に単発依頼するプロンプトを生成する ---
 # 対象タスク = state.json で done かつ commit が git log origin/<base>..HEAD に含まれるもの。
 # 出力先は runs/pr-<連番>-1/prompt.md。stdout に "RunId: pr-<連番>" を出す。
 if ($Pr) {
-    $baseBranch = 'main'
+    $baseBranch = Get-BaseBranch (Read-WorkflowConfig $ConfigPath)
     $branch = "$(git branch --show-current)".Trim()
-    if (-not $branch -or $branch -eq $baseBranch) {
+    if (-not $branch -or $branch -eq 'main' -or $branch -eq $baseBranch) {
         [Console]::Error.WriteLine("PR mode must be run on a work branch (current: '$branch')")
         exit 1
     }
@@ -80,6 +241,52 @@ if ($Pr) {
     }
     $prRunDir = "$RunsBase/pr-$prN-1"
     $null = New-Item -ItemType Directory -Force $prRunDir
+    # 推敲の指示を組み立てる。推敲しないときは '' を返す。
+    # config.json の text_refine.mode が 'dispatch' でなければ推敲しない
+    # (ファイルが無い・読めない・キーが無いときも推敲しない)。
+    function Get-RefineInstruction {
+        $refineSource = '.agents/workflow/runs/refine/summary.md'   # カレントディレクトリはプロジェクトのルート
+        $when = @{
+            pr_body = '手順4 の後、手順5 の前に行う。推敲できたとき(下の 2. が `Next: continue` で終わったとき)は、手順5 で `{input}` の代わりに `{output}` を使う。'
+            summary = '手順5 の後に行う。親が書いた完了時のサマリーの下書きを推敲する。'
+        }
+        $textRefine = $null
+        try {
+            $config = [System.IO.File]::ReadAllText($ConfigPath, [System.Text.Encoding]::UTF8) | ConvertFrom-Json -ErrorAction Stop
+            $textRefine = $config.text_refine
+        } catch {
+            $textRefine = $null
+        }
+        if (-not ($textRefine -is [pscustomobject]) -or -not ($textRefine.mode -is [string]) -or $textRefine.mode -cne 'dispatch') {
+            return ''
+        }
+        $targets = @([pscustomobject]@{ Scene = 'pr_body'; InputPath = ".agents/workflow/runs/pr-$prN-1/pr-body.md" })
+        if (Test-Path -LiteralPath $refineSource -PathType Leaf) {
+            Move-Item -LiteralPath $refineSource -Destination "$prRunDir/summary.md" -Force
+            $targets += [pscustomobject]@{ Scene = 'summary'; InputPath = ".agents/workflow/runs/pr-$prN-1/summary.md" }
+        }
+        $refineTemplate = Get-Content "$PSScriptRoot/dispatch-pr-refine-template.md" -Raw -Encoding UTF8
+        $sections = @()
+        foreach ($target in $targets) {
+            $scene = $target.Scene
+            $inputPath = $target.InputPath
+            $ext = [System.IO.Path]::GetExtension($inputPath)
+            $outputPath = $inputPath.Substring(0, $inputPath.Length - $ext.Length) + '.refined' + $ext
+            # {when} を最初に置換する(WHEN の文に {input}・{output} が入っているため)
+            $section = $refineTemplate.Replace('{when}', $when[$scene])
+            $section = $section.Replace('{scene}', $scene)
+            $section = $section.Replace('{input}', $inputPath)
+            $section = $section.Replace('{output}', $outputPath)
+            $section = $section.Replace('{request_command}',
+                "pwsh -NoProfile -File .agents/workflow/scripts/text-refine.ps1 $scene $inputPath -Request")
+            $section = $section.Replace('{check_command}',
+                "pwsh -NoProfile -File .agents/workflow/scripts/text-refine.ps1 $scene $inputPath -Check")
+            $sections += $section
+        }
+        $refineTxt = (($targets | ForEach-Object { "$($_.Scene) $($_.InputPath)" }) -join "`n") + "`n"
+        [System.IO.File]::WriteAllText("$prRunDir/refine.txt", $refineTxt, [System.Text.UTF8Encoding]::new($false))
+        return (($sections | ForEach-Object { $_.TrimEnd("`n") }) -join "`n`n")
+    }
     $text = Get-Content "$PSScriptRoot/dispatch-pr-prompt-template.md" -Raw -Encoding UTF8
     $text = $text.Replace('{task_list}', ($selected -join "`n"))
     $text = $text.Replace('{requirement_list}', $requirementList)
@@ -87,14 +294,19 @@ if ($Pr) {
     $text = $text.Replace('{base_branch}', $baseBranch)
     $text = $text.Replace('{base_ref}', $baseRef)
     $text = $text.Replace('{run_dir}', ".agents/workflow/runs/pr-$prN-1")
+    $text = $text.Replace('{refine_instruction}', (Get-RefineInstruction))
     [System.IO.File]::WriteAllText("$prRunDir/prompt.md", $text, [System.Text.UTF8Encoding]::new($false))
+    if ($Launcher) {
+        [System.IO.File]::WriteAllText("$prRunDir/launcher", "$Launcher`n", [System.Text.UTF8Encoding]::new($false))
+    }
+    Add-SubagentSection $prRunDir
     Write-Output "Generated: $prRunDir/prompt.md"
     Write-Output "RunId: pr-$prN"
     exit 0
 }
 
 if (-not $TaskId) {
-    [Console]::Error.WriteLine("Usage: dispatch-prompt-gen.ps1 -TaskId <TaskId> [-Attempt <n>] | dispatch-prompt-gen.ps1 -Pr")
+    [Console]::Error.WriteLine($PrUsage)
     exit 1
 }
 # パスや埋め込みに使うため、タスクIDと試行回数の形式を検証する
@@ -389,5 +601,7 @@ $generated = $generated.Replace('{handoff_reports}', $handoffReports)
 $generated = $generated.Replace('{verify_instruction}', $verifyInstruction)
 
 [System.IO.File]::WriteAllText($PromptPath, $generated, [System.Text.UTF8Encoding]::new($false))
+Add-WorktreeSection $RunDir
+Add-SubagentSection $RunDir
 Write-Output "Generated: $PromptPath"
 exit 0

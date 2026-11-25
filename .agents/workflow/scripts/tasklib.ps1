@@ -14,6 +14,59 @@ $script:ReqLinePattern = '^- (R\d+):[ \t]*(\S.*?)[ \t]*$'
 $script:ReqFieldPattern = '^(\s*-\s+\*\*要件\*\*:)[ \t]*(.*?)[ \t]*$'
 $script:ReqFormatHint = "expected 'なし' or comma-separated requirement IDs like 'R1, R2'"
 
+$script:DefaultBaseBranch = 'main'
+$script:DefaultBranchPrefixes = @('develop/', 'develop-')
+
+# config.json を読む。無い・読めないときは $null
+function Read-WorkflowConfig {
+    param([string]$Path)
+    try {
+        return (Get-Content $Path -Raw -Encoding UTF8 -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop)
+    } catch {
+        return $null
+    }
+}
+
+# base_branch が空でない文字列ならそれ、それ以外は 'main'
+function Get-BaseBranch {
+    param($Config)
+    if ($null -ne $Config) {
+        $v = $Config.base_branch
+        if ($v -is [string] -and $v) { return $v }
+    }
+    return $script:DefaultBaseBranch
+}
+
+# branch_prefixes が空でない文字列だけの空でない配列ならそれ、それ以外は既定。呼び出し側は @(...) で受ける
+function Get-BranchPrefixes {
+    param($Config)
+    if ($null -ne $Config) {
+        $v = $Config.branch_prefixes
+        if ($v -is [array]) {
+            $items = @($v)
+            $ok = ($items.Count -gt 0)
+            foreach ($p in $items) {
+                if (-not ($p -is [string]) -or -not $p) { $ok = $false; break }
+            }
+            if ($ok) { return $items }
+        }
+    }
+    return @($script:DefaultBranchPrefixes)
+}
+
+function Test-BranchPrefix {
+    param([string]$Branch, [string[]]$Prefixes)
+    foreach ($p in $Prefixes) {
+        if ($Branch.StartsWith($p, [System.StringComparison]::Ordinal)) { return $true }
+    }
+    return $false
+}
+
+function Format-BranchPrefixes {
+    param([string[]]$Prefixes)
+    return (($Prefixes | ForEach-Object { "'$_'" }) -join ', ')
+}
+
 # 改行コードを保持したまま行に分割する(CRLF の tasks.md をそのまま書き戻すため)
 function Split-TaskLines {
     param([string]$Content)
@@ -45,7 +98,7 @@ function Read-TaskList {
         }
         if ($line.StartsWith('## ')) {
             if ($line -cmatch '^## (T\d+):\s*(.+)') {
-                $current = [pscustomobject]@{ id = $Matches[1]; title = $Matches[2].Trim(); depRaw = $null; depLine = -1; group = $currentGroup; groupRaw = $null; reqRaw = $null }
+                $current = [pscustomobject]@{ id = $Matches[1]; title = $Matches[2].Trim(); depRaw = $null; depLine = -1; group = $currentGroup; groupRaw = $null; reqRaw = $null; changed = [System.Collections.Generic.List[string]]::new() }
                 $tasks[$current.id] = $current
             } else {
                 $current = $null
@@ -62,10 +115,17 @@ function Read-TaskList {
         if ($null -ne $current -and $null -eq $current.reqRaw -and $line -cmatch $script:ReqFieldPattern) {
             $current.reqRaw = $Matches[2]
         }
+        if ($null -ne $current) {
+            foreach ($cm in [regex]::Matches($line, '`([^`]+)`[(（]変更対象')) {
+                $path = $cm.Groups[1].Value -replace ':\d+(-\d+)?$', ''
+                if (-not $current.changed.Contains($path)) { $current.changed.Add($path) }
+            }
+        }
     }
     # グループ欄による上書き(欄の名前が区切りに存在する場合のみ)
     foreach ($t in $tasks.Values) {
         if ($null -ne $t.groupRaw -and $declared.Contains($t.groupRaw)) { $t.group = $t.groupRaw }
+        $t.changed = [string[]]@($t.changed)
     }
     return @($tasks.Values)
 }

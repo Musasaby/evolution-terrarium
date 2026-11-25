@@ -40,6 +40,10 @@ exit code・Verdict・`Next:` 行・reason(`idle-timeout` 等)・ステータス
 - **タスク1件が done になったとき**(`task_done`): 状況=進捗(何タスク中何件完了)。
   起きたこと=タスクID・結果(done)・コミットハッシュ・リトライ回数。次にすること=次のタスク。
   リトライの途中では報告しない
+  - `workflow-run` で進めているときは、`Done: <ID> <ハッシュ> retries=<n>` の行をそのまま伝える。
+    下書きも推敲もしない。`workflow-run` が戻ったときに、たまった `Done:` の行をまとめて伝える
+  - 「子の起動直後」「子の実行待ち」「子の完了検知後」「レビュー結果」「コミット完了」の場面は、
+    `workflow-run` の経路では使わない(止まって親が処理するタスクだけに使う)
 - **PR 作成・マージ待ち**(`pr_body` は PR 説明の推敲): 状況=作業ブランチと PR の状態。起きたこと=PR を作成したこと(PR の URL)。
   次にすること=**利用者がマージする**ことを先頭に書く
 - **停止して判断を仰ぐとき**(`confirm`): 状況=止まった場所(タスク・グループ)。起きたこと=止まった理由を言葉で。
@@ -61,6 +65,9 @@ yomiyasu は同梱しない。利用者が導入し、config.json の `text_refi
    - 親自身の skill 一覧に出ている yomiyasu の名前を `text_refine.skill` に設定すると、推敲できること
      (例: Claude Code の `npx skills add` では `yomiyasu`、Claude Code のプラグインと Codex では `yomiyasu:yomiyasu`)
    - 親の skill 一覧に yomiyasu が無いとき(別のエージェント用に入っているとき)は、その旨
+
+   `Refine: dispatch` が出たとき(`text_refine.mode` が `dispatch`)も `Next: continue` なので、
+   下書きをそのまま使う。PR 本文と完了時のサマリーは PR 作成の子が推敲する(手順は `pr.md`)。
 
    config.json は、利用者の承認なしに書き換えない
 4. `Next: refine` のときは、`Request:` 行の依頼文を**一字も変えずに**そのまま自分への依頼として実行する

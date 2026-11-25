@@ -11,11 +11,20 @@ set -uo pipefail
 #   6=権限拒否で中断(output.log にプロファイルの権限拒否の記録がある)、または、ツール実行の記録に
 #     プロジェクト外(/tmp・ホームディレクトリ等)へのアクセスがある
 #   5=完了報告が無い・無効(最後の `## 完了報告` の後にツール実行の記録が続く、必須項目が無い・テンプレートのまま)。
+#     レビューの run(review-*)では、Verdict が pass/fail でない、fail で fix-notes.md が無い、
+#     pass で comprehension_check.enabled が true なのに理解確認ファイルが無い場合も含む。
 #     最後のツール実行の後に出力が無い場合は、その旨を理由に書く
-#   7=変更0件(完了報告はあるが作業ツリーに変更が無い。PR 作成の run(pr-*)では判定しない)
+#   7=変更0件(完了報告はあるが作業ツリーに変更が無い。PR 作成の run(pr-*)と
+#     レビューの run(review-*)では判定しない)
+#   9=PR 作成の run(pr-*)で、子の推敲を確かめられない・判断待ちの候補が残った(refine.txt がある
+#     run だけ。ほかの判定が ok のときに判定する)
 #   0=正常終了かつ完了報告あり / 2=done マーカーが無い(まだ実行中) / 1=使い方不備
 # stdout の最後の行には次のアクションを示す `Next:` 行を出す(wait / review <TaskId> /
-# escalate reason=<理由>。使い方不備の exit 1 では出さない)
+# collect <TaskId>(worktree の run で正常のとき)/
+# commit <ベースのタスクID>(レビューの run で Verdict が pass のとき)/
+# retry <ベースのタスクID>(レビューの run で Verdict が fail のとき)/
+# escalate reason=<理由>(refine-unchecked / refine-undecided を含む)。使い方不備の exit 1 では出さない)
+# レビューの run では `Review type:` に type(決まった値でなければ `invalid`)を出す
 
 TASK_ID="${1:?Usage: dispatch-check.sh <TaskId> [Attempt]}"
 ATTEMPT="${2:-1}"
@@ -49,7 +58,15 @@ to_py_path() {
         echo "$1"
     fi
 }
-if ! PROFILE_OUT="$(python3 "$(to_py_path "$SCRIPT_DIR")/childprofile.py" . | tr -d '\r')"; then
+# runs/<ID>-<N>/launcher が subagent の run は subagent プロファイルで判定する(無い・cli は config.json のまま)。
+# レビューの run(review-*)は --task で渡し、config.json の review 節の設定を使う
+PROFILE_ARGS=""
+if [ -f "$RUN_DIR/launcher" ] && [ "$(tr -d '[:space:]' < "$RUN_DIR/launcher")" = "subagent" ]; then
+    PROFILE_ARGS="--profile subagent"
+fi
+PROFILE_ARGS="${PROFILE_ARGS:+$PROFILE_ARGS }--task $TASK_ID"
+# shellcheck disable=SC2086
+if ! PROFILE_OUT="$(python3 "$(to_py_path "$SCRIPT_DIR")/childprofile.py" . $PROFILE_ARGS | tr -d '\r')"; then
     exit 1
 fi
 PROFILE_NAME="$(printf '%s\n' "$PROFILE_OUT" | sed -n '1p')"
@@ -113,22 +130,255 @@ else
     done < <(LC_ALL=C tr -d '\r' < "$GUARD_PATH")
 fi
 
+# worktree の run と、本体で動くレビューの run(review-* かつ worktree.txt が無い run)は、
+# 本体の state.json の自分のタスクの欄が起動時から変わっていないかも確かめる
+if [ -f "$RUN_DIR/worktree.txt" ] || [[ "$TASK_ID" == review-* ]]; then
+    # 比べる欄のタスクID: worktree.txt があれば自分のタスク、無ければレビュー対象(レビューの run)
+    ENTRY_ID="$TASK_ID"
+    if [ ! -f "$RUN_DIR/worktree.txt" ]; then
+        ENTRY_ID="${TASK_ID#review-}"
+    fi
+    if [ ! -f "$RUN_DIR/state-entry.txt" ]; then
+        GUARD_ISSUES="${GUARD_ISSUES}state-entry.txt not found
+"
+    else
+        CURRENT_ENTRY="$(python3 -c "
+import json, sys
+try:
+    with open('.agents/workflow/state.json', encoding='utf-8') as f:
+        tasks = json.load(f).get('tasks', [])
+    for e in tasks:
+        if e.get('id') == sys.argv[1]:
+            print(json.dumps({k: e.get(k) for k in ('status', 'retries', 'commit')}, sort_keys=True))
+            break
+    else:
+        print('-')
+except Exception:
+    print('-')
+" "$ENTRY_ID" 2> /dev/null | tr -d '\r')"
+        if [ "$CURRENT_ENTRY" != "$(LC_ALL=C tr -d '\r' < "$RUN_DIR/state-entry.txt" | head -n 1)" ]; then
+            GUARD_ISSUES="${GUARD_ISSUES}changed: .agents/workflow/state.json ($ENTRY_ID)
+"
+        fi
+    fi
+    # 自分以外のタスクの欄は、親の正規の遷移(task-state・state-sync --insert)だけを許す
+    if [ ! -f "$RUN_DIR/state-tasks.json" ]; then
+        GUARD_ISSUES="${GUARD_ISSUES}state-tasks.json not found
+"
+    else
+        BAD_TASKS="$(python3 -c "
+import json, subprocess, sys
+try:
+    with open(sys.argv[2], encoding='utf-8') as f:
+        before = {e['id']: e for e in json.load(f)}
+except Exception:
+    before = None
+if before is None:
+    print(sys.argv[1])
+    sys.exit(0)
+try:
+    with open('.agents/workflow/state.json', encoding='utf-8') as f:
+        now = {str(e.get('id')): e for e in json.load(f).get('tasks', [])}
+except Exception:
+    now = {}
+
+def is_ancestor(c):
+    if not c or not isinstance(c, str):
+        return False
+    r = subprocess.run(['git', 'merge-base', '--is-ancestor', c, 'HEAD'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    return r.returncode == 0
+
+bad = []
+for tid, b in before.items():
+    if tid == sys.argv[1]:
+        continue
+    n = now.get(tid)
+    if n is None:
+        bad.append(tid)
+    elif b.get('status') == 'done':
+        if n.get('status') != 'done' or n.get('commit') != b.get('commit'):
+            bad.append(tid)
+    else:
+        if n.get('status') == 'done' and not is_ancestor(n.get('commit')):
+            bad.append(tid)
+for tid, n in now.items():
+    if tid not in before and n.get('status') != 'pending':
+        bad.append(tid)
+print(' '.join(bad))
+" "$ENTRY_ID" "$RUN_DIR/state-tasks.json" 2> /dev/null | tr -d '\r')"
+        for bad_id in $BAD_TASKS; do
+            GUARD_ISSUES="${GUARD_ISSUES}changed: .agents/workflow/state.json ($bad_id)
+"
+        done
+    fi
+fi
+
+# 本体(メインの作業ツリー)の変更を、起動時に dispatch-run が main-tree.txt に記録した
+# パスごとのハッシュと比べる(worktree の run とレビューの run で使う)。ほかの run が
+# collect した changes.patch のパスは、その collected が自分の main-tree.txt より新しければ
+# 除外する(親の正当な collect を許す)
+check_main_tree() {
+    local main_tree_path="$RUN_DIR/main-tree.txt"
+    if [ ! -f "$main_tree_path" ]; then
+        GUARD_ISSUES="${GUARD_ISSUES}main-tree.txt not found
+"
+        return
+    fi
+    local current_main_tree changed_main changed_path
+    current_main_tree="$(bash "$SCRIPT_DIR/git-state.sh" --main-tree 2> /dev/null | LC_ALL=C tr -d '\r')"
+    changed_main="$(printf '%s\n' "$current_main_tree" | python3 -c "
+import os, re, sys
+
+run_dir, recorded_path = sys.argv[1], sys.argv[2]
+recorded = {}
+try:
+    with open(recorded_path, encoding='utf-8') as f:
+        for line in f.read().split('\n'):
+            if not line:
+                continue
+            h, sep, p = line.partition('  ')
+            if sep:
+                recorded[p] = h
+except OSError:
+    recorded = {}
+try:
+    recorded_mtime = os.path.getmtime(recorded_path)
+except OSError:
+    recorded_mtime = 0
+# run の終了(done)より後に更新されたパスには、その旨を付ける
+try:
+    done_mtime = os.path.getmtime(os.path.join(run_dir, 'done'))
+except OSError:
+    done_mtime = None
+
+excluded = set()
+runs_dir = os.path.dirname(run_dir)
+try:
+    entries = os.listdir(runs_dir)
+except OSError:
+    entries = []
+own = os.path.abspath(run_dir)
+for name in entries:
+    other = os.path.join(runs_dir, name)
+    if os.path.abspath(other) == own:
+        continue
+    collected = os.path.join(other, 'collected')
+    patch = os.path.join(other, 'changes.patch')
+    if not os.path.isfile(collected):
+        continue
+    try:
+        if os.path.getmtime(collected) <= recorded_mtime:
+            continue
+    except OSError:
+        continue
+    try:
+        with open(patch, encoding='utf-8', errors='replace') as f:
+            for line in f:
+                m = re.match(r'^diff --git a/(.+) b/(.+)\$', line.rstrip('\n').rstrip('\r'))
+                if m:
+                    excluded.add(m.group(1))
+                    excluded.add(m.group(2))
+    except OSError:
+        pass
+
+for line in sys.stdin.read().split('\n'):
+    if not line:
+        continue
+    h, sep, p = line.partition('  ')
+    if not sep or p in excluded:
+        continue
+    if p not in recorded or recorded[p] != h:
+        try:
+            late = done_mtime is not None and os.path.getmtime(p) > done_mtime
+        except OSError:
+            late = False
+        print(p + (' (modified after the run ended)' if late else ''))
+" "$RUN_DIR" "$main_tree_path" 2> /dev/null | tr -d '\r')"
+    while IFS= read -r changed_path; do
+        [ -n "$changed_path" ] || continue
+        GUARD_ISSUES="${GUARD_ISSUES}changed: main worktree: $changed_path
+"
+    done <<< "$changed_main"
+}
+
 # --- 本物のリポジトリの git 状態の検証(dispatch-run が起動時に git-state.txt に記録した値と比べる) ---
 # タスク種別の判定(完了報告の必須項目と変更0件の判定で使う case)は、ここでも IS_PR を使うため
 # この位置に置いている。PR 作成の run(IS_PR=true。タスクIDが pr- で始まる)は config を比べない
-# (子が git push -u で .git/config を正当に変えるため)
+# (子が git push -u で .git/config を正当に変えるため)。レビューの run(review-*)は
+# BASE_ID(元のタスクID)とレビュー用の必須項目を持つ
 case "$TASK_ID" in
-    pr-*) IS_PR=true; REQUIRED='PR URL' ;;
-    *) IS_PR=false; REQUIRED='変更ファイル|テスト結果' ;;
+    review-*)
+        IS_REVIEW=true; IS_PR=false
+        BASE_ID="${TASK_ID#review-}"
+        REQUIRED='Verdict|指摘|要約|fix-notes|理解確認'
+        ;;
+    pr-*) IS_REVIEW=false; IS_PR=true; BASE_ID=""; REQUIRED='PR URL' ;;
+    *) IS_REVIEW=false; IS_PR=false; BASE_ID=""; REQUIRED='変更ファイル|テスト結果' ;;
 esac
+# 本体の変更の検知は、worktree の run とレビューの run の両方で行う
+if [ -f "$RUN_DIR/worktree.txt" ] || [ "$IS_REVIEW" = true ]; then
+    check_main_tree
+fi
+# worktree.txt がある run(dispatch-worktree create 済み)は、worktree の中で git-state --run <branch> --parent <親の作業ブランチ> を
+# 実行した値で比べ、変更の取得も worktree の中で行う(WT_DIR が空でなければ worktree の run)
+WT_DIR=""
+WT_BRANCH=""
+WT_MISSING=false
+if [ -f "$RUN_DIR/worktree.txt" ]; then
+    WT_DIR="$(sed -n 's/^path //p' "$RUN_DIR/worktree.txt" | head -n 1 | tr -d '\r')"
+    WT_BRANCH="$(sed -n 's/^branch //p' "$RUN_DIR/worktree.txt" | head -n 1 | tr -d '\r')"
+    if [ -z "$WT_DIR" ] || [ ! -d "$WT_DIR" ]; then
+        WT_MISSING=true
+        GUARD_ISSUES="${GUARD_ISSUES}worktree not found: $WT_DIR
+"
+    fi
+fi
 GIT_STATE_PATH="$RUN_DIR/git-state.txt"
 if [ ! -f "$GIT_STATE_PATH" ]; then
     GUARD_ISSUES="${GUARD_ISSUES}git-state.txt not found (deleted, or the run was not started by dispatch-run)
 "
+elif [ "$WT_MISSING" = true ]; then
+    :
 else
     RECORDED_STATE="$(LC_ALL=C tr -d '\r' < "$GIT_STATE_PATH")"
     # 実行権限に頼らず bash で呼ぶ(リポジトリ上のスクリプトは mode 100644 のため)
-    CURRENT_STATE="$(bash "$SCRIPT_DIR/git-state.sh" 2> /dev/null | LC_ALL=C tr -d '\r')"
+    if [ -n "$WT_DIR" ]; then
+        PARENT_REF="$(git symbolic-ref -q HEAD 2> /dev/null || true)"
+        [ -n "$PARENT_REF" ] || PARENT_REF=-
+        OTHER_RUNS="$(python3 -c "
+import json, sys
+try:
+    with open('.agents/workflow/state.json', encoding='utf-8') as f:
+        tasks = json.load(f).get('tasks', [])
+    print(','.join(str(e.get('id')) for e in tasks if e.get('id') != sys.argv[1] and e.get('status') in ('in_progress', 'in_review')))
+except Exception:
+    print('')
+" "$TASK_ID" 2> /dev/null | tr -d '\r')"
+        CURRENT_STATE="$(cd "$WT_DIR" && bash "$SCRIPT_DIR/git-state.sh" --run "$WT_BRANCH" --parent "$PARENT_REF" --other-runs "$OTHER_RUNS" 2> /dev/null | LC_ALL=C tr -d '\r')"
+        # 親の作業ブランチが、起動時の参照名のまま、記録した値から進む方向にだけ動いたかを確かめる
+        if [ ! -f "$RUN_DIR/parent-head.txt" ]; then
+            GUARD_ISSUES="${GUARD_ISSUES}parent-head.txt not found
+"
+        else
+            REC_PARENT_REF="$(sed -n 1p "$RUN_DIR/parent-head.txt" | tr -d '\r')"
+            REC_PARENT_SHA="$(sed -n 2p "$RUN_DIR/parent-head.txt" | tr -d '\r')"
+            CUR_PARENT_SHA="$(git rev-parse --verify -q HEAD 2> /dev/null || echo -)"
+            PARENT_BAD=false
+            if [ "$REC_PARENT_REF" != "$PARENT_REF" ]; then
+                PARENT_BAD=true
+            elif [ "$REC_PARENT_SHA" != "$CUR_PARENT_SHA" ]; then
+                if [ "$REC_PARENT_SHA" = - ] || [ "$CUR_PARENT_SHA" = - ] || ! git merge-base --is-ancestor "$REC_PARENT_SHA" "$CUR_PARENT_SHA" 2> /dev/null; then
+                    PARENT_BAD=true
+                fi
+            fi
+            if [ "$PARENT_BAD" = true ]; then
+                GUARD_ISSUES="${GUARD_ISSUES}git changed: parent
+"
+            fi
+        fi
+    else
+        CURRENT_STATE="$(bash "$SCRIPT_DIR/git-state.sh" 2> /dev/null | LC_ALL=C tr -d '\r')"
+    fi
     for name in head branch refs config; do
         if [ "$IS_PR" = true ] && [ "$name" = config ]; then continue; fi
         recorded="$(printf '%s\n' "$RECORDED_STATE" | LC_ALL=C awk -v name="$name" '$1 == name { print $2 }')"
@@ -194,9 +444,11 @@ OUTSIDE_LINES="$(printf '%s\n' "$RAW_LOG" | TOOL_CALL_RE="$TOOL_CALL_RE" LC_ALL=
 # --- 子CLI自身のログのエラー検出(利用上限・エンドポイント障害などの切り分け用) ---
 # config.json の child_agent.cli_log(子CLI自身のログファイルのパス。先頭の ~/ はホームディレクトリ)
 # を読む(python3 が無い・config.json が読めない場合は空 = 未設定扱い)。末尾 200 行のうち ERROR を
-# 含む行の最後の 5 行と、プロバイダー起因かどうか(利用上限・レート制限・エンドポイント障害・429。
-# 429 の前後に英数字を許さないのは .429Z のようなタイムスタンプや16進の ID に一致させないため)を
-# 出力に表示するだけなので、判定(Verdict・exit code)には影響しない
+# 含む行を取り、runs/<ID>-<N>/started(dispatch-run が記録した起動時刻)があれば各行の最初の
+# タイムスタンプを UTC の秒に直して起動時刻より前の行を除く(タイムスタンプが無い行・タイムゾーンが
+# 無い行は残す)。その最後の 5 行と、プロバイダー起因かどうか(利用上限・レート制限・エンドポイント
+# 障害・429 など。429 の前後に英数字を許さないのは .429Z のようなタイムスタンプや16進の ID に
+# 一致させないため)を出力に表示するだけなので、判定(Verdict・exit code)には影響しない
 CLI_LOG="$(python3 -c "import json; print(json.load(open('.agents/workflow/config.json', encoding='utf-8'))['child_agent'].get('cli_log', ''))" 2>/dev/null | tr -d '\r')"
 PROVIDER_ERROR=unknown
 CLI_LOG_LINES=""
@@ -211,7 +463,48 @@ if [ -n "$CLI_LOG" ]; then
     else
         PROVIDER_ERROR=no
         # NUL を含むと grep がバイナリ扱いするため、output.log と同じく NUL・CR を除いてから読む
-        CLI_LOG_LINES="$(LC_ALL=C tr -d '\000\r' < "$CLI_LOG_PATH" | tail -n 200 | grep ERROR | tail -n 5)"
+        CLI_LOG_TAIL="$(LC_ALL=C tr -d '\000\r' < "$CLI_LOG_PATH" | tail -n 200 | grep ERROR)"
+        # 起動時刻より前の ERROR 行を除く(dispatch-run の started が無ければ絞り込まない)。
+        # タイムスタンプを取れない行(タイムゾーンが無い行を含む)は残す。python3 が無ければ絞り込まない
+        if [ -f "$RUN_DIR/started" ] && command -v python3 > /dev/null 2>&1; then
+            CLI_LOG_TAIL="$(printf '%s\n' "$CLI_LOG_TAIL" | python3 -c '
+import re, sys
+from datetime import datetime, timezone, timedelta
+
+TS_RE = re.compile(rb"([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})(?:\.[0-9]+)?(Z|[+-][0-9]{2}:?[0-9]{2})")
+
+def to_utc_second(data):
+    m = TS_RE.search(data)
+    if not m:
+        return None
+    g = m.groups()
+    tz = g[6].decode("ascii")
+    if tz == "Z":
+        offset = timedelta(0)
+    else:
+        digits = tz[1:].replace(":", "")
+        offset = timedelta(hours=int(digits[0:2]), minutes=int(digits[2:4]))
+        if tz[0] == "-":
+            offset = -offset
+    # 日付として成り立たない値(13月・24時間以上のオフセット等)は、ps1 版と同じく比較できない行として残す
+    try:
+        dt = datetime(int(g[0]), int(g[1]), int(g[2]), int(g[3]), int(g[4]), int(g[5]), tzinfo=timezone(offset))
+    except (ValueError, OverflowError):
+        return None
+    return int(dt.timestamp())
+
+with open(sys.argv[1], "rb") as f:
+    started = to_utc_second(f.read())
+if started is None:
+    sys.stdout.buffer.write(sys.stdin.buffer.read())
+else:
+    for line in sys.stdin.buffer:
+        ts = to_utc_second(line)
+        if ts is None or ts >= started:
+            sys.stdout.buffer.write(line)
+' "$RUN_DIR/started")"
+        fi
+        CLI_LOG_LINES="$(printf '%s\n' "$CLI_LOG_TAIL" | tail -n 5)"
         if [ -n "$PROVIDER_RE" ] && [ -n "$CLI_LOG_LINES" ] && printf '%s\n' "$CLI_LOG_LINES" | LC_ALL=C tr '[:upper:]' '[:lower:]' | LC_ALL=C grep -Eq -e "$PROVIDER_RE"; then
             PROVIDER_ERROR=yes
         fi
@@ -224,7 +517,8 @@ fi
 # プロファイルの tool_activity_pattern に一致する行に限る(auto / opencode では色付きのマーカー行
 # (`ESC[0m$ ESC[0m...` 等)と stream-json の `[tool_use]` / `[tool_result]` 行。報告本文の
 # `→ 要確認` や `$ npm test` は対象外。パターンが空なら記録は無いものとして扱う)。必須項目は
-# 通常のタスクが「変更ファイル」「テスト結果」、PR 作成の run(pr-*)が「PR URL」。
+# 通常のタスクが「変更ファイル」「テスト結果」、PR 作成の run(pr-*)が「PR URL」、
+# レビューの run(review-*)が「Verdict」「指摘」「要約」「fix-notes」「理解確認」。
 # 区切りは半角 `:` と全角 `：` のどちらでもよい。
 # 値が同じ行に無い場合は、次の行からのインデントされた箇条書きを値とみなす。
 REPORT_RESULT="$(printf '%s\n' "$RAW_LOG" | TOOL_ACTIVITY_RE="$TOOL_ACTIVITY_RE" LC_ALL=C awk -v esc="$ESC" -v required="$REQUIRED" '
@@ -271,7 +565,83 @@ REPORT_RESULT="$(printf '%s\n' "$RAW_LOG" | TOOL_ACTIVITY_RE="$TOOL_ACTIVITY_RE"
         print "found"
     }')"
 
-CHANGES="$(git status --porcelain)"
+# --- レビューの run(review-*)の完了報告の追加検証 ---
+# 完了報告が有効なとき、Verdict が pass/fail か、fail なら次の試行の fix-notes.md があるか、
+# pass なら理解確認が有効なときに comprehension/<ベースID>.md があるかを確かめる
+REVIEW_VERDICT=""
+REVIEW_FINDINGS=""
+REVIEW_SUMMARY=""
+REVIEW_TYPE=""
+FIX_NOTES_PATH=""
+if [ "$IS_REVIEW" = true ]; then
+    FIX_NOTES_PATH=".agents/workflow/runs/${BASE_ID}-$((ATTEMPT + 1))/fix-notes.md"
+    REVIEW_FIELDS="$(printf '%s\n' "$RAW_LOG" | LC_ALL=C awk -v esc="$ESC" '
+        {
+            line = $0
+            gsub(esc "\\[[0-9;]*[A-Za-z]", "", line)
+            lines[NR] = line
+        }
+        lines[NR] ~ /^## 完了報告[ \t]*$/ { last = NR }
+        END {
+            if (!last) exit
+            end = NR
+            for (i = last + 1; i <= NR; i++) if (lines[i] ~ /^## /) { end = i - 1; break }
+            target[1] = "Verdict"; target[2] = "指摘"; target[3] = "要約"; target[4] = "type"
+            for (k = 1; k <= 4; k++) {
+                value = ""
+                for (i = last + 1; i <= end; i++) {
+                    plen = 0
+                    if (index(lines[i], "- " target[k] ":") == 1) plen = length("- " target[k] ":")
+                    else if (index(lines[i], "- " target[k] "：") == 1) plen = length("- " target[k] "：")
+                    if (!plen) continue
+                    value = substr(lines[i], plen + 1)
+                    gsub(/^[ \t]+|[ \t]+$/, "", value)
+                    if (value == "" && i < end && lines[i + 1] ~ /^[ \t]+[^ \t]/) value = "(list)"
+                    break
+                }
+                print value
+            }
+        }')"
+    REVIEW_VERDICT="$(printf '%s\n' "$REVIEW_FIELDS" | sed -n '1p')"
+    REVIEW_FINDINGS="$(printf '%s\n' "$REVIEW_FIELDS" | sed -n '2p')"
+    REVIEW_SUMMARY="$(printf '%s\n' "$REVIEW_FIELDS" | sed -n '3p')"
+    REVIEW_TYPE="$(printf '%s\n' "$REVIEW_FIELDS" | sed -n '4p')"
+    if ! printf '%s\n' "$REVIEW_TYPE" | grep -qxE 'feat|fix|refactor|docs|test|chore|perf|ci'; then
+        REVIEW_TYPE=invalid
+    fi
+    if [ "$REPORT_RESULT" = found ]; then
+        if [ "$REVIEW_VERDICT" != pass ] && [ "$REVIEW_VERDICT" != fail ]; then
+            REPORT_RESULT="invalid (Verdict must be pass or fail)"
+        elif [ "$REVIEW_VERDICT" = fail ]; then
+            if [ ! -f "$FIX_NOTES_PATH" ]; then
+                REPORT_RESULT="invalid (fix-notes not found: $FIX_NOTES_PATH)"
+            fi
+        else
+            COMPREHENSION_ENABLED="$(python3 -c "
+import json
+try:
+    with open('.agents/workflow/config.json', encoding='utf-8') as f:
+        print(str(json.load(f).get('comprehension_check', {}).get('enabled', False)).lower())
+except Exception:
+    print('false')
+" 2> /dev/null | tr -d '\r')"
+            COMPREHENSION_PATH=".agents/workflow/comprehension/${BASE_ID}.md"
+            if [ "$COMPREHENSION_ENABLED" = true ] && [ ! -f "$COMPREHENSION_PATH" ]; then
+                REPORT_RESULT="invalid (comprehension file not found: $COMPREHENSION_PATH)"
+            fi
+        fi
+    fi
+fi
+
+# worktree の run は worktree の中で変更を取る(worktree が無いときは本体で取る)
+git_in_wt() {
+    if [ -n "$WT_DIR" ] && [ "$WT_MISSING" = false ]; then
+        git -C "$WT_DIR" "$@"
+    else
+        git "$@"
+    fi
+}
+CHANGES="$(git_in_wt status --porcelain)"
 CHANGE_COUNT=0
 [ -n "$CHANGES" ] && CHANGE_COUNT="$(printf '%s\n' "$CHANGES" | wc -l | tr -d ' ')"
 
@@ -285,10 +655,55 @@ elif [ -n "$OUTSIDE_LINES" ]; then
     VERDICT="outside-access"; CODE=6
 elif [ "$REPORT_RESULT" != found ]; then
     VERDICT="no-report"; CODE=5
-elif [ "$IS_PR" = false ] && [ "$CHANGE_COUNT" -eq 0 ]; then
+elif [ "$IS_PR" = false ] && [ "$IS_REVIEW" = false ] && [ "$CHANGE_COUNT" -eq 0 ]; then
     VERDICT="no-changes"; CODE=7
 else
     VERDICT="ok"; CODE=0
+fi
+
+# --- PR 作成の run(pr-*)の推敲の確認 ---
+REFINE_LINES=""   # 出力する行をためる
+REFINE_WORST=""   # 空 / undecided / unchecked(unchecked を優先する)
+if [ "$IS_PR" = true ] && [ "$CODE" -eq 0 ] && [ -f "$RUN_DIR/refine.txt" ]; then
+    while read -r scene path; do
+        # 空行は飛ばす。path の末尾の CR は取り除く
+        if [ -z "${scene%$'\r'}" ] && [ -z "$path" ]; then
+            continue
+        fi
+        path="${path%$'\r'}"
+        R_OUT="$(bash "$SCRIPT_DIR/text-refine.sh" "$scene" "$path" --check 2> /dev/null)"; R_CODE=$?
+        # 結果を決める
+        if [ "$R_CODE" -eq 0 ] && printf '%s\n' "$R_OUT" | grep -qxF 'Refine: off'; then
+            R_RESULT=off
+        elif [ "$R_CODE" -eq 0 ] && printf '%s\n' "$R_OUT" | grep -qxF 'Check: skipped'; then
+            R_RESULT=skipped
+        elif [ "$R_CODE" -eq 0 ]; then
+            R_RESULT=ok
+        elif [ "$R_CODE" -eq 2 ]; then
+            R_RESULT=undecided
+        else
+            R_RESULT=unchecked
+        fi
+        if [ -z "$REFINE_LINES" ]; then
+            REFINE_LINES="Refine ${scene}: ${R_RESULT}"
+        else
+            REFINE_LINES="${REFINE_LINES}
+Refine ${scene}: ${R_RESULT}"
+        fi
+        if [ "$R_RESULT" = undecided ] || [ "$R_RESULT" = unchecked ]; then
+            R_EXTRA="$(printf '%s\n' "$R_OUT" | grep -E '^(Undecided|Unchecked): ')"
+            if [ -n "$R_EXTRA" ]; then
+                REFINE_LINES="${REFINE_LINES}
+${R_EXTRA}"
+            fi
+        fi
+        if [ "$R_RESULT" = unchecked ]; then
+            REFINE_WORST=unchecked
+        elif [ "$R_RESULT" = undecided ] && [ "$REFINE_WORST" != unchecked ]; then
+            REFINE_WORST=undecided
+        fi
+    done < "$RUN_DIR/refine.txt"
+    if [ -n "$REFINE_WORST" ]; then VERDICT="refine-$REFINE_WORST"; CODE=9; fi
 fi
 
 # --- 完了報告の report.md への書き出し(CODE が 0・7 = 完了報告が有効で改ざん・異常終了が無いとき) ---
@@ -363,10 +778,24 @@ if [ -n "$REPORT_SAVED" ]; then
 fi
 echo "Changes: ${CHANGE_COUNT}"
 echo "Verdict: ${VERDICT}"
+if [ "$IS_REVIEW" = true ]; then
+    echo "Review verdict: ${REVIEW_VERDICT}"
+    echo "Review findings: ${REVIEW_FINDINGS}"
+    echo "Review summary: ${REVIEW_SUMMARY}"
+    echo "Review type: ${REVIEW_TYPE}"
+    if [ -n "$FIX_NOTES_PATH" ] && [ -f "$FIX_NOTES_PATH" ]; then
+        echo "Fix notes: ${FIX_NOTES_PATH}"
+    else
+        echo "Fix notes: none"
+    fi
+fi
+if [ -n "$REFINE_LINES" ]; then
+    printf '%s\n' "$REFINE_LINES"
+fi
 echo "--- git status --porcelain"
-git status --porcelain
+git_in_wt status --porcelain
 echo "--- git diff --stat"
-git diff --stat
+git_in_wt diff --stat
 echo "--- output.log (last ${TAIL_LINES} lines)"
 if [ -f "$LOG_PATH" ]; then
     # 切り詰められた output.log(先頭の NUL)をそのまま tail に渡すと stdout に NUL が流れるため除く
@@ -378,7 +807,21 @@ fi
 # --- 次のアクションの判定(stdout の最後の行に出す) ---
 # PR 作成の run(pr-*)はレビューしない。PR を検証して報告し、マージを待つ
 case "$CODE" in
-    0) if [ "$IS_PR" = true ]; then NEXT="wait-merge"; else NEXT="review $TASK_ID"; fi ;;
+    0)
+        if [ "$IS_REVIEW" = true ]; then
+            if [ "$REVIEW_VERDICT" = pass ]; then
+                NEXT="commit $BASE_ID"
+            else
+                NEXT="retry $BASE_ID"
+            fi
+        elif [ "$IS_PR" = true ]; then
+            NEXT="wait-merge"
+        elif [ -n "$WT_DIR" ]; then
+            NEXT="collect $TASK_ID"
+        else
+            NEXT="review $TASK_ID"
+        fi
+        ;;
     8) NEXT="escalate reason=tampered" ;;
     4)
         if [ "$PROVIDER_ERROR" = yes ]; then
@@ -403,6 +846,7 @@ case "$CODE" in
         esac
         ;;
     7) NEXT="escalate reason=no-changes" ;;
+    9) NEXT="escalate reason=refine-$REFINE_WORST" ;;
 esac
 echo "Next: $NEXT"
 

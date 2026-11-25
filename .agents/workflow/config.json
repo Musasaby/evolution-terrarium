@@ -1,44 +1,45 @@
 {
   "child_agent": {
-    "command_template": "claude.cmd -p --model claude-sonnet-5-5 --output-format stream-json --verbose --permission-mode bypassPermissions",
-    "timeout_seconds": 1800,
-    "isolate_xdg": false
+    "comment_previous_command_template": "claude-exe.exe -p --model claude-sonnet-5-5 --output-format stream-json --verbose --permission-mode bypassPermissions \"{prompt}\"",
+    "command_template": "opencode run -m opencode-go/deepseek-v4.1-flash \"{prompt}\"",
+    "timeout_seconds": 3600,
+    "idle_timeout_seconds": 600
   },
   "test_command": "npm run check:sim",
-  "verify_before_commit": false,
+  "verify_before_commit": true,
   "quality_gate": {
     "steps": [
-      { "name": "typecheck", "command": "", "blocking": true },
-      { "name": "test", "command": "npm run check:sim", "blocking": true },
-      { "name": "lint", "command": "", "blocking": false }
+      {
+        "name": "test",
+        "command": "npm run check:sim",
+        "blocking": true
+      }
     ],
-    "child_dispatch_command": ""
+    "child_dispatch_command": "npm run check:sim"
   },
   "max_fix_retries": 2,
+  "max_parallel": 3,
   "comprehension_check": {
     "enabled": false,
     "questions_per_task": 3
   },
-  "task_sizing": {
-    "max_acceptance_criteria": 5,
-    "max_changed_files": 3,
-    "max_reference_files": 5,
-    "design_detail": "skeleton"
+  "text_refine": {
+    "skill": "yomiyasu",
+    "mode": "dispatch"
   },
   "upstream": {
     "url": "https://github.com/Musasaby/multi-ai-agents-workflow.git",
     "branch": "main"
   },
-  "text_refine": {
-    "skill": "yomiyasu",
-    "targets": [
-      "summary",
-      "confirm",
-      "commit",
-      "pr_body",
-      "task_done",
-      "tasks"
-    ],
-    "reader": "informed"
+  "review": {
+    "mode": "dispatch",
+    "command_template": "claude-exe.exe -p --model claude-opus-5-5 --output-format stream-json --verbose --permission-mode bypassPermissions \"{prompt}\"",
+    "subagent_model": "claude-opus-5-5"
+  },
+  "task_sizing": {
+    "max_acceptance_criteria": 5,
+    "max_changed_files": 4,
+    "max_reference_files": 5,
+    "design_detail": "skeleton"
   }
 }

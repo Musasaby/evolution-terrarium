@@ -1,4 +1,11 @@
 #!/bin/bash
+# オプション --prepare-only は位置引数より前でも後でも指定できる
+PREPARE_ONLY=false
+POSARGS=()
+for a in "$@"; do
+  if [ "$a" = "--prepare-only" ]; then PREPARE_ONLY=true; else POSARGS+=("$a"); fi
+done
+set -- "${POSARGS[@]}"
 TASK_ID="${1:?TaskId required}"
 ATTEMPT="${2:-1}"
 # パスや埋め込みコードに使うため、タスクIDと試行回数の形式を検証する
@@ -26,15 +33,32 @@ mkdir -p "$RUN_DIR"
 # 子の一時ファイルをプロジェクト内(runs/<ID>-<試行>/tmp/)に置かせ、そこで実行された git が
 # 本物のリポジトリにたどり着かないようにする(#46)。git は ceiling と同じディレクトリが
 # カレントのときは探索を止めないため、tmp/ の親(runs/<ID>-<試行>/)を上限にする
-CHILD_TMP="$(pwd)/$RUN_DIR/tmp"
+# worktree.txt があるとき(dispatch-worktree create 済み)は、子を worktree の中で動かす。
+# 出力ファイル(output.log・done 等)は本体の runs/ に置いたまま、tmp と ceiling だけ worktree 側にする
+WT_PATH=""
+WT_BRANCH=""
+if [ -f "$RUN_DIR/worktree.txt" ]; then
+  WT_PATH="$(sed -n 's/^path //p' "$RUN_DIR/worktree.txt" | head -n 1 | tr -d '\r')"
+  WT_BRANCH="$(sed -n 's/^branch //p' "$RUN_DIR/worktree.txt" | head -n 1 | tr -d '\r')"
+fi
+if [ -n "$WT_PATH" ]; then
+  CHILD_BASE="$WT_PATH/$RUN_DIR"
+  # cwd が変わるので、相対パスの XDG は本体の絶対パスにする
+  if [ "$ISOLATE_XDG" = true ]; then
+    export XDG_CONFIG_HOME="$(pwd)/.agents/workflow/.config" XDG_DATA_HOME="$(pwd)/.agents/workflow/.config"
+  fi
+else
+  CHILD_BASE="$(pwd)/$RUN_DIR"
+fi
+CHILD_TMP="$CHILD_BASE/tmp"
 mkdir -p "$CHILD_TMP"
-CHILD_CEILING="$(pwd)/$RUN_DIR"
+CHILD_CEILING="$CHILD_BASE"
 # Windows ネイティブの子プロセスは /c/... 形式を解釈できないため C:/... 形式にする
 if command -v cygpath > /dev/null 2>&1; then
   CHILD_TMP="$(cygpath -m "$CHILD_TMP")"
   CHILD_CEILING="$(cygpath -m "$CHILD_CEILING")"
 fi
-export TMPDIR="$CHILD_TMP" TEMP="$CHILD_TMP" TMP="$CHILD_TMP" GIT_CEILING_DIRECTORIES="$CHILD_CEILING"
+export TMPDIR="$CHILD_TMP" TEMP="$CHILD_TMP" TMP="$CHILD_TMP" GIT_CEILING_DIRECTORIES="$CHILD_CEILING" PYTHONDONTWRITEBYTECODE=1
 LOG_PATH="$RUN_DIR/output.log"
 JSONL_PATH="$RUN_DIR/output.jsonl"
 DONE_PATH="$RUN_DIR/done"
@@ -42,14 +66,38 @@ DONE_PATH="$RUN_DIR/done"
 SIGNAL_PATH="$RUN_DIR/exit-signal"
 # ログが idle_timeout_seconds 更新されず子を止めたときに記録するファイル(#53)
 IDLE_PATH="$RUN_DIR/idle-timeout"
-rm -f "$DONE_PATH" "$SIGNAL_PATH" "$IDLE_PATH"
+rm -f "$DONE_PATH" "$SIGNAL_PATH" "$IDLE_PATH" "$RUN_DIR/start-error"
 PROMPT_PATH="$RUN_DIR/prompt.md"
 
 # 子が管理ファイルを変更・削除していないかを dispatch-check が確かめられるよう、起動時の
 # SHA-256 を記録する(存在しないファイルは "-")。形式は sha256sum と同じ "<hash>  <path>"
 GUARD_PATH="$RUN_DIR/guard.sha256"
 : > "$GUARD_PATH"
-for f in "$PROMPT_PATH" .agents/workflow/state.json .agents/workflow/tasks.md .agents/workflow/config.json .agents/workflow/child-profiles.json; do
+GUARD_STATE=.agents/workflow/state.json
+GUARD_TASKS=.agents/workflow/tasks.md
+# 守る欄のタスクID(ENTRY_ID): worktree の run は自分のタスク、本体で動くレビューの run は
+# レビュー対象のタスク。それ以外は空(state-entry.txt を書かない)
+ENTRY_ID=""
+if [ -n "$WT_PATH" ]; then
+  # worktree の run では、子が触れる worktree 側のコピーを守る
+  GUARD_STATE="$RUN_DIR/worktree/.agents/workflow/state.json"
+  GUARD_TASKS="$RUN_DIR/worktree/.agents/workflow/tasks.md"
+  ENTRY_ID="$TASK_ID"
+elif [[ "$TASK_ID" == review-* ]]; then
+  ENTRY_ID="${TASK_ID#review-}"
+fi
+if [ -n "$ENTRY_ID" ] && [ -z "$WT_PATH" ] && [[ "$TASK_ID" == review-* ]]; then
+  # 本体で動くレビューの run では、state.json の全体のハッシュは記録しない
+  # (親が並列中に更新するため、レビュー対象の欄だけを state-entry.txt で守る)
+  GUARD_FILES=("$PROMPT_PATH" "$GUARD_TASKS" .agents/workflow/config.json .agents/workflow/child-profiles.json)
+else
+  GUARD_FILES=("$PROMPT_PATH" "$GUARD_STATE" "$GUARD_TASKS" .agents/workflow/config.json .agents/workflow/child-profiles.json)
+fi
+if [ -n "$WT_PATH" ]; then
+  # 本体の tasks.md も守る(state.json は親が並列中に更新するため、自分のタスクの欄だけを state-entry.txt で守る)
+  GUARD_FILES+=(.agents/workflow/tasks.md)
+fi
+for f in "${GUARD_FILES[@]}"; do
   if [ ! -f "$f" ]; then
     h=-
   elif command -v sha256sum > /dev/null 2>&1; then
@@ -59,15 +107,84 @@ for f in "$PROMPT_PATH" .agents/workflow/state.json .agents/workflow/tasks.md .a
   fi
   printf '%s  %s\n' "$h" "$f" >> "$GUARD_PATH"
 done
+if [ -n "$ENTRY_ID" ]; then
+  python3 -c "
+import json, sys
+try:
+    with open('.agents/workflow/state.json', encoding='utf-8') as f:
+        tasks = json.load(f).get('tasks', [])
+    for e in tasks:
+        if e.get('id') == sys.argv[1]:
+            print(json.dumps({k: e.get(k) for k in ('status', 'retries', 'commit')}, sort_keys=True))
+            break
+    else:
+        print('-')
+except Exception:
+    print('-')
+" "$ENTRY_ID" 2> /dev/null | tr -d '\r' > "$RUN_DIR/state-entry.txt"
+  # 全タスクの {id, status, retries, commit} も記録する(dispatch-check が、ほかのタスクの欄の不正な変更を検知する)
+  python3 -c "
+import json
+try:
+    with open('.agents/workflow/state.json', encoding='utf-8') as f:
+        tasks = json.load(f).get('tasks', [])
+    print(json.dumps([{k: e.get(k) for k in ('id', 'status', 'retries', 'commit')} for e in tasks], sort_keys=True))
+except Exception:
+    print('[]')
+" 2> /dev/null | tr -d '\r' > "$RUN_DIR/state-tasks.json"
+fi
 
 # 起動時の git 状態(HEAD・ブランチ・参照・設定)を git-state.txt に記録する。dispatch-check が
 # 実行後の状態と比べて、子がリポジトリのどこを変えたかを特定する(失敗しても起動は止めない)。
 # 実行権限に頼らず bash で呼ぶ(リポジトリ上のスクリプトは mode 100644 のため)
-bash "$SCRIPT_DIR/git-state.sh" > "$RUN_DIR/git-state.txt"
+if [ -n "$WT_PATH" ]; then
+  # 親の作業ブランチは本体で取る(detached なら "-")
+  PARENT_REF="$(git symbolic-ref -q HEAD 2> /dev/null || true)"
+  [ -n "$PARENT_REF" ] || PARENT_REF=-
+  # 親の作業ブランチの参照名と値を記録する(dispatch-check が巻き戻しを検知する)
+  { printf '%s\n' "$PARENT_REF"; git rev-parse --verify -q HEAD 2> /dev/null || echo -; } > "$RUN_DIR/parent-head.txt"
+  # 実行中の自分以外のタスクの run のブランチだけを、refs の比較から外す
+  OTHER_RUNS="$(python3 -c "
+import json, sys
+try:
+    with open('.agents/workflow/state.json', encoding='utf-8') as f:
+        tasks = json.load(f).get('tasks', [])
+    print(','.join(str(e.get('id')) for e in tasks if e.get('id') != sys.argv[1] and e.get('status') in ('in_progress', 'in_review')))
+except Exception:
+    print('')
+" "$TASK_ID" 2> /dev/null | tr -d '\r')"
+  (cd "$WT_PATH" && bash "$SCRIPT_DIR/git-state.sh" --run "$WT_BRANCH" --parent "$PARENT_REF" --other-runs "$OTHER_RUNS") > "$RUN_DIR/git-state.txt"
+else
+  bash "$SCRIPT_DIR/git-state.sh" > "$RUN_DIR/git-state.txt"
+fi
+# 起動時刻を UTC の1行で記録する(dispatch-check が CLI ログをこの時刻より後の行に絞るため)
+date -u +%Y-%m-%dT%H:%M:%SZ > "$RUN_DIR/started"
 
-CMD_TEMPLATE=$(jq -r '.child_agent.command_template' .agents/workflow/config.json 2>/dev/null || \
-  python3 -c "import json; print(json.load(open('.agents/workflow/config.json'))['child_agent']['command_template'])" 2>/dev/null || \
-  sed -n 's/.*"command_template"[[:space:]]*:[[:space:]]*"\(.*\)"[[:space:]]*,\{0,1\}[[:space:]]*$/\1/p' .agents/workflow/config.json | sed 's/\\"/"/g')
+# worktree の run、またはレビューの run(review- 始まり)では、子の実行中に本体(メインの作業ツリー)で
+# 起きた変更も dispatch-check が検知できるよう、起動時のパスごとのハッシュを main-tree.txt に記録する
+# (失敗しても起動は止めない)
+if [ -n "$WT_PATH" ] || [[ "$TASK_ID" == review-* ]]; then
+  bash "$SCRIPT_DIR/git-state.sh" --main-tree > "$RUN_DIR/main-tree.txt" || true
+fi
+
+# --prepare-only: guard・git-state・tmp を用意したところで終える(子は起動せず、done も書かない)
+if [ "$PREPARE_ONLY" = true ]; then
+  exit 0
+fi
+
+CMD_SECTION=child_agent
+if [[ "$TASK_ID" == review-* ]]; then
+  CMD_SECTION=review
+fi
+if [ "$CMD_SECTION" = review ]; then
+  CMD_TEMPLATE=$(jq -r '.review.command_template' .agents/workflow/config.json 2>/dev/null || \
+    python3 -c "import json; print(json.load(open('.agents/workflow/config.json'))['review']['command_template'])" 2>/dev/null || \
+    sed -n '/^[[:space:]]*"review"[[:space:]]*:/,/^[[:space:]]*}/s/.*"command_template"[[:space:]]*:[[:space:]]*"\(.*\)"[[:space:]]*,\{0,1\}[[:space:]]*$/\1/p' .agents/workflow/config.json | sed 's/\\"/"/g')
+else
+  CMD_TEMPLATE=$(jq -r '.child_agent.command_template' .agents/workflow/config.json 2>/dev/null || \
+    python3 -c "import json; print(json.load(open('.agents/workflow/config.json'))['child_agent']['command_template'])" 2>/dev/null || \
+    sed -n 's/.*"command_template"[[:space:]]*:[[:space:]]*"\(.*\)"[[:space:]]*,\{0,1\}[[:space:]]*$/\1/p' .agents/workflow/config.json | sed 's/\\"/"/g')
+fi
 
 SCRIPT_DIR_PY="$SCRIPT_DIR"
 if command -v cygpath > /dev/null 2>&1; then
@@ -75,14 +192,14 @@ if command -v cygpath > /dev/null 2>&1; then
 fi
 
 if command -v python3 > /dev/null 2>&1; then
-  python3 -c "
-import json, subprocess, sys, shlex, os, threading, time, signal
+  WT_PATH="$WT_PATH" TASK_ID="$TASK_ID" python3 -c "
+import json, subprocess, sys, shlex, os, shutil, threading, time, signal
 sys.dont_write_bytecode = True
 sys.path.insert(0, '$SCRIPT_DIR_PY')
 import childprofile
 
-with open('.agents/workflow/config.json', encoding='utf-8') as f:
-    cfg = json.load(f)['child_agent']
+task_id = os.environ.get('TASK_ID', '')
+cfg = childprofile.agent_config('.', task_id)
 tmpl = cfg['command_template']
 # ログの無更新監視のしきい値。未指定・0 以下は無効(#53)
 idle_timeout = float(cfg.get('idle_timeout_seconds') or 0)
@@ -96,6 +213,17 @@ use_stdin = '{prompt_file}' not in tmpl and '{prompt}' not in tmpl
 
 log_path = '$LOG_PATH'
 signal_path = '$SIGNAL_PATH'
+start_error_path = '$RUN_DIR/start-error'
+
+def fail_start(reason):
+    # 子を起動できなかったことを output.log に残し、理由を start-error に書いて
+    # 呼び出し元の bash が done マーカーを EXIT:crashed:<理由> にできるようにする
+    reason = str(reason)
+    with open(log_path, 'w', encoding='utf-8') as lf:
+        lf.write('failed to start: ' + reason + '\n')
+    with open(start_error_path, 'w', encoding='utf-8') as sf:
+        sf.write(' '.join(reason.splitlines()) + '\n')
+    sys.exit(1)
 
 def finish(returncode):
     # シグナルで終了した子は負の returncode になる。sys.exit(-15) は 8bit に切り詰められ
@@ -131,7 +259,7 @@ def start_watchdog(proc):
     threading.Thread(target=watch, daemon=True).start()
 
 try:
-    prof = childprofile.load_profile('.')
+    prof = childprofile.load_profile('.', task_id=task_id)
 except childprofile.ProfileError as e:
     with open(log_path, 'w', encoding='utf-8') as lf:
         lf.write('Child profile error: ' + str(e) + '\n')
@@ -156,6 +284,16 @@ def feed_stdin(proc):
     threading.Thread(target=write, daemon=True).start()
 
 stdin_mode = subprocess.PIPE if use_stdin else subprocess.DEVNULL
+# worktree の run では子の作業ディレクトリを worktree にする(未指定なら今の cwd のまま)
+child_cwd = os.environ.get('WT_PATH') or None
+
+# .cmd / .bat は Popen から直接起動できない(Windows の CreateProcess が解釈しない)ため、
+# 起動せずに .exe を指定するよう案内する
+resolved = shutil.which(tokens[0])
+if resolved and resolved.lower().endswith(('.cmd', '.bat')):
+    q = chr(39)
+    cfg_section = 'review' if task_id.startswith('review-') else 'child_agent'
+    fail_start(q + resolved + q + ' is a batch file (.cmd/.bat); write the path of the real executable (.exe) in ' + cfg_section + '.command_template')
 
 if is_stream:
     jsonl_path = '$JSONL_PATH'
@@ -198,14 +336,19 @@ if is_stream:
                     lines.append('[tool_result] ' + text)
             return '\n'.join(lines)
         if t == 'result':
-            return '[result] exit_subtype=' + str(obj.get('subtype')) + ' result=' + str(obj.get('result'))
+            # 本文(result)は output.jsonl に残るため、output.log には結果の種別だけを書く
+            return '[result] exit_subtype=' + str(obj.get('subtype'))
         compact = json.dumps(obj, ensure_ascii=False)
         if len(compact) > 300:
             compact = compact[:300] + '...(truncated)'
         return '[' + str(t) + '] ' + compact
 
     with open(jsonl_path, 'w', encoding='utf-8') as jf, open(log_path, 'w', encoding='utf-8') as lf:
-        proc = subprocess.Popen(tokens, stdin=stdin_mode, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding='utf-8', bufsize=1, start_new_session=(os.name != 'nt'))
+        try:
+            proc = subprocess.Popen(tokens, stdin=stdin_mode, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding='utf-8', bufsize=1, cwd=child_cwd, start_new_session=(os.name != 'nt'))
+        except OSError as e:
+            lf.close()
+            fail_start(str(e))
         if use_stdin:
             feed_stdin(proc)
         start_watchdog(proc)
@@ -225,7 +368,11 @@ if is_stream:
         finish(proc.returncode)
 else:
     with open(log_path, 'w', encoding='utf-8') as lf:
-        proc = subprocess.Popen(tokens, stdin=stdin_mode, stdout=lf, stderr=subprocess.STDOUT, start_new_session=(os.name != 'nt'))
+        try:
+            proc = subprocess.Popen(tokens, stdin=stdin_mode, stdout=lf, stderr=subprocess.STDOUT, cwd=child_cwd, start_new_session=(os.name != 'nt'))
+        except OSError as e:
+            lf.close()
+            fail_start(str(e))
         if use_stdin:
             feed_stdin(proc)
         start_watchdog(proc)
@@ -233,6 +380,11 @@ else:
         finish(proc.returncode)
   "
   EXIT_CODE=$?
+  # 子を起動できなかった場合は、python ラッパーが残した理由を done マーカーに反映する
+  if [ -f "$RUN_DIR/start-error" ]; then
+    EXIT_CODE="crashed:$(head -n 1 "$RUN_DIR/start-error")"
+    rm -f "$RUN_DIR/start-error"
+  fi
 elif [[ "$CMD_TEMPLATE" == *'"{prompt}"'* ]]; then
   PROMPT=$(cat "$PROMPT_PATH")
   PREFIX="${CMD_TEMPLATE%%'"{prompt}"'*}"
@@ -243,7 +395,11 @@ elif [[ "$CMD_TEMPLATE" == *'"{prompt}"'* ]]; then
     IFS=' ' read -ra SA <<< "$SUFFIX"
     ARGS+=("${SA[@]}")
   fi
-  "${ARGS[@]}" < /dev/null > "$LOG_PATH" 2>&1
+  if [ -n "$WT_PATH" ]; then
+    (cd "$WT_PATH" && "${ARGS[@]}" < /dev/null > "$OLDPWD/$LOG_PATH" 2>&1)
+  else
+    "${ARGS[@]}" < /dev/null > "$LOG_PATH" 2>&1
+  fi
   EXIT_CODE=$?
   # bash はシグナル N で終了した子の終了コードを 128+N で返す
   if [ "$EXIT_CODE" -gt 128 ]; then

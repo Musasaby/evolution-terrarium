@@ -25,8 +25,10 @@ description: マルチエージェント実装ワークフローのオーケス�
 
 - `agents-md-setup` 済みであること(`AGENTS.md` が正本、`.claude` リンク有効)。
   未了なら先に `/agents-md-setup` を実行
-- 作業は `develop/*` ブランチで行う。`main` 上で開始された場合は
+- 作業は config.json の `branch_prefixes`(既定 `develop/`・`develop-`)のどれかで始まるブランチで行う。
+  `main`(`base_branch` があればその名前)上で開始された場合は
   `develop/<計画に基づく作業名>` ブランチを作成してから進める
+  (`develop/` は `branch_prefixes` の先頭の接頭辞に読み替える。以下の例も同じ)
 - tasks.md のタスク実行**以外**の依頼(タスクの追加・計画の変更・ドキュメントや設定の
   変更 等)では、作業に着手する前に `agent-branch-guard` skill を使ってブランチを
   確かめる。グループ完了時のブランチ切替は従来どおり `group-advance` を使う
@@ -38,8 +40,8 @@ tasks.md にグループ区切りがあり、config の `branch_per_group` が�
 `Next: group-advance`(作業グループ完了)を出したら、以下の手順に**必ず**従う。**グループ途中で
 次のグループのタスクに進んではならない**。
 
-1. `group-advance` を実行する。`--branch` には次のグループ用の新ブランチ名(`develop/` 始まり。
-   MERGED 時のみ使用)を渡す。名前は親が計画・グループ名から決める(例: `develop/<作業名>-<グループ名>`)
+1. `group-advance` を実行する。`--branch` には次のグループ用の新ブランチ名(`branch_prefixes` のどれかで始まる名前。
+   MERGED 時のみ使用)を渡す。名前は親が計画・グループ名から決める(例: `develop/<作業名>-<グループ名>`。`develop/` は `branch_prefixes` の先頭の接頭辞に読み替える)
    ```bash
    .agents/workflow/scripts/group-advance.sh --branch "develop/<作業名>-<グループ名>"
    ```
@@ -63,25 +65,15 @@ tasks.md にグループ区切りがあり、config の `branch_per_group` が�
 
 ```
 1. 計画参照・タスク分解   → /agent-task-plan <引数>     (ユーザー承認を挟み、承認後に計画をコミット)
-2. 各タスクについてループ(依存順。次のタスクは next-task スクリプトで選ぶ):
-   a. 実装dispatch        → /agent-dispatch <タスクID>   (子がテスト実行まで担当)
-   b. レビュー〜コミット   → /agent-review-commit <タスクID>
-      - 不合格 → 子へ修正再依頼(リトライ上限あり) → b に戻る
-      - 合格   → (verify_before_commit 有効時のみ)最終ゲート /agent-quality-gate
-                 - FAIL(blocking) → 不合格扱いで修正再依頼へ(b に戻る)
-                 - PASS → コミット(configで有効なら理解確認質問を生成)→ ループの先頭へ戻る
-                   (next-task が `Next: group-advance` を出したら「グループ単位の PR とブランチ切替」の手順へ)
+2. 各グループを workflow-run で進める(`references/runner.md`)。
+   使えないときは `references/loop.md` の手順で、タスクごとに dispatch → レビュー → コミットを行う
 3. 全タスク完了 → サマリー報告(未回答の質問ファイル一覧を含む)
 ```
 
 ### 次のタスクの選び方
 
-ループの各周回の先頭で `next-task`(`.agents/workflow/scripts/next-task.sh`)を実行し、
-stdout の最後の `Next:` 行に従う: `dispatch <ID>` → `/agent-dispatch <ID>`、
-`review <ID>` → `/agent-review-commit <ID>`、`finish` → 手順3、
-`group-advance` → 「グループ単位の PR とブランチ切替」、`escalate` → reason と stderr を
-ユーザーに説明する。`Next:` 行が無ければ stderr を添えて報告する。
-語彙は `.agents/workflow/README.md` の「Next: 行」の節。
+通常はタスクのループを `workflow-run` に任せる([runner.md](references/runner.md))。使えないときは
+[loop.md](references/loop.md) の手順でタスクごとに進める。どちらも次のタスクは `next-task` スクリプトが選ぶ。
 tasks.md の記述順や ID 順、state.json の並び順で次のタスクを決めない
 (挿入したタスクの順序が崩れるため)。
 
@@ -107,6 +99,7 @@ PR が未マージなどで `workflow-archive` が止まった場合、残課題
 **手順1をスキップ**し、状態に応じたフェーズから再開する(`in_progress` → dispatch からやり直し、
 `in_review` → レビューから)。`source` が引数と異なる場合は、進行中ワークフローの破棄可否を
 ユーザーに確認する。state.json が無く引数も無ければ、ユーザーに計画ソースを質問する。
+`workflow-run` は呼び直すだけで続きから再開する。
 
 ## 問題発生時の対応順序
 
@@ -123,9 +116,9 @@ PR が未マージなどで `workflow-archive` が止まった場合、残課題
 
 ## 要件の充足確認
 
-PR 作成の前に、要件が満たされているかを親が確かめる(`req-status` と
-`git diff origin/main...HEAD` を使い、要件ごとに「満たした / 部分 / 未対応」を判断する。
-部分・未対応があれば PR 作成に進まず停止する)。手順は `references/pr.md` を読む。
+PR 作成の前に、要件が満たされているかを親が確かめる(`req-status` とコミットの説明の一覧を使い、
+全体の diff は読まない)。要件ごとに「満たした / 部分 / 未対応」を判断し、
+部分・未対応があれば PR 作成に進まず停止する。手順は `references/pr.md` を読む。
 
 ## PR作成(子への単発依頼)
 
@@ -136,16 +129,17 @@ PR 作成の前に、要件が満たされているかを親が確かめる(`req
 ## 完了時のサマリー報告
 
 先に `workflow-status --summary` を実行し、その出力をもとに
-`references/report-template.md` の「完了時のサマリー」の形で下書きし、推敲を通してから示す。
+`references/report-template.md` の「完了時のサマリー」の形で下書きし、推敲を通してから示す(`text_refine.mode` が `dispatch` のときは PR 作成の子が推敲する)。
 項目と使う行は `references/pr.md` を読む。
+`Next: update-pr` のときは、要件の充足確認のあとに「PR作成(子への単発依頼)」を実行して
+PR を更新してから報告する。
 
 ## ユーザーへの報告
 
 - 報告の形は `references/report-template.md` に従う
 - **タスク1件が done になったとき**(リトライ途中は報告しない)に最低限報告する項目:
   タスクID・結果(done)、コミットハッシュ(コミット済みの場合)、リトライ回数。
-  テンプレートの該当場面に従って `.agents/workflow/runs/refine/task_done.md` に下書きし、
-  場面 `task_done` の推敲を通してから報告する
-- ユーザーに判断を求めて停止するときは、場面 `confirm`(`.agents/workflow/runs/refine/confirm.md`)の
-  推敲を通してから報告する
-- 報告が短くなりすぎた・状況が分からなくなったときは `workflow-status` を実行し、その出力からテンプレートの形で報告し直す
+  `.agents/workflow/runs/refine/task_done.md` に下書きし、場面 `task_done` の推敲を通してから報告する
+  (`workflow-run` の経路では `Done:` の行をそのまま伝える)
+- 停止して判断を仰ぐときは、場面 `confirm` の推敲を通してから報告する
+- 報告が短すぎる・状況が分からないときは `workflow-status` の出力からテンプレートの形で報告し直す

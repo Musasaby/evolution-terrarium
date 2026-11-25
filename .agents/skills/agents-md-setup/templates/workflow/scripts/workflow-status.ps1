@@ -3,6 +3,8 @@
 # stdout: "Progress: <done>/<全タスク> done"、"Group: <名前> <done>/<数>"(グループ区切りがあるときだけ)、
 #       "Current: <ID> <status> | <title>" / "Current: none"、
 #       "Run: <ID>-<N> running elapsed=<秒>s log_idle=<秒>s" / "Run: <ID>-<N> finished"(in_progress で run があるときだけ)、
+#       "Runner: locked pid=<pid>" / "Runner: idle"、"Runner last: <progress.log の最後の空でない行>"
+#       (runs/workflow-run/progress.log があるときだけ)、
 #       "Failed: T3, T5"(failed があるときだけ)、"PR: <state> <url>" / "PR: none" / "PR: unknown"(finish / group-advance のときだけ)、
 #       "Comprehension: unanswered=<n>[ <ファイル名> ...]"、最後に "Next: ..."
 #       -Summary のときは、先頭に "Task <ID> <status> <commit 先頭7文字 | -> retries=<n> | <title>"(全タスク)と
@@ -58,6 +60,7 @@ $stTasks = @($state.tasks)
 # --- PR の状態(finish / group-advance のときだけ) ---
 $prState = ''
 $prUrl = ''
+$unpushedSuffix = ''
 if ($nextLine -ceq 'Next: finish' -or $nextLine -ceq 'Next: group-advance') {
     $prState = 'unknown'
     $branch = ''
@@ -89,6 +92,33 @@ if ($nextLine -ceq 'Next: finish' -or $nextLine -ceq 'Next: group-advance') {
             }
         } finally {
             Remove-Item $errFile -ErrorAction SilentlyContinue
+        }
+    }
+    # OPEN のときは未 push のコミットを数える(fetch はせず、リモート追跡ブランチと比べる)
+    if ($prState -ceq 'OPEN' -and $branch) {
+        $remoteRef = "refs/remotes/origin/$branch"
+        $hasRemote = $false
+        try {
+            & git rev-parse --verify -q $remoteRef *> $null
+            $hasRemote = ($LASTEXITCODE -eq 0)
+        } catch {
+            $hasRemote = $false
+        }
+        if (-not $hasRemote) {
+            $unpushedSuffix = ' unpushed=no-remote'
+        } else {
+            $countOut = $null
+            $revCode = 1
+            try {
+                $countOut = (& git rev-list --count "$remoteRef..refs/heads/$branch" 2> $null)
+                $revCode = $LASTEXITCODE
+            } catch {
+                $revCode = 1
+            }
+            if ($revCode -eq 0) {
+                $n = "$countOut".Trim()
+                if ($n -match '^\d+$' -and [int]$n -gt 0) { $unpushedSuffix = " unpushed=$n" }
+            }
         }
     }
 }
@@ -169,6 +199,25 @@ if ($null -eq $current) {
     }
 }
 
+# --- Runner(workflow-run の記録があるときだけ) ---
+$runnerDir = "$RunsDir/workflow-run"
+$progressPath = "$runnerDir/progress.log"
+if (Test-Path $progressPath -PathType Leaf) {
+    $pidPath = "$runnerDir/lock/pid"
+    if (Test-Path $pidPath -PathType Leaf) {
+        $pidValue = ([System.IO.File]::ReadAllText($pidPath, [System.Text.Encoding]::UTF8)).Trim()
+        $out.Add("Runner: locked pid=$pidValue")
+    } else {
+        $out.Add('Runner: idle')
+    }
+    $lastProgress = ''
+    foreach ($l in ([System.IO.File]::ReadAllText($progressPath, [System.Text.Encoding]::UTF8) -split "`n")) {
+        $s = $l.Trim()
+        if ($s) { $lastProgress = $s }
+    }
+    if ($lastProgress) { $out.Add("Runner last: $lastProgress") }
+}
+
 # --- Failed ---
 $failed = @($stTasks | Where-Object { "$($_.status)" -eq 'failed' } | ForEach-Object { "$($_.id)" })
 if ($failed.Count -gt 0) { $out.Add('Failed: ' + ($failed -join ', ')) }
@@ -178,7 +227,7 @@ if ($prState) {
     if ($prState -eq 'none' -or $prState -eq 'unknown') {
         $out.Add("PR: $prState")
     } else {
-        $out.Add("PR: $prState" + $(if ($prUrl) { " $prUrl" } else { '' }))
+        $out.Add("PR: $prState" + $(if ($prUrl) { " $prUrl" } else { '' }) + $unpushedSuffix)
     }
 }
 
@@ -216,7 +265,7 @@ if ($runShown) {
 } elseif ($prState -eq 'none') {
     $out.Add('Next: create-pr')
 } elseif ($prState -ceq 'OPEN') {
-    $out.Add('Next: wait-merge')
+    $out.Add($(if ($unpushedSuffix) { 'Next: update-pr' } else { 'Next: wait-merge' }))
 } elseif ($prState -ceq 'CLOSED') {
     $out.Add('Next: escalate reason=pr-closed')
 } else {

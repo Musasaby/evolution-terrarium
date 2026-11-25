@@ -20,9 +20,14 @@
     "child_dispatch_command": ""
   },
   "max_fix_retries": 2,
+  "max_parallel": 1,
   "comprehension_check": {
     "enabled": false,
     "questions_per_task": 3
+  },
+  "review": {
+    "mode": "parent",
+    "command_template": ""
   },
   "task_sizing": {
     "max_acceptance_criteria": 5,
@@ -33,7 +38,8 @@
   "text_refine": {
     "skill": null,
     "targets": ["summary", "confirm", "commit", "pr_body", "task_done", "tasks"],
-    "reader": "informed"
+    "reader": "informed",
+    "mode": "parent"
   },
   "base_branch": "main",
   "upstream": {
