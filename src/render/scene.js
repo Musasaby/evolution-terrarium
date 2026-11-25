@@ -2,7 +2,9 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
+// 既定の広さ（一辺 120 m）でのカメラの初期位置。広さに比例して離す
 export const CAMERA_HOME = { target: [0, 4, 0], position: [0, 62, 82] };
+const BASE_SIZE = 120;
 
 export function createStage(container) {
   const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -28,7 +30,15 @@ export function createStage(container) {
 
   return {
     renderer, scene, camera, controls,
-    resetCamera() { controls.target.set(...CAMERA_HOME.target); camera.position.set(...CAMERA_HOME.position); },
+    // size: 世界の一辺。カメラの距離・操作の上限・霧を広さに合わせる
+    resetCamera(size = BASE_SIZE) {
+      const k = size / BASE_SIZE;
+      controls.target.set(...CAMERA_HOME.target);
+      camera.position.set(...CAMERA_HOME.position.map((v, i) => (i === 1 ? CAMERA_HOME.target[1] + (v - CAMERA_HOME.target[1]) * k : v * k)));
+      controls.maxDistance = 220 * k;
+      scene.fog.near = 120 * k; scene.fog.far = 320 * k;
+      camera.far = 600 * k; camera.updateProjectionMatrix();
+    },
     // カメラを target の方へ k の割合だけ寄せる（注視点とカメラを一緒に平行移動）
     panToward(t, k) {
       const dx = t.x - controls.target.x, dy = t.y - controls.target.y, dz = t.z - controls.target.z;

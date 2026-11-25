@@ -20,15 +20,20 @@ import { interfertile, updateSpecies } from './speciation.js';
 import { recordStats } from './stats.js';
 import { clampVel } from './body.js';
 import { NULL_PROFILER } from './profiler.js';
+import { normalizeSettings, worldGeometry } from './world-settings.js';
 
 const MAX_EVENTS = 120;
 
 export class Sim {
   // opts.profiler: begin(name)/end(name) を持つ計測器（省略時は計測しない）
+  // opts.settings: 世界の設定（world-settings.js。省略した項目は既定値）
   constructor(RAPIER, seed = 1, opts = {}) {
     this.R = RAPIER;
     this.seed = seed;
     this.profiler = opts.profiler || NULL_PROFILER;
+    this.settings = normalizeSettings(opts.settings);
+    // 広さから決まる値（一辺・格子数・置ける範囲・個体数と植物数の上限）。外からは sim.size などで読む
+    this.geo = worldGeometry(this.settings.size);
     this.rng = makeRng(seed);
     this.noise = makeNoise(this.rng);
     this.t = 0;
@@ -51,11 +56,11 @@ export class Sim {
 
     this.initPhysics();
     const log = (msg, kind) => this.log(msg, kind);
-    this.climate = new Climate(this.rng, log);
-    this.terrain = new Terrain(this.rng, this.noise);
+    this.climate = new Climate(this.rng, log, this.settings);
+    this.terrain = new Terrain(this.rng, this.noise, this.settings);
     this.buildTerrainCollider();
     this.terrain.computeMoisture(this.climate.water);
-    this.flora = new Flora({ R: RAPIER, world: this.world, colliderOwner: this.colliderOwner, rng: this.rng, terrain: this.terrain, climate: this.climate });
+    this.flora = new Flora({ R: RAPIER, world: this.world, colliderOwner: this.colliderOwner, rng: this.rng, terrain: this.terrain, climate: this.climate, geo: this.geo });
     this.flora.populate();
     for (let i = 0; i < CFG.INIT_SPECIES; i++) spawnFounderGroup(this, CFG.GROUP);
   }
@@ -94,7 +99,7 @@ export class Sim {
     };
   }
   buildTerrainCollider() {
-    const R = this.R, N = CFG.GRID, S = CFG.WORLD;
+    const R = this.R, N = this.grid, S = this.size;
     if (this.terrainCol) this.world.removeCollider(this.terrainCol, false);
     this.terrainCol = this.world.createCollider(R.ColliderDesc.heightfield(N, N, this.terrain.H, { x: S, y: 1, z: S }).setFriction(1.0));
     this.colliderOwner.set(this.terrainCol.handle, { kind: 't' });
@@ -110,6 +115,9 @@ export class Sim {
   dispose() { this.world.free(); this.eventQueue.free?.(); this.listeners.clear(); }
 
   // ---------------- 外から使う問い合わせ ----------------
+  get size() { return this.geo.size; }
+  get grid() { return this.geo.grid; }
+  get edge() { return this.geo.edge; }
   get year() { return this.t / CFG.YEAR; }
   seasonName() { return Climate.seasonName(this.t); }
   get H() { return this.terrain.H; }

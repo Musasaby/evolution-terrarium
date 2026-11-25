@@ -20,7 +20,7 @@
 <body>
 <div id="app">
   <header>
-    <h1>円柱生物の進化箱庭</h1>
+    <h1 id="title-h1">円柱生物の進化箱庭</h1>
     <div class="readings" id="readings">
       <span title="経過年数と季節"><b id="r-year">0.0</b>年 <b id="r-season">春</b></span>
       <span title="気温"><b id="r-temp">--</b>℃</span>
@@ -45,12 +45,12 @@
       </div>
       <button class="lone" id="btn-panel" aria-pressed="true" title="右パネルの開閉（B キー）">パネル</button>
       <button class="lone" id="btn-perf" aria-pressed="false" title="パフォーマンス表示の切り替え（P キー）">性能</button>
-      <button class="lone" id="btn-reset" title="今の世界を捨てて新しい世界を生成する">新しい世界</button>
+      <button class="lone" id="btn-reset" title="タイトル画面に戻って、設定を選んで新しい世界を作る">新しい世界</button>
     </div>
   </header>
 
   <div id="view">
-    <div id="loading"><div><div class="big">世界を生成中</div><p id="loading-msg">物理エンジンを読み込んでいます…</p></div></div>
+    <div id="loading" hidden><div><div class="big">世界を生成中</div><p id="loading-msg">物理エンジンを読み込んでいます…</p></div></div>
     <section id="perf" aria-label="パフォーマンス" hidden></section>
     <div id="hint">ドラッグで回転・ホイールで拡大・クリックで観察</div>
   </div>
@@ -147,5 +147,6 @@
     </section>
   </aside>
 </div>
+<div id="title" role="dialog" aria-label="世界の設定" aria-modal="true"></div>
 </body>
 </html>

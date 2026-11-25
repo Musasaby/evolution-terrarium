@@ -1,8 +1,8 @@
 {
   "source": "docs/plans/biodiversity.md",
-  "branch": "develop/biodiversity-D",
-  "updated_at": "2026-10-22T15:23:02+09:00",
-  "group": "D",
+  "branch": "develop/biodiversity-F",
+  "updated_at": "2026-10-22T16:27:12+09:00",
+  "group": "F",
   "tasks": [
     {
       "id": "T1",
@@ -105,23 +105,23 @@
     {
       "id": "T15",
       "title": "世界の設定を Sim に渡せるようにする(地形・土壌・気候)",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "a128e4c766c25a515c240fe8c77f6061e112da66"
     },
     {
       "id": "T16",
       "title": "世界の広さを設定できるようにする",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "e108d32f0443405e77c590c7688834e595598a04"
     },
     {
       "id": "T17",
       "title": "タイトル画面と世界の設定画面",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "54995c4d652736f48e3c8a01932d0818b59983cc"
     },
     {
       "id": "T18",

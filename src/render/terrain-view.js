@@ -1,7 +1,6 @@
 // ===== 地形の描画 =====
 // sim から読むもの: H（高さ）, distWater, soil, climate, terrainVersion
 import * as THREE from 'three';
-import { CFG } from '../sim/index.js';
 
 const COLOR_INTERVAL_MS = 4000; // 季節・湿り気による色の塗り直し間隔
 
@@ -23,7 +22,7 @@ export class TerrainView {
   attach(sim) {
     this.sim = sim;
     if (this.mesh) { this.scene.remove(this.mesh); this.mesh.geometry.dispose(); this.mesh.material.dispose(); }
-    const N = CFG.GRID, W = N + 1;
+    const N = sim.grid, W = N + 1;
     const g = new THREE.BufferGeometry();
     const idx = [];
     for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
@@ -44,7 +43,7 @@ export class TerrainView {
   }
 
   updateGeometry() {
-    const sim = this.sim, N = CFG.GRID, W = N + 1, S = CFG.WORLD, H = sim.H;
+    const sim = this.sim, N = sim.grid, W = N + 1, S = sim.size, H = sim.H;
     const geo = this.mesh.geometry, pos = geo.attributes.position.array;
     for (let i = 0; i <= N; i++) for (let j = 0; j <= N; j++) {
       const k = (i * W + j) * 3;
@@ -58,7 +57,7 @@ export class TerrainView {
   }
 
   updateColors() {
-    const sim = this.sim, N = CFG.GRID, W = N + 1, H = sim.H, cl = sim.climate, tmp = this.tmp;
+    const sim = this.sim, N = sim.grid, W = N + 1, H = sim.H, cl = sim.climate, tmp = this.tmp;
     const col = this.mesh.geometry.attributes.color.array, nrm = this.mesh.geometry.attributes.normal.array;
     for (let i = 0; i <= N; i++) for (let j = 0; j <= N; j++) {
       const id = i * W + j, h = H[id];
