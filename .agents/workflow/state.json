@@ -2,7 +2,7 @@
   "source": "https://github.com/Musasaby/evolution-terrarium/issues/18",
   "branch": "develop/scaling-study",
   "group": "A",
-  "updated_at": "2026-11-25T14:59:22+09:00",
+  "updated_at": "2026-11-25T15:07:08+09:00",
   "tasks": [
     {
       "id": "T1",
@@ -14,9 +14,9 @@
     {
       "id": "T2",
       "title": "条件を差し替えて多様性を測る実行スクリプト(V0 用)",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "72b0f0fddf511dc80900569f9946977c74c761f7"
     },
     {
       "id": "T3",
