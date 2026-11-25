@@ -1,7 +1,7 @@
 {
   "child_agent": {
-    "comment_previous_command_template": "opencode run -m opencode-go/deepseek-v4.1-flash \"{prompt}\"",
-    "command_template": "claude-exe.exe -p --model claude-opus-5-5 --output-format stream-json --verbose --permission-mode bypassPermissions \"{prompt}\"",
+    "comment_previous_command_template": "claude-exe.exe -p --model claude-sonnet-5-5 --output-format stream-json --verbose --permission-mode bypassPermissions \"{prompt}\"",
+    "command_template": "opencode run -m opencode-go/deepseek-v4.1-flash \"{prompt}\"",
     "timeout_seconds": 3600,
     "idle_timeout_seconds": 600
   },
