@@ -2,7 +2,7 @@
   "source": "https://github.com/Musasaby/evolution-terrarium/issues/22",
   "branch": "develop/physics-groups16",
   "group": "",
-  "updated_at": "2026-11-26T14:18:28+09:00",
+  "updated_at": "2026-11-26T15:09:43+09:00",
   "tasks": [
     {
       "id": "T1",
@@ -28,9 +28,9 @@
     {
       "id": "T4",
       "title": "変更前後の計測を実行してデータを保存する",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "286aaf1c5033973268b0a5285897077b0bebdf83"
     },
     {
       "id": "T5",
