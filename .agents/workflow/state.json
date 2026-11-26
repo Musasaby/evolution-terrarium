@@ -2,14 +2,14 @@
   "source": "https://github.com/Musasaby/evolution-terrarium/issues/22",
   "branch": "develop/physics-groups16",
   "group": "",
-  "updated_at": "2026-11-26T13:57:57+09:00",
+  "updated_at": "2026-11-26T14:09:16+09:00",
   "tasks": [
     {
       "id": "T1",
       "title": "sim の体節を衝突グループで分け、接触フックを外す",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "4efbdd4f2e78ffe48179e838c10bcf9fd3f95872"
     },
     {
       "id": "T2",
