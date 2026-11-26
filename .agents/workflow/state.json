@@ -2,7 +2,7 @@
   "source": "https://github.com/Musasaby/evolution-terrarium/issues/22",
   "branch": "develop/physics-groups16",
   "group": "",
-  "updated_at": "2026-11-26T15:09:43+09:00",
+  "updated_at": "2026-11-26T15:18:05+09:00",
   "tasks": [
     {
       "id": "T1",
@@ -35,9 +35,9 @@
     {
       "id": "T5",
       "title": "結果と採否の判断を検証記録にまとめる",
-      "status": "pending",
-      "retries": 0,
-      "commit": null
+      "status": "done",
+      "retries": 1,
+      "commit": "83d25371368caf6b7ef38df3de7a7d9b79402bd5"
     }
   ]
 }
