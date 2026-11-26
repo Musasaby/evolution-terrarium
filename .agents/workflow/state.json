@@ -2,7 +2,7 @@
   "source": "https://github.com/Musasaby/evolution-terrarium/issues/23",
   "branch": "develop/island-model-check",
   "group": "",
-  "updated_at": "2026-11-26T18:40:21+09:00",
+  "updated_at": "2026-11-26T18:48:48+09:00",
   "tasks": [
     {
       "id": "T1",
@@ -63,9 +63,9 @@
     {
       "id": "T9",
       "title": "検証の結果と判断を検証記録にまとめる",
-      "status": "pending",
-      "retries": 0,
-      "commit": null
+      "status": "done",
+      "retries": 1,
+      "commit": "d0e97c6a55422dff74a3eaf4e264ad12cebb3dfd"
     },
     {
       "id": "T10",
