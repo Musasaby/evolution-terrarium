@@ -87,16 +87,6 @@ export class Sim {
     this.world = new R.World({ x: 0, y: -9.81, z: 0 });
     this.world.timestep = CFG.DT;
     this.eventQueue = new R.EventQueue(true);
-    const owner = this.colliderOwner;
-    this.hooks = {
-      // 同じ個体の体節どうしはぶつからない
-      filterContactPair: (c1, c2) => {
-        const a = owner.get(c1), b = owner.get(c2);
-        if (a && b && a.kind === 'c' && b.kind === 'c' && a.obj === b.obj) return null;
-        return R.SolverFlags.COMPUTE_IMPULSE;
-      },
-      filterIntersectionPair: () => true,
-    };
   }
   buildTerrainCollider() {
     const R = this.R, N = this.grid, S = this.size;
@@ -161,7 +151,7 @@ export class Sim {
     P.end('生物');
 
     P.begin('物理');
-    this.world.step(this.eventQueue, this.hooks);
+    this.world.step(this.eventQueue);
     if (sc % 2 === 0) for (const c of this.creatures) if (c.alive) clampVel(c);
     readPoses(this);
     P.end('物理');

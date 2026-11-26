@@ -106,7 +106,7 @@ export const VARIANTS = {
   },
   // ---- V1: 衝突判定を軽くする差し替え案 ----
   groups16: {
-    desc: '体節の衝突グループを id で 16 分割し、フックを外す',
+    desc: '体節の衝突グループを id で 16 分割し、フックを外す（#22 で本番に入ったため、今は base と同じ）',
     prepare(sim, R) {
       onCreatureCollider(sim, (col, o) => {
         const bit = 1 << (o.obj.id % 16);
@@ -117,6 +117,27 @@ export const VARIANTS = {
     sample(sim) {
       return { ...sampleBase(sim), ...samplePairs(sim) };
     },
+  },
+  hooks: {
+    desc: '旧方式: 衝突グループを分けず、接触フックで同じ個体の体節どうしの衝突を外す（#22 の変更前）',
+    prepare(sim, R) {
+      onCreatureCollider(sim, (col) => {
+        col.setCollisionGroups(0xFFFFFFFF);
+        col.setActiveHooks(R.ActiveHooks.FILTER_CONTACT_PAIRS);
+      });
+      const owner = sim.colliderOwner;
+      const hooks = {
+        filterContactPair: (c1, c2) => {
+          const a = owner.get(c1), b = owner.get(c2);
+          if (a && b && a.kind === 'c' && b.kind === 'c' && a.obj === b.obj) return null;
+          return R.SolverFlags.COMPUTE_IMPULSE;
+        },
+        filterIntersectionPair: () => true,
+      };
+      const step = sim.world.step.bind(sim.world);
+      sim.world.step = (queue) => step(queue, hooks);
+    },
+    sample: sampleBase,
   },
   iter2: {
     desc: 'ソルバの反復回数を 2 にする（既定 4）',
