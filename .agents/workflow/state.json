@@ -2,7 +2,7 @@
   "source": "https://github.com/Musasaby/evolution-terrarium/issues/23",
   "branch": "develop/island-model-check",
   "group": "",
-  "updated_at": "2026-11-26T16:55:52+09:00",
+  "updated_at": "2026-11-26T17:03:01+09:00",
   "tasks": [
     {
       "id": "T1",
@@ -21,9 +21,9 @@
     {
       "id": "T3",
       "title": "群島と単一世界の結果を表にまとめるツール",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "e515adaae73777f9756205277bda36de0316aef3"
     },
     {
       "id": "T4",
