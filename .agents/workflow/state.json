@@ -2,7 +2,7 @@
   "source": "https://github.com/Musasaby/evolution-terrarium/issues/22",
   "branch": "develop/physics-groups16",
   "group": "",
-  "updated_at": "2026-11-26T14:09:16+09:00",
+  "updated_at": "2026-11-26T14:14:04+09:00",
   "tasks": [
     {
       "id": "T1",
@@ -14,9 +14,9 @@
     {
       "id": "T2",
       "title": "旧方式を再現する variant と、variant ごとの状態ハッシュを出すツール",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "383dd19530381e9793b4eedfef3a5f590001ae57"
     },
     {
       "id": "T3",
