@@ -2,14 +2,14 @@
   "source": "https://github.com/Musasaby/evolution-terrarium/issues/23",
   "branch": "develop/island-model-check",
   "group": "",
-  "updated_at": "2026-11-26T16:38:37+09:00",
+  "updated_at": "2026-11-26T16:47:20+09:00",
   "tasks": [
     {
       "id": "T1",
       "title": "島の worker に、種の代表ゲノム・由来キー・状態ハッシュ・応答の揺らしを足す",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "ee74e95a4f484f89eb7bf36fe9f72b3a79ae6a20"
     },
     {
       "id": "T2",
