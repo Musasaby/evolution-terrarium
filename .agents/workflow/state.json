@@ -2,7 +2,7 @@
   "source": "https://github.com/Musasaby/evolution-terrarium/issues/23",
   "branch": "develop/island-model-check",
   "group": "",
-  "updated_at": "2026-11-26T17:39:42+09:00",
+  "updated_at": "2026-11-26T17:54:53+09:00",
   "tasks": [
     {
       "id": "T1",
@@ -42,9 +42,9 @@
     {
       "id": "T6",
       "title": "群島の本計測(後半: 6000 ステップごと)",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "776da63a487cb3a3a3e9a0bbd2c4a055b6f15966"
     },
     {
       "id": "T7",
