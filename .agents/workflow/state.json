@@ -1,7 +1,7 @@
 {
   "source": "https://github.com/Musasaby/evolution-terrarium/issues/22",
   "branch": "develop/physics-groups16",
-  "updated_at": "2026-11-26T15:37:54+09:00",
+  "updated_at": "2026-11-26T16:12:31+09:00",
   "group": "",
   "tasks": [
     {
@@ -42,9 +42,9 @@
     {
       "id": "T6",
       "title": "捕食の減少がシードの振れかを確かめる追加計測と、シードごとの表を出すツール",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "fa3680790d2b9f61dbb36132d6a2cfb961bc0f44"
     },
     {
       "id": "T7",
