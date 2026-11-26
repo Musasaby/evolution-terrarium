@@ -1,0 +1,1510 @@
+{
+  "date": "2026-11-26T09:04:09.462Z",
+  "islands": 1,
+  "size": 100,
+  "steps": 27000,
+  "serialSeeds": false,
+  "jitter": false,
+  "runs": [
+    {
+      "seed": 1,
+      "interval": 0,
+      "migrants": 0,
+      "rows": [
+        {
+          "step": 2250,
+          "year": 0.25,
+          "archipelago": {
+            "pop": 132,
+            "species": 10,
+            "effSpecies": 9.698839508055919,
+            "effDiet": 2.546305867443627,
+            "diet": [
+              61,
+              59,
+              12
+            ],
+            "msPerStep": 8.082136222222221,
+            "msPerIndividual": 0.06122830471380471,
+            "speciesFertile": 10,
+            "effSpeciesFertile": 9.698839508055919,
+            "speciesLineage": 10,
+            "effSpeciesLineage": 9.698839508055919,
+            "cpuMsPerStep": 8.08194888888889,
+            "cpuMsPerIndividual": 0.06122688552188553
+          },
+          "islands": [
+            {
+              "index": 0,
+              "pop": 132,
+              "species": 10,
+              "effSpecies": 9.698839508055919,
+              "effDiet": 2.5463058674436265,
+              "diet": [
+                61,
+                59,
+                12
+              ],
+              "msPerStep": 8.08194888888889,
+              "msPerIndividual": 0.06122688552188553
+            }
+          ]
+        },
+        {
+          "step": 4500,
+          "year": 0.5,
+          "archipelago": {
+            "pop": 132,
+            "species": 10,
+            "effSpecies": 9.607740271162928,
+            "effDiet": 2.4788666165190216,
+            "diet": [
+              64,
+              58,
+              10
+            ],
+            "msPerStep": 8.006899333333335,
+            "msPerIndividual": 0.06065832828282829,
+            "speciesFertile": 10,
+            "effSpeciesFertile": 9.607740271162928,
+            "speciesLineage": 10,
+            "effSpeciesLineage": 9.607740271162928,
+            "cpuMsPerStep": 8.00675968888889,
+            "cpuMsPerIndividual": 0.06065727037037038
+          },
+          "islands": [
+            {
+              "index": 0,
+              "pop": 132,
+              "species": 10,
+              "effSpecies": 9.607740271162928,
+              "effDiet": 2.4788666165190216,
+              "diet": [
+                64,
+                58,
+                10
+              ],
+              "msPerStep": 8.00675968888889,
+              "msPerIndividual": 0.06065727037037038
+            }
+          ]
+        },
+        {
+          "step": 6750,
+          "year": 0.75,
+          "archipelago": {
+            "pop": 111,
+            "species": 10,
+            "effSpecies": 9.137789627268193,
+            "effDiet": 2.3771927554437786,
+            "diet": [
+              53,
+              52,
+              6
+            ],
+            "msPerStep": 7.285515111111111,
+            "msPerIndividual": 0.06563527127127126,
+            "speciesFertile": 10,
+            "effSpeciesFertile": 9.137789627268193,
+            "speciesLineage": 10,
+            "effSpeciesLineage": 9.137789627268193,
+            "cpuMsPerStep": 7.285373466666668,
+            "cpuMsPerIndividual": 0.06563399519519521
+          },
+          "islands": [
+            {
+              "index": 0,
+              "pop": 111,
+              "species": 10,
+              "effSpecies": 9.137789627268193,
+              "effDiet": 2.3771927554437786,
+              "diet": [
+                53,
+                52,
+                6
+              ],
+              "msPerStep": 7.285373466666668,
+              "msPerIndividual": 0.06563399519519521
+            }
+          ]
+        },
+        {
+          "step": 9000,
+          "year": 1,
+          "archipelago": {
+            "pop": 84,
+            "species": 10,
+            "effSpecies": 8.583391363432998,
+            "effDiet": 2.4048038080513967,
+            "diet": [
+              40,
+              39,
+              5
+            ],
+            "msPerStep": 5.446449733333332,
+            "msPerIndividual": 0.06483868730158729,
+            "speciesFertile": 10,
+            "effSpeciesFertile": 8.583391363432998,
+            "speciesLineage": 10,
+            "effSpeciesLineage": 8.583391363432998,
+            "cpuMsPerStep": 5.446356666666663,
+            "cpuMsPerIndividual": 0.06483757936507932
+          },
+          "islands": [
+            {
+              "index": 0,
+              "pop": 84,
+              "species": 10,
+              "effSpecies": 8.583391363432998,
+              "effDiet": 2.4048038080513967,
+              "diet": [
+                40,
+                39,
+                5
+              ],
+              "msPerStep": 5.446356666666663,
+              "msPerIndividual": 0.06483757936507932
+            }
+          ]
+        },
+        {
+          "step": 11250,
+          "year": 1.25,
+          "archipelago": {
+            "pop": 74,
+            "species": 10,
+            "effSpecies": 8.294467311082173,
+            "effDiet": 2.6592740426761563,
+            "diet": [
+              31,
+              34,
+              9
+            ],
+            "msPerStep": 4.420140888888887,
+            "msPerIndividual": 0.05973163363363361,
+            "speciesFertile": 10,
+            "effSpeciesFertile": 8.294467311082173,
+            "speciesLineage": 10,
+            "effSpeciesLineage": 8.294467311082173,
+            "cpuMsPerStep": 4.420040800000004,
+            "cpuMsPerIndividual": 0.05973028108108114
+          },
+          "islands": [
+            {
+              "index": 0,
+              "pop": 74,
+              "species": 10,
+              "effSpecies": 8.294467311082173,
+              "effDiet": 2.659274042676156,
+              "diet": [
+                31,
+                34,
+                9
+              ],
+              "msPerStep": 4.420040800000004,
+              "msPerIndividual": 0.05973028108108114
+            }
+          ]
+        },
+        {
+          "step": 13500,
+          "year": 1.5,
+          "archipelago": {
+            "pop": 55,
+            "species": 10,
+            "effSpecies": 7.645766157373311,
+            "effDiet": 2.694746423476332,
+            "diet": [
+              19,
+              28,
+              8
+            ],
+            "msPerStep": 3.918462577777779,
+            "msPerIndividual": 0.07124477414141415,
+            "speciesFertile": 10,
+            "effSpeciesFertile": 7.645766157373311,
+            "speciesLineage": 10,
+            "effSpeciesLineage": 7.645766157373311,
+            "cpuMsPerStep": 3.918298444444443,
+            "cpuMsPerIndividual": 0.07124178989898987
+          },
+          "islands": [
+            {
+              "index": 0,
+              "pop": 55,
+              "species": 10,
+              "effSpecies": 7.645766157373311,
+              "effDiet": 2.6947464234763316,
+              "diet": [
+                19,
+                28,
+                8
+              ],
+              "msPerStep": 3.918298444444443,
+              "msPerIndividual": 0.07124178989898987
+            }
+          ]
+        },
+        {
+          "step": 15750,
+          "year": 1.75,
+          "archipelago": {
+            "pop": 33,
+            "species": 10,
+            "effSpecies": 7.154518177029521,
+            "effDiet": 2.418833359924639,
+            "diet": [
+              10,
+              20,
+              3
+            ],
+            "msPerStep": 2.9025537777777775,
+            "msPerIndividual": 0.08795617508417508,
+            "speciesFertile": 10,
+            "effSpeciesFertile": 7.154518177029521,
+            "speciesLineage": 10,
+            "effSpeciesLineage": 7.154518177029521,
+            "cpuMsPerStep": 2.902483822222217,
+            "cpuMsPerIndividual": 0.08795405521885506
+          },
+          "islands": [
+            {
+              "index": 0,
+              "pop": 33,
+              "species": 10,
+              "effSpecies": 7.154518177029521,
+              "effDiet": 2.418833359924639,
+              "diet": [
+                10,
+                20,
+                3
+              ],
+              "msPerStep": 2.902483822222217,
+              "msPerIndividual": 0.08795405521885506
+            }
+          ]
+        },
+        {
+          "step": 18000,
+          "year": 2,
+          "archipelago": {
+            "pop": 22,
+            "species": 8,
+            "effSpecies": 5.9956906136840145,
+            "effDiet": 2.5350588127981206,
+            "diet": [
+              9,
+              11,
+              2
+            ],
+            "msPerStep": 1.8583451111111142,
+            "msPerIndividual": 0.08447023232323246,
+            "speciesFertile": 8,
+            "effSpeciesFertile": 5.9956906136840145,
+            "speciesLineage": 8,
+            "effSpeciesLineage": 5.9956906136840145,
+            "cpuMsPerStep": 1.8582376444444462,
+            "cpuMsPerIndividual": 0.08446534747474756
+          },
+          "islands": [
+            {
+              "index": 0,
+              "pop": 22,
+              "species": 8,
+              "effSpecies": 5.9956906136840145,
+              "effDiet": 2.5350588127981206,
+              "diet": [
+                9,
+                11,
+                2
+              ],
+              "msPerStep": 1.8582376444444462,
+              "msPerIndividual": 0.08446534747474756
+            }
+          ]
+        },
+        {
+          "step": 20250,
+          "year": 2.25,
+          "archipelago": {
+            "pop": 21,
+            "species": 7,
+            "effSpecies": 5.264550751454546,
+            "effDiet": 2.306975512013103,
+            "diet": [
+              14,
+              5,
+              2
+            ],
+            "msPerStep": 2.104346755555559,
+            "msPerIndividual": 0.10020698835978853,
+            "speciesFertile": 7,
+            "effSpeciesFertile": 5.264550751454546,
+            "speciesLineage": 7,
+            "effSpeciesLineage": 5.264550751454546,
+            "cpuMsPerStep": 2.1042867999999952,
+            "cpuMsPerIndividual": 0.10020413333333311
+          },
+          "islands": [
+            {
+              "index": 0,
+              "pop": 21,
+              "species": 7,
+              "effSpecies": 5.264550751454546,
+              "effDiet": 2.306975512013103,
+              "diet": [
+                14,
+                5,
+                2
+              ],
+              "msPerStep": 2.1042867999999952,
+              "msPerIndividual": 0.10020413333333311
+            }
+          ]
+        },
+        {
+          "step": 22500,
+          "year": 2.5,
+          "archipelago": {
+            "pop": 28,
+            "species": 7,
+            "effSpecies": 4.426630370796792,
+            "effDiet": 2.2027078549197947,
+            "diet": [
+              10,
+              17,
+              1
+            ],
+            "msPerStep": 2.397466711111108,
+            "msPerIndividual": 0.08562381111111099,
+            "speciesFertile": 7,
+            "effSpeciesFertile": 4.426630370796792,
+            "speciesLineage": 7,
+            "effSpeciesLineage": 4.426630370796792,
+            "cpuMsPerStep": 2.397335511111111,
+            "cpuMsPerIndividual": 0.0856191253968254
+          },
+          "islands": [
+            {
+              "index": 0,
+              "pop": 28,
+              "species": 7,
+              "effSpecies": 4.426630370796792,
+              "effDiet": 2.2027078549197947,
+              "diet": [
+                10,
+                17,
+                1
+              ],
+              "msPerStep": 2.397335511111111,
+              "msPerIndividual": 0.0856191253968254
+            }
+          ]
+        },
+        {
+          "step": 24750,
+          "year": 2.75,
+          "archipelago": {
+            "pop": 25,
+            "species": 7,
+            "effSpecies": 5.232865984511449,
+            "effDiet": 1.9332733803021325,
+            "diet": [
+              19,
+              5,
+              1
+            ],
+            "msPerStep": 2.8216476,
+            "msPerIndividual": 0.112865904,
+            "speciesFertile": 7,
+            "effSpeciesFertile": 5.232865984511449,
+            "speciesLineage": 7,
+            "effSpeciesLineage": 5.232865984511449,
+            "cpuMsPerStep": 2.821580400000003,
+            "cpuMsPerIndividual": 0.11286321600000011
+          },
+          "islands": [
+            {
+              "index": 0,
+              "pop": 25,
+              "species": 7,
+              "effSpecies": 5.232865984511449,
+              "effDiet": 1.9332733803021325,
+              "diet": [
+                19,
+                5,
+                1
+              ],
+              "msPerStep": 2.821580400000003,
+              "msPerIndividual": 0.11286321600000011
+            }
+          ]
+        },
+        {
+          "step": 27000,
+          "year": 3,
+          "archipelago": {
+            "pop": 27,
+            "species": 4,
+            "effSpecies": 2.9228092733730398,
+            "effDiet": 1.9876669750024174,
+            "diet": [
+              12,
+              15,
+              0
+            ],
+            "msPerStep": 2.966613288888889,
+            "msPerIndividual": 0.10987456625514404,
+            "speciesFertile": 4,
+            "effSpeciesFertile": 2.9228092733730398,
+            "speciesLineage": 4,
+            "effSpeciesLineage": 2.9228092733730398,
+            "cpuMsPerStep": 2.966504444444442,
+            "cpuMsPerIndividual": 0.10987053497942378
+          },
+          "islands": [
+            {
+              "index": 0,
+              "pop": 27,
+              "species": 4,
+              "effSpecies": 2.9228092733730398,
+              "effDiet": 1.9876669750024174,
+              "diet": [
+                12,
+                15,
+                0
+              ],
+              "msPerStep": 2.966504444444442,
+              "msPerIndividual": 0.10987053497942378
+            }
+          ]
+        }
+      ],
+      "migrated": 0,
+      "dropped": 0,
+      "hashes": [
+        "0bbe4d71d750efa2"
+      ],
+      "hash": "d98ed30d8d7e09d5",
+      "summary": {
+        "fromYear": 1.999999,
+        "toYear": 3,
+        "rows": 5,
+        "pop": 25,
+        "species": 7,
+        "effSpecies": 5.232865984511449,
+        "effDiet": 2.2027078549197947,
+        "speciesFertile": 7,
+        "effSpeciesFertile": 5.232865984511449,
+        "speciesLineage": 7,
+        "effSpeciesLineage": 5.232865984511449,
+        "cpuMsPerStep": 2.397335511111111,
+        "cpuMsPerIndividual": 0.10020413333333311,
+        "islandEffSpecies": 5.232865984511449,
+        "islandPop": 25,
+        "msPerStep": 2.397466711111108,
+        "msPerIndividual": 0.10020698835978853
+      }
+    },
+    {
+      "seed": 2,
+      "interval": 0,
+      "migrants": 0,
+      "rows": [
+        {
+          "step": 2250,
+          "year": 0.25,
+          "archipelago": {
+            "pop": 55,
+            "species": 10,
+            "effSpecies": 7.065706728296332,
+            "effDiet": 1.9443878605562028,
+            "diet": [
+              0,
+              21,
+              34
+            ],
+            "msPerStep": 4.278466577777778,
+            "msPerIndividual": 0.07779030141414142,
+            "speciesFertile": 10,
+            "effSpeciesFertile": 7.065706728296332,
+            "speciesLineage": 10,
+            "effSpeciesLineage": 7.065706728296332,
+            "cpuMsPerStep": 4.278134355555555,
+            "cpuMsPerIndividual": 0.07778426101010101
+          },
+          "islands": [
+            {
+              "index": 0,
+              "pop": 55,
+              "species": 10,
+              "effSpecies": 7.065706728296332,
+              "effDiet": 1.9443878605562028,
+              "diet": [
+                0,
+                21,
+                34
+              ],
+              "msPerStep": 4.278134355555555,
+              "msPerIndividual": 0.07778426101010101
+            }
+          ]
+        },
+        {
+          "step": 4500,
+          "year": 0.5,
+          "archipelago": {
+            "pop": 26,
+            "species": 7,
+            "effSpecies": 5.313030499744024,
+            "effDiet": 1.7163572076839733,
+            "diet": [
+              0,
+              6,
+              20
+            ],
+            "msPerStep": 2.9883085777777776,
+            "msPerIndividual": 0.11493494529914529,
+            "speciesFertile": 7,
+            "effSpeciesFertile": 5.313030499744024,
+            "speciesLineage": 7,
+            "effSpeciesLineage": 5.313030499744024,
+            "cpuMsPerStep": 2.9881957333333333,
+            "cpuMsPerIndividual": 0.11493060512820513
+          },
+          "islands": [
+            {
+              "index": 0,
+              "pop": 26,
+              "species": 7,
+              "effSpecies": 5.313030499744024,
+              "effDiet": 1.7163572076839733,
+              "diet": [
+                0,
+                6,
+                20
+              ],
+              "msPerStep": 2.9881957333333333,
+              "msPerIndividual": 0.11493060512820513
+            }
+          ]
+        },
+        {
+          "step": 6750,
+          "year": 0.75,
+          "archipelago": {
+            "pop": 24,
+            "species": 7,
+            "effSpecies": 4.359568708063589,
+            "effDiet": 2,
+            "diet": [
+              0,
+              12,
+              12
+            ],
+            "msPerStep": 2.0411299111111116,
+            "msPerIndividual": 0.08504707962962965,
+            "speciesFertile": 7,
+            "effSpeciesFertile": 4.359568708063589,
+            "speciesLineage": 7,
+            "effSpeciesLineage": 4.359568708063589,
+            "cpuMsPerStep": 2.041042622222222,
+            "cpuMsPerIndividual": 0.0850434425925926
+          },
+          "islands": [
+            {
+              "index": 0,
+              "pop": 24,
+              "species": 7,
+              "effSpecies": 4.359568708063589,
+              "effDiet": 2,
+              "diet": [
+                0,
+                12,
+                12
+              ],
+              "msPerStep": 2.041042622222222,
+              "msPerIndividual": 0.0850434425925926
+            }
+          ]
+        },
+        {
+          "step": 9000,
+          "year": 1,
+          "archipelago": {
+            "pop": 27,
+            "species": 7,
+            "effSpecies": 4.989160993718995,
+            "effDiet": 1.8898815748423097,
+            "diet": [
+              0,
+              18,
+              9
+            ],
+            "msPerStep": 2.0826601777777767,
+            "msPerIndividual": 0.07713556213991765,
+            "speciesFertile": 7,
+            "effSpeciesFertile": 4.989160993718995,
+            "speciesLineage": 7,
+            "effSpeciesLineage": 4.989160993718995,
+            "cpuMsPerStep": 2.0825504888888893,
+            "cpuMsPerIndividual": 0.07713149958847738
+          },
+          "islands": [
+            {
+              "index": 0,
+              "pop": 27,
+              "species": 7,
+              "effSpecies": 4.989160993718995,
+              "effDiet": 1.8898815748423097,
+              "diet": [
+                0,
+                18,
+                9
+              ],
+              "msPerStep": 2.0825504888888893,
+              "msPerIndividual": 0.07713149958847738
+            }
+          ]
+        },
+        {
+          "step": 11250,
+          "year": 1.25,
+          "archipelago": {
+            "pop": 22,
+            "species": 6,
+            "effSpecies": 3.060620976487245,
+            "effDiet": 1.4893013446830232,
+            "diet": [
+              0,
+              19,
+              3
+            ],
+            "msPerStep": 2.110281466666667,
+            "msPerIndividual": 0.09592188484848486,
+            "speciesFertile": 6,
+            "effSpeciesFertile": 3.060620976487245,
+            "speciesLineage": 6,
+            "effSpeciesLineage": 3.060620976487245,
+            "cpuMsPerStep": 2.1100998222222227,
+            "cpuMsPerIndividual": 0.0959136282828283
+          },
+          "islands": [
+            {
+              "index": 0,
+              "pop": 22,
+              "species": 6,
+              "effSpecies": 3.060620976487245,
+              "effDiet": 1.4893013446830232,
+              "diet": [
+                0,
+                19,
+                3
+              ],
+              "msPerStep": 2.1100998222222227,
+              "msPerIndividual": 0.0959136282828283
+            }
+          ]
+        },
+        {
+          "step": 13500,
+          "year": 1.5,
+          "archipelago": {
+            "pop": 22,
+            "species": 6,
+            "effSpecies": 4.623506126287459,
+            "effDiet": 2.7756586420179503,
+            "diet": [
+              4,
+              11,
+              7
+            ],
+            "msPerStep": 2.637684133333335,
+            "msPerIndividual": 0.11989473333333342,
+            "speciesFertile": 6,
+            "effSpeciesFertile": 4.623506126287459,
+            "speciesLineage": 6,
+            "effSpeciesLineage": 4.623506126287459,
+            "cpuMsPerStep": 2.6375323555555563,
+            "cpuMsPerIndividual": 0.11988783434343438
+          },
+          "islands": [
+            {
+              "index": 0,
+              "pop": 22,
+              "species": 6,
+              "effSpecies": 4.623506126287459,
+              "effDiet": 2.7756586420179503,
+              "diet": [
+                4,
+                11,
+                7
+              ],
+              "msPerStep": 2.6375323555555563,
+              "msPerIndividual": 0.11988783434343438
+            }
+          ]
+        },
+        {
+          "step": 15750,
+          "year": 1.75,
+          "archipelago": {
+            "pop": 24,
+            "species": 5,
+            "effSpecies": 3.8336586254776353,
+            "effDiet": 1.9378192408783848,
+            "diet": [
+              0,
+              15,
+              9
+            ],
+            "msPerStep": 2.7625002666666663,
+            "msPerIndividual": 0.11510417777777776,
+            "speciesFertile": 5,
+            "effSpeciesFertile": 3.8336586254776353,
+            "speciesLineage": 5,
+            "effSpeciesLineage": 3.8336586254776353,
+            "cpuMsPerStep": 2.762369955555555,
+            "cpuMsPerIndividual": 0.11509874814814813
+          },
+          "islands": [
+            {
+              "index": 0,
+              "pop": 24,
+              "species": 5,
+              "effSpecies": 3.8336586254776353,
+              "effDiet": 1.9378192408783848,
+              "diet": [
+                0,
+                15,
+                9
+              ],
+              "msPerStep": 2.762369955555555,
+              "msPerIndividual": 0.11509874814814813
+            }
+          ]
+        },
+        {
+          "step": 18000,
+          "year": 2,
+          "archipelago": {
+            "pop": 37,
+            "species": 5,
+            "effSpecies": 3.2790650974305375,
+            "effDiet": 1.5577428904901567,
+            "diet": [
+              0,
+              6,
+              31
+            ],
+            "msPerStep": 2.8755530222222214,
+            "msPerIndividual": 0.07771764924924923,
+            "speciesFertile": 5,
+            "effSpeciesFertile": 3.2790650974305375,
+            "speciesLineage": 5,
+            "effSpeciesLineage": 3.2790650974305375,
+            "cpuMsPerStep": 2.8753985777777755,
+            "cpuMsPerIndividual": 0.07771347507507502
+          },
+          "islands": [
+            {
+              "index": 0,
+              "pop": 37,
+              "species": 5,
+              "effSpecies": 3.2790650974305375,
+              "effDiet": 1.5577428904901567,
+              "diet": [
+                0,
+                6,
+                31
+              ],
+              "msPerStep": 2.8753985777777755,
+              "msPerIndividual": 0.07771347507507502
+            }
+          ]
+        },
+        {
+          "step": 20250,
+          "year": 2.25,
+          "archipelago": {
+            "pop": 29,
+            "species": 5,
+            "effSpecies": 3.6567595771940704,
+            "effDiet": 2.5961680063093757,
+            "diet": [
+              13,
+              3,
+              13
+            ],
+            "msPerStep": 2.615198844444443,
+            "msPerIndividual": 0.09017927049808425,
+            "speciesFertile": 5,
+            "effSpeciesFertile": 3.6567595771940704,
+            "speciesLineage": 5,
+            "effSpeciesLineage": 3.6567595771940704,
+            "cpuMsPerStep": 2.6151130222222223,
+            "cpuMsPerIndividual": 0.09017631111111112
+          },
+          "islands": [
+            {
+              "index": 0,
+              "pop": 29,
+              "species": 5,
+              "effSpecies": 3.6567595771940704,
+              "effDiet": 2.5961680063093757,
+              "diet": [
+                13,
+                3,
+                13
+              ],
+              "msPerStep": 2.6151130222222223,
+              "msPerIndividual": 0.09017631111111112
+            }
+          ]
+        },
+        {
+          "step": 22500,
+          "year": 2.5,
+          "archipelago": {
+            "pop": 30,
+            "species": 5,
+            "effSpecies": 3.3779522477205104,
+            "effDiet": 2.6727416112064857,
+            "diet": [
+              15,
+              11,
+              4
+            ],
+            "msPerStep": 2.9685125777777768,
+            "msPerIndividual": 0.09895041925925922,
+            "speciesFertile": 5,
+            "effSpeciesFertile": 3.3779522477205104,
+            "speciesLineage": 5,
+            "effSpeciesLineage": 3.3779522477205104,
+            "cpuMsPerStep": 2.9683650666666668,
+            "cpuMsPerIndividual": 0.09894550222222223
+          },
+          "islands": [
+            {
+              "index": 0,
+              "pop": 30,
+              "species": 5,
+              "effSpecies": 3.3779522477205104,
+              "effDiet": 2.6727416112064857,
+              "diet": [
+                15,
+                11,
+                4
+              ],
+              "msPerStep": 2.9683650666666668,
+              "msPerIndividual": 0.09894550222222223
+            }
+          ]
+        },
+        {
+          "step": 24750,
+          "year": 2.75,
+          "archipelago": {
+            "pop": 22,
+            "species": 5,
+            "effSpecies": 4.6066568097212315,
+            "effDiet": 2.9160674625764607,
+            "diet": [
+              8,
+              5,
+              9
+            ],
+            "msPerStep": 2.46623408888889,
+            "msPerIndividual": 0.11210154949494955,
+            "speciesFertile": 5,
+            "effSpeciesFertile": 4.6066568097212315,
+            "speciesLineage": 5,
+            "effSpeciesLineage": 4.6066568097212315,
+            "cpuMsPerStep": 2.466139599999995,
+            "cpuMsPerIndividual": 0.11209725454545433
+          },
+          "islands": [
+            {
+              "index": 0,
+              "pop": 22,
+              "species": 5,
+              "effSpecies": 4.6066568097212315,
+              "effDiet": 2.9160674625764598,
+              "diet": [
+                8,
+                5,
+                9
+              ],
+              "msPerStep": 2.466139599999995,
+              "msPerIndividual": 0.11209725454545433
+            }
+          ]
+        },
+        {
+          "step": 27000,
+          "year": 3,
+          "archipelago": {
+            "pop": 18,
+            "species": 5,
+            "effSpecies": 3.870074345697557,
+            "effDiet": 2.381101577952299,
+            "diet": [
+              9,
+              1,
+              8
+            ],
+            "msPerStep": 2.103584222222219,
+            "msPerIndividual": 0.1168657901234566,
+            "speciesFertile": 5,
+            "effSpeciesFertile": 3.870074345697557,
+            "speciesLineage": 5,
+            "effSpeciesLineage": 3.870074345697557,
+            "cpuMsPerStep": 2.1034906666666697,
+            "cpuMsPerIndividual": 0.11686059259259277
+          },
+          "islands": [
+            {
+              "index": 0,
+              "pop": 18,
+              "species": 5,
+              "effSpecies": 3.870074345697557,
+              "effDiet": 2.381101577952299,
+              "diet": [
+                9,
+                1,
+                8
+              ],
+              "msPerStep": 2.1034906666666697,
+              "msPerIndividual": 0.11686059259259277
+            }
+          ]
+        }
+      ],
+      "migrated": 0,
+      "dropped": 0,
+      "hashes": [
+        "ee6d08daf06c71bf"
+      ],
+      "hash": "21373359bd458ad6",
+      "summary": {
+        "fromYear": 1.999999,
+        "toYear": 3,
+        "rows": 5,
+        "pop": 29,
+        "species": 5,
+        "effSpecies": 3.6567595771940704,
+        "effDiet": 2.5961680063093757,
+        "speciesFertile": 5,
+        "effSpeciesFertile": 3.6567595771940704,
+        "speciesLineage": 5,
+        "effSpeciesLineage": 3.6567595771940704,
+        "cpuMsPerStep": 2.6151130222222223,
+        "cpuMsPerIndividual": 0.09894550222222223,
+        "islandEffSpecies": 3.6567595771940704,
+        "islandPop": 29,
+        "msPerStep": 2.615198844444443,
+        "msPerIndividual": 0.09895041925925922
+      }
+    },
+    {
+      "seed": 3,
+      "interval": 0,
+      "migrants": 0,
+      "rows": [
+        {
+          "step": 2250,
+          "year": 0.25,
+          "archipelago": {
+            "pop": 134,
+            "species": 14,
+            "effSpecies": 13.718718660926754,
+            "effDiet": 2.4374362652016943,
+            "diet": [
+              23,
+              87,
+              24
+            ],
+            "msPerStep": 8.701579555555556,
+            "msPerIndividual": 0.06493716086235489,
+            "speciesFertile": 14,
+            "effSpeciesFertile": 13.718718660926754,
+            "speciesLineage": 14,
+            "effSpeciesLineage": 13.718718660926754,
+            "cpuMsPerStep": 8.701325333333331,
+            "cpuMsPerIndividual": 0.06493526368159203
+          },
+          "islands": [
+            {
+              "index": 0,
+              "pop": 134,
+              "species": 14,
+              "effSpecies": 13.718718660926754,
+              "effDiet": 2.4374362652016943,
+              "diet": [
+                23,
+                87,
+                24
+              ],
+              "msPerStep": 8.701325333333331,
+              "msPerIndividual": 0.06493526368159203
+            }
+          ]
+        },
+        {
+          "step": 4500,
+          "year": 0.5,
+          "archipelago": {
+            "pop": 134,
+            "species": 14,
+            "effSpecies": 12.77768352623419,
+            "effDiet": 2.651630263585724,
+            "diet": [
+              26,
+              77,
+              31
+            ],
+            "msPerStep": 8.676245377777779,
+            "msPerIndividual": 0.06474809983416252,
+            "speciesFertile": 14,
+            "effSpeciesFertile": 12.77768352623419,
+            "speciesLineage": 14,
+            "effSpeciesLineage": 12.77768352623419,
+            "cpuMsPerStep": 8.676146622222221,
+            "cpuMsPerIndividual": 0.06474736285240464
+          },
+          "islands": [
+            {
+              "index": 0,
+              "pop": 134,
+              "species": 14,
+              "effSpecies": 12.77768352623419,
+              "effDiet": 2.651630263585724,
+              "diet": [
+                26,
+                77,
+                31
+              ],
+              "msPerStep": 8.676146622222221,
+              "msPerIndividual": 0.06474736285240464
+            }
+          ]
+        },
+        {
+          "step": 6750,
+          "year": 0.75,
+          "archipelago": {
+            "pop": 133,
+            "species": 12,
+            "effSpecies": 10.730642146198646,
+            "effDiet": 2.6773425394859847,
+            "diet": [
+              22,
+              73,
+              38
+            ],
+            "msPerStep": 8.899892133333335,
+            "msPerIndividual": 0.0669164822055138,
+            "speciesFertile": 12,
+            "effSpeciesFertile": 10.730642146198646,
+            "speciesLineage": 12,
+            "effSpeciesLineage": 10.730642146198646,
+            "cpuMsPerStep": 8.899764933333335,
+            "cpuMsPerIndividual": 0.06691552581453636
+          },
+          "islands": [
+            {
+              "index": 0,
+              "pop": 133,
+              "species": 12,
+              "effSpecies": 10.730642146198646,
+              "effDiet": 2.6773425394859847,
+              "diet": [
+                22,
+                73,
+                38
+              ],
+              "msPerStep": 8.899764933333335,
+              "msPerIndividual": 0.06691552581453636
+            }
+          ]
+        },
+        {
+          "step": 9000,
+          "year": 1,
+          "archipelago": {
+            "pop": 132,
+            "species": 12,
+            "effSpecies": 8.883481684692152,
+            "effDiet": 2.646787683656891,
+            "diet": [
+              17,
+              68,
+              47
+            ],
+            "msPerStep": 9.409550488888888,
+            "msPerIndividual": 0.0712844734006734,
+            "speciesFertile": 12,
+            "effSpeciesFertile": 8.883481684692152,
+            "speciesLineage": 12,
+            "effSpeciesLineage": 8.883481684692152,
+            "cpuMsPerStep": 9.409468933333333,
+            "cpuMsPerIndividual": 0.07128385555555555
+          },
+          "islands": [
+            {
+              "index": 0,
+              "pop": 132,
+              "species": 12,
+              "effSpecies": 8.883481684692152,
+              "effDiet": 2.646787683656891,
+              "diet": [
+                17,
+                68,
+                47
+              ],
+              "msPerStep": 9.409468933333333,
+              "msPerIndividual": 0.07128385555555555
+            }
+          ]
+        },
+        {
+          "step": 11250,
+          "year": 1.25,
+          "archipelago": {
+            "pop": 133,
+            "species": 11,
+            "effSpecies": 7.287970982189625,
+            "effDiet": 2.5210062714449677,
+            "diet": [
+              12,
+              69,
+              52
+            ],
+            "msPerStep": 9.092338844444447,
+            "msPerIndividual": 0.06836344995822892,
+            "speciesFertile": 11,
+            "effSpeciesFertile": 7.287970982189625,
+            "speciesLineage": 11,
+            "effSpeciesLineage": 7.287970982189625,
+            "cpuMsPerStep": 9.092240933333336,
+            "cpuMsPerIndividual": 0.06836271378446117
+          },
+          "islands": [
+            {
+              "index": 0,
+              "pop": 133,
+              "species": 11,
+              "effSpecies": 7.287970982189625,
+              "effDiet": 2.5210062714449677,
+              "diet": [
+                12,
+                69,
+                52
+              ],
+              "msPerStep": 9.092240933333336,
+              "msPerIndividual": 0.06836271378446117
+            }
+          ]
+        },
+        {
+          "step": 13500,
+          "year": 1.5,
+          "archipelago": {
+            "pop": 133,
+            "species": 12,
+            "effSpecies": 6.090958037140441,
+            "effDiet": 2.4074413458086372,
+            "diet": [
+              8,
+              64,
+              61
+            ],
+            "msPerStep": 8.579860177777778,
+            "msPerIndividual": 0.0645102269005848,
+            "speciesFertile": 12,
+            "effSpeciesFertile": 6.090958037140441,
+            "speciesLineage": 12,
+            "effSpeciesLineage": 6.090958037140441,
+            "cpuMsPerStep": 8.579702400000002,
+            "cpuMsPerIndividual": 0.06450904060150378
+          },
+          "islands": [
+            {
+              "index": 0,
+              "pop": 133,
+              "species": 12,
+              "effSpecies": 6.090958037140441,
+              "effDiet": 2.4074413458086372,
+              "diet": [
+                8,
+                64,
+                61
+              ],
+              "msPerStep": 8.579702400000002,
+              "msPerIndividual": 0.06450904060150378
+            }
+          ]
+        },
+        {
+          "step": 15750,
+          "year": 1.75,
+          "archipelago": {
+            "pop": 133,
+            "species": 13,
+            "effSpecies": 6.129839008450765,
+            "effDiet": 2.329639010279946,
+            "diet": [
+              6,
+              63,
+              64
+            ],
+            "msPerStep": 6.5575263999999995,
+            "msPerIndividual": 0.04930470977443609,
+            "speciesFertile": 13,
+            "effSpeciesFertile": 6.129839008450765,
+            "speciesLineage": 13,
+            "effSpeciesLineage": 6.129839008450765,
+            "cpuMsPerStep": 6.557430044444439,
+            "cpuMsPerIndividual": 0.04930398529657473
+          },
+          "islands": [
+            {
+              "index": 0,
+              "pop": 133,
+              "species": 13,
+              "effSpecies": 6.129839008450765,
+              "effDiet": 2.329639010279946,
+              "diet": [
+                6,
+                63,
+                64
+              ],
+              "msPerStep": 6.557430044444439,
+              "msPerIndividual": 0.04930398529657473
+            }
+          ]
+        },
+        {
+          "step": 18000,
+          "year": 2,
+          "archipelago": {
+            "pop": 134,
+            "species": 10,
+            "effSpecies": 4.587764791106804,
+            "effDiet": 2.1390712466693484,
+            "diet": [
+              2,
+              66,
+              66
+            ],
+            "msPerStep": 7.454740577777783,
+            "msPerIndividual": 0.05563239237147599,
+            "speciesFertile": 10,
+            "effSpeciesFertile": 4.587764791106804,
+            "speciesLineage": 10,
+            "effSpeciesLineage": 4.587764791106804,
+            "cpuMsPerStep": 7.454660044444453,
+            "cpuMsPerIndividual": 0.05563179137645114
+          },
+          "islands": [
+            {
+              "index": 0,
+              "pop": 134,
+              "species": 10,
+              "effSpecies": 4.587764791106804,
+              "effDiet": 2.1390712466693484,
+              "diet": [
+                2,
+                66,
+                66
+              ],
+              "msPerStep": 7.454660044444453,
+              "msPerIndividual": 0.05563179137645114
+            }
+          ]
+        },
+        {
+          "step": 20250,
+          "year": 2.25,
+          "archipelago": {
+            "pop": 132,
+            "species": 9,
+            "effSpecies": 3.6727675821216708,
+            "effDiet": 2.0728637952184936,
+            "diet": [
+              1,
+              60,
+              71
+            ],
+            "msPerStep": 7.626635288888886,
+            "msPerIndividual": 0.057777540067340045,
+            "speciesFertile": 9,
+            "effSpeciesFertile": 3.6727675821216708,
+            "speciesLineage": 9,
+            "effSpeciesLineage": 3.6727675821216708,
+            "cpuMsPerStep": 7.626535733333336,
+            "cpuMsPerIndividual": 0.05777678585858588
+          },
+          "islands": [
+            {
+              "index": 0,
+              "pop": 132,
+              "species": 9,
+              "effSpecies": 3.6727675821216708,
+              "effDiet": 2.0728637952184936,
+              "diet": [
+                1,
+                60,
+                71
+              ],
+              "msPerStep": 7.626535733333336,
+              "msPerIndividual": 0.05777678585858588
+            }
+          ]
+        },
+        {
+          "step": 22500,
+          "year": 2.5,
+          "archipelago": {
+            "pop": 133,
+            "species": 8,
+            "effSpecies": 3.441132522148108,
+            "effDiet": 1.9872936616216172,
+            "diet": [
+              0,
+              59,
+              74
+            ],
+            "msPerStep": 7.805329688888884,
+            "msPerIndividual": 0.05868668939014199,
+            "speciesFertile": 8,
+            "effSpeciesFertile": 3.441132522148108,
+            "speciesLineage": 8,
+            "effSpeciesLineage": 3.441132522148108,
+            "cpuMsPerStep": 7.805235155555549,
+            "cpuMsPerIndividual": 0.058685978613199616
+          },
+          "islands": [
+            {
+              "index": 0,
+              "pop": 133,
+              "species": 8,
+              "effSpecies": 3.441132522148108,
+              "effDiet": 1.9872936616216172,
+              "diet": [
+                0,
+                59,
+                74
+              ],
+              "msPerStep": 7.805235155555549,
+              "msPerIndividual": 0.058685978613199616
+            }
+          ]
+        },
+        {
+          "step": 24750,
+          "year": 2.75,
+          "archipelago": {
+            "pop": 132,
+            "species": 8,
+            "effSpecies": 3.439030931081577,
+            "effDiet": 1.9770867713197309,
+            "diet": [
+              0,
+              56,
+              76
+            ],
+            "msPerStep": 7.038813377777775,
+            "msPerIndividual": 0.053324343771043746,
+            "speciesFertile": 8,
+            "effSpeciesFertile": 3.439030931081577,
+            "speciesLineage": 8,
+            "effSpeciesLineage": 3.439030931081577,
+            "cpuMsPerStep": 7.038713644444451,
+            "cpuMsPerIndividual": 0.053323588215488264
+          },
+          "islands": [
+            {
+              "index": 0,
+              "pop": 132,
+              "species": 8,
+              "effSpecies": 3.439030931081577,
+              "effDiet": 1.9770867713197309,
+              "diet": [
+                0,
+                56,
+                76
+              ],
+              "msPerStep": 7.038713644444451,
+              "msPerIndividual": 0.053323588215488264
+            }
+          ]
+        },
+        {
+          "step": 27000,
+          "year": 3,
+          "archipelago": {
+            "pop": 132,
+            "species": 8,
+            "effSpecies": 3.619268185859037,
+            "effDiet": 1.8348516095534388,
+            "diet": [
+              0,
+              39,
+              93
+            ],
+            "msPerStep": 7.228825200000002,
+            "msPerIndividual": 0.054763827272727286,
+            "speciesFertile": 8,
+            "effSpeciesFertile": 3.619268185859037,
+            "speciesLineage": 8,
+            "effSpeciesLineage": 3.619268185859037,
+            "cpuMsPerStep": 7.228703777777781,
+            "cpuMsPerIndividual": 0.054762907407407434
+          },
+          "islands": [
+            {
+              "index": 0,
+              "pop": 132,
+              "species": 8,
+              "effSpecies": 3.619268185859037,
+              "effDiet": 1.8348516095534388,
+              "diet": [
+                0,
+                39,
+                93
+              ],
+              "msPerStep": 7.228703777777781,
+              "msPerIndividual": 0.054762907407407434
+            }
+          ]
+        }
+      ],
+      "migrated": 0,
+      "dropped": 0,
+      "hashes": [
+        "0f60b1afbe4697e0"
+      ],
+      "hash": "22786684acd4df54",
+      "summary": {
+        "fromYear": 1.999999,
+        "toYear": 3,
+        "rows": 5,
+        "pop": 132,
+        "species": 8,
+        "effSpecies": 3.619268185859037,
+        "effDiet": 1.9872936616216172,
+        "speciesFertile": 8,
+        "effSpeciesFertile": 3.619268185859037,
+        "speciesLineage": 8,
+        "effSpeciesLineage": 3.619268185859037,
+        "cpuMsPerStep": 7.454660044444453,
+        "cpuMsPerIndividual": 0.05563179137645114,
+        "islandEffSpecies": 3.619268185859037,
+        "islandPop": 132,
+        "msPerStep": 7.454740577777783,
+        "msPerIndividual": 0.05563239237147599
+      }
+    }
+  ]
+}
