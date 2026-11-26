@@ -5,6 +5,7 @@
 - R2: 27000 ステップ・seed 1,2,3 で生態の指標を確かめ、#18 の V1 と同じ基準で採否を判断して記録する
 - R3: 物理の所要時間を `tools/scaling/ab-bench.mjs` で変更前後を比べて記録する
 - R4: 別の個体どうしのめり込みを数値で確かめる(ブラウザでの見た目確認の代わり)
+- R5: 捕食(predations)の減少(シード 1〜3 で hooks 比 −29.2%)がシードの振れによるものかを確かめ、結果と採否の判断を記録する
 
 ## 前提・解釈
 - 本実装は #18 で測った試作 `groups16`(`tools/scaling/variants.mjs`)と**状態ハッシュが一致する**形にする。計画時に確かめた値: 試作を今のコードにかけると、`node tools/sim-check.mjs`(600 ステップ・既定シード 20261007)は `088bad967edb44ab`、`node tools/sim-check.mjs 600 1` は `fb099bd8c5bfe5dd`。変更前は `0e7801998fe70d04`
@@ -144,3 +145,64 @@
   - [ ] 判断の段落に、基準の各指標(物理 ms の比・個体数・実効種数・食性実効・births・matings・predations・broken)の変化が書かれている
   - [ ] `ARCHITECTURE.md` に `bodyCollisionGroups` を含む段落がある
 - **依存**: T4
+
+## T6: 捕食の減少がシードの振れかを確かめる追加計測と、シードごとの表を出すツール
+- **目的**: T4 の計測では predations が hooks 40.0 → base 28.3(−29.2%)で基準 ±20% を外れた。ただしシードごとの値は hooks 5・34・81、base 5・25・55 と振れが大きい。またぶつからなくなる組(根が 3 未満の別の個体のうち、id を 16 で割った余りが同じ組)は、`v1impl-overlap.json` の base で 4639 組、余りが違う組は 102330 組で、全体の約 4.3% しかない。仕組みだけで −29% を説明するのは難しいため、シードを 4〜9 に増やして差がシードの振れかを確かめる。手順は次のとおり
+  1. シードごとの表を出すツール `tools/scaling/predation-table.mjs` を作る。骨格は次のとおりで、ここから変えない
+     ```js
+     // 結果 JSON(run.mjs の出力)を読み、シードごとの predations・births・matings・肉からの獲得量を表にする
+     //   node tools/scaling/predation-table.mjs <json...>
+     // 同じ variant のファイルを複数渡すと、variant ごとに全シードの平均の行(seed 欄は "平均")も出す
+     import { readFile } from 'node:fs/promises';
+
+     const files = process.argv.slice(2);
+     const byVariant = new Map(); // variant -> 行の配列
+     for (const f of files) {
+       const run = JSON.parse(await readFile(f, 'utf8'));
+       for (const r of run.results) {
+         const row = {
+           variant: run.variant, seed: r.seed,
+           predations: r.counters.predations, births: r.counters.births, matings: r.counters.matings,
+           meat: r.feedStats.meat,
+         };
+         if (!byVariant.has(run.variant)) byVariant.set(run.variant, []);
+         byVariant.get(run.variant).push(row);
+       }
+     }
+     // 出力は Markdown の表。列は「条件 | シード | predations | births | matings | meat」。
+     // variant ごとにシードの昇順で行を出し、続けて平均の行を出す。
+     // 数値は predations・births・matings が整数(平均の行は小数 1 桁)、meat は小数 0 桁で丸める
+     ```
+  2. 次のコマンドを 1 つずつ順に実行する(並行に走らせない)。1 本は 10 分前後かかり、その間ほとんど出力が無い。10 分出力が無いと打ち切られるため、バックグラウンドで実行し(例: `node tools/scaling/run.mjs ... > $TMPDIR/hooks.log 2>&1 &`)、終わるまで 1〜2 分おきに `tail -3` などで進み具合を表示して待つ
+     - `node tools/scaling/run.mjs --variant hooks --steps 27000 --seeds 4,5,6,7,8,9 --out docs/plans/scaling-data/v1impl-hooks-s4-9.json`
+     - `node tools/scaling/run.mjs --variant base --steps 27000 --seeds 4,5,6,7,8,9 --out docs/plans/scaling-data/v1impl-base-s4-9.json`
+  3. 次の 2 つを実行し、出力を完了報告にそのまま貼る
+     - `node tools/scaling/predation-table.mjs docs/plans/scaling-data/v1impl-hooks.json docs/plans/scaling-data/v1impl-hooks-s4-9.json docs/plans/scaling-data/v1impl-base.json docs/plans/scaling-data/v1impl-base-s4-9.json`
+     - `node tools/scaling/summarize.mjs docs/plans/scaling-data/v1impl-hooks-s4-9.json docs/plans/scaling-data/v1impl-base-s4-9.json`
+- **対象**: `tools/scaling/predation-table.mjs`, `docs/plans/scaling-data/v1impl-hooks-s4-9.json`, `docs/plans/scaling-data/v1impl-base-s4-9.json`
+- **要件**: R5
+- **参照ファイル**:
+  - `tools/scaling/summarize.mjs:1-30`(結果 JSON の読み方と表の出し方を真似る)
+  - `tools/scaling/run.mjs:1-40`(引数と出力 JSON の形)
+- **受け入れ基準**:
+  - [ ] `v1impl-hooks-s4-9.json` と `v1impl-base-s4-9.json` が作られ、どちらも `seeds` が `[4,5,6,7,8,9]`、`steps` が 27000 になっている
+  - [ ] 手順 3 の predation-table.mjs の実行で、hooks と base それぞれに 9 シード分の行と「平均」の行が出る。hooks のシード 1・2・3 の predations は 5・34・81、base は 5・25・55 になっている
+  - [ ] 完了報告に、predation-table.mjs と summarize.mjs の出力がそのまま貼られている
+- **依存**: T5
+
+## T7: 捕食の減少の調査結果と採否の判断を検証記録に足す
+- **目的**: T6 の結果(T6 の完了報告に表がある)を `docs/plans/scaling-study.md` の「## V1 の本実装の確認(Issue #22)」節に足し、採否の判断を更新する。既存の「### 判断」の本文は書き換えず、その直後(「## まとめと提案」の前)に「### 捕食の減少の調査」の小見出しを足して、次の順で書く
+  1. 調べた理由: シード 1〜3 の predations が −29.2% で基準を外れたこと
+  2. 仕組みからの見積もり: base でぶつからなくなる組は、根が 3 未満の別の個体の組のうち約 4.3%(`v1impl-overlap.json` の base の same 4639 組 / 全 106969 組)。捕食は体節どうしの接触で起きる(`src/sim/interactions.js` の `applyHit`)ので、ぶつからない組が捕食を直接減らす分は、この割合と同じ程度と見積もれる
+  3. 追加計測: 実行した 2 つのコマンド、T6 の predation-table.mjs の表(9 シード分と平均)、summarize.mjs の表
+  4. 判断: 9 シードの平均で predations の base / hooks を計算し、−20%〜+20% に入っていれば「シード 1〜3 の −29.2% はシードの振れによるもので、**採用してよい**」と書く。入っていなければ「シードを増やしても predations が基準を外れるため **条件付き**(外れた指標は predations)」と書く。どちらの場合も 9 シードの predations の平均と比を数値で書く。births・matings も 9 シードの平均で比を書き、±20% を外れていればその旨を書く
+- **対象**: `docs/plans/scaling-study.md`
+- **要件**: R5
+- **参照ファイル**:
+  - `docs/plans/scaling-study.md:278-335`(変更対象。Issue #22 の節。書き方と表の形を真似る)
+- **受け入れ基準**:
+  - [ ] 「### 捕食の減少の調査」が「### 判断」の後、「## まとめと提案」の前にあり、目的欄の 1〜4 がこの順で書かれている
+  - [ ] 表の数値が T6 の完了報告の出力と一致する(`node tools/scaling/predation-table.mjs` を目的欄と同じ 4 ファイルで実行して確かめる)
+  - [ ] 判断の結論が目的欄 4 の規則と 9 シードの平均の比に合っている
+  - [ ] 既存の「### 判断」までの本文が変わっていない(`git diff` で追加行だけになっている)
+- **依存**: T6
