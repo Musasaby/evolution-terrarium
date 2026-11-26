@@ -2,7 +2,7 @@
   "source": "https://github.com/Musasaby/evolution-terrarium/issues/23",
   "branch": "develop/island-model-check",
   "group": "",
-  "updated_at": "2026-11-26T17:54:53+09:00",
+  "updated_at": "2026-11-26T18:12:23+09:00",
   "tasks": [
     {
       "id": "T1",
@@ -49,9 +49,9 @@
     {
       "id": "T7",
       "title": "単一世界の計測(90・100・110 m)",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "338556842779a6b28889ca61eb7433e1e9d8bd5c"
     },
     {
       "id": "T8",
