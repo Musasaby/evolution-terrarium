@@ -1,127 +1,43 @@
 {
-  "source": "https://github.com/Musasaby/evolution-terrarium/issues/18",
-  "branch": "develop/scaling-study-C",
-  "updated_at": "2026-11-26T02:37:56+09:00",
-  "group": "C",
+  "source": "https://github.com/Musasaby/evolution-terrarium/issues/22",
+  "branch": "develop/physics-groups16",
+  "group": "",
+  "updated_at": "2026-11-26T13:57:57+09:00",
   "tasks": [
     {
       "id": "T1",
-      "title": "検証記録の雛形と出力先の用意",
-      "status": "done",
+      "title": "sim の体節を衝突グループで分け、接触フックを外す",
+      "status": "pending",
       "retries": 0,
-      "commit": "d9dcd79750fade60fef5ab7938c668f5c317b7f6"
+      "commit": null
     },
     {
       "id": "T2",
-      "title": "条件を差し替えて多様性を測る実行スクリプト(V0 用)",
-      "status": "done",
+      "title": "旧方式を再現する variant と、variant ごとの状態ハッシュを出すツール",
+      "status": "pending",
       "retries": 0,
-      "commit": "72b0f0fddf511dc80900569f9946977c74c761f7"
+      "commit": null
     },
     {
       "id": "T3",
-      "title": "V0 の結果を表と結論にまとめる",
-      "status": "done",
-      "retries": 1,
-      "commit": "624f40e8c6504281bb4418bbb1d5c10f6fee6ff5"
+      "title": "別の個体どうしのめり込みを測るツール",
+      "status": "pending",
+      "retries": 0,
+      "commit": null
     },
     {
       "id": "T4",
-      "title": "V1 の差し替え案と、動きの指標",
-      "status": "done",
+      "title": "変更前後の計測を実行してデータを保存する",
+      "status": "pending",
       "retries": 0,
-      "commit": "c2dd8ee30151f2147648768e7e2d5e458967a933"
+      "commit": null
     },
     {
       "id": "T5",
-      "title": "物理の所要時間を交互に測る A/B 計測",
-      "status": "done",
+      "title": "結果と採否の判断を検証記録にまとめる",
+      "status": "pending",
       "retries": 0,
-      "commit": "26dfe61ae46f38c2e7fcedfd77802a0a0d8ef882"
-    },
-    {
-      "id": "T6",
-      "title": "V1 の結果と採用の判断をまとめる",
-      "status": "done",
-      "retries": 0,
-      "commit": "301ba1d8dc6ee43643deca4cbdd68cfbc3a830ab"
-    },
-    {
-      "id": "T7",
-      "title": "領域分割の試作(postMessage による毎ステップ同期)",
-      "status": "done",
-      "retries": 1,
-      "commit": "57074ca05a6aa8ba56d9e9255289bf3dc1377bf8"
-    },
-    {
-      "id": "T8",
-      "title": "領域分割の SharedArrayBuffer 同期と決定性の確認",
-      "status": "done",
-      "retries": 0,
-      "commit": "c8d2dd2a0d1fbe187c1c2ad87b8efa14c32572c9"
-    },
-    {
-      "id": "T9",
-      "title": "島モデルの試作(独立した世界と、ときどきの移住)",
-      "status": "done",
-      "retries": 1,
-      "commit": "b9f9b5c4c210cbdd081e9c7873ec7041188b46e9"
-    },
-    {
-      "id": "T10",
-      "title": "物理の詳細度の切り替え(LOD)の実現性を測る",
-      "status": "done",
-      "retries": 0,
-      "commit": "b68646ed98dc50bc961fe88deda8faa8d19bc706"
-    },
-    {
-      "id": "T11",
-      "title": "V3・V4・V5 の結果と判断をまとめる",
-      "status": "done",
-      "retries": 1,
-      "commit": "509345a0c14de522d0502681b64b78d270c68ba0"
-    },
-    {
-      "id": "T12",
-      "title": "描画の上限を測る計測ページ(V6)",
-      "status": "done",
-      "retries": 0,
-      "commit": "0bf43ab7fcc8e5c5b209e8f4a5139171aab42836"
-    },
-    {
-      "id": "T13",
-      "title": "sim を Web Worker に移す効果を測る計測ページ(V2)",
-      "status": "done",
-      "retries": 0,
-      "commit": "f50420536ec3c2d66aebd4a65f2d6fe3606bab49"
-    },
-    {
-      "id": "T14",
-      "title": "V2・V6 の結果をまとめる",
-      "status": "done",
-      "retries": 1,
-      "commit": "7fd0d97b5df5597df4c708e580543a36e0997fc1"
-    },
-    {
-      "id": "T15",
-      "title": "全案のまとめと採用案の提案",
-      "status": "done",
-      "retries": 1,
-      "commit": "b2b323c063db56ef5c9ed9edf96037fbc824c89d"
-    },
-    {
-      "id": "T16",
-      "title": "領域分割の atomics 同期で共有箱があふれる問題を直す",
-      "status": "done",
-      "retries": 1,
-      "commit": "5f28895403a74bde18fd30239f8b9a5384723a0e"
-    },
-    {
-      "id": "T17",
-      "title": "計測ページの URL パラメータで既定値が使われない問題を直す",
-      "status": "done",
-      "retries": 0,
-      "commit": "bc16e197e8473450ccebcd5a4dec21db5df72df4"
+      "commit": null
     }
   ]
 }
