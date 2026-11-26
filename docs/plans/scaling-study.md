@@ -380,6 +380,94 @@ node tools/scaling/run.mjs --variant base --steps 27000 --seeds 4,5,6,7,8,9 --ou
 
 判断: 9 シードの平均では predations が hooks 25.0・base 21.9 で、base / hooks は 0.88(-12.4%)と ±20% の基準に入る。births は hooks 484.0・base 489.7 で比 1.01(+1.2%)、matings は hooks 241.3・base 250.8 で比 1.04(+3.9%)で、いずれも ±20% の基準に入る。したがって、シード 1〜3 の -29.2% はシードの振れによるもので、**採用してよい**。
 
+## V4 の検証(Issue #23)
+
+計測日: 2026-11-26。V1(groups16)適用後のコードで、島モデルの集計を補正して測り直した。実行したコマンドは次のとおり。
+
+```
+node tools/scaling/island-run.mjs --steps 9000 --seeds 1,2 --conditions 0x0,1500x8 --out docs/plans/scaling-data/v4check-hash-1.json
+node tools/scaling/island-run.mjs --steps 9000 --seeds 1,2 --conditions 0x0,1500x8 --out docs/plans/scaling-data/v4check-hash-2.json
+node tools/scaling/island-run.mjs --steps 9000 --seeds 1,2 --conditions 0x0,1500x8 --jitter --serial-seeds --out docs/plans/scaling-data/v4check-hash-jitter.json
+node tools/scaling/island-run.mjs --steps 27000 --seeds 1,2,3 --conditions 0x0,1500x2,1500x8 --serial-seeds --out docs/plans/scaling-data/v4check-islands-a.json
+node tools/scaling/island-run.mjs --steps 27000 --seeds 1,2,3 --conditions 6000x2,6000x8 --serial-seeds --out docs/plans/scaling-data/v4check-islands-b.json
+node tools/scaling/island-run.mjs --islands 1 --size 90 --steps 27000 --seeds 1,2,3 --out docs/plans/scaling-data/v4check-single-90.json
+node tools/scaling/island-run.mjs --islands 1 --size 100 --steps 27000 --seeds 1,2,3 --out docs/plans/scaling-data/v4check-single-100.json
+node tools/scaling/island-run.mjs --islands 1 --size 110 --steps 27000 --seeds 1,2,3 --out docs/plans/scaling-data/v4check-single-110.json
+node tools/scaling/island-run.mjs --islands 1 --size 120 --steps 27000 --seeds 1,2,3 --out docs/plans/scaling-data/v4check-single-120.json
+node tools/scaling/island-run.mjs --islands 1 --size 130 --steps 27000 --seeds 1,2,3 --out docs/plans/scaling-data/v4check-single-130.json
+node tools/scaling/island-run.mjs --islands 1 --size 140 --steps 27000 --seeds 1,2,3 --out docs/plans/scaling-data/v4check-single-140.json
+```
+
+生データは `docs/plans/scaling-data/v4check-hash-1.json`・`v4check-hash-2.json`・`v4check-hash-jitter.json`・`v4check-islands-a.json`・`v4check-islands-b.json`・`v4check-single-90.json`・`v4check-single-100.json`・`v4check-single-110.json`・`v4check-single-120.json`・`v4check-single-130.json`・`v4check-single-140.json`。
+
+### 集計の方法
+
+- **島:種**: 島番号と種 id の組を別の種として数える(従来の数え方。`island-run.mjs` の `buildRow`)
+- **交配で束ねる**: 各島の種ごとに、生きている個体を id の昇順に最大 3 体選び、そのゲノムを代表とする(`sp.rep` は種ができた時点のゲノムで更新されないため使わない)。別の島の 2 種で、代表どうしのどれか 1 組が `interfertile`(`src/sim/speciation.js`。sim の種分化と同じ判定)を満たせば同じ種にまとめる。まとめは推移的に広がる(union-find)ので、同じ島の 2 種が別の島の種を介して 1 つにまとまることもある。同じ島の種どうしを直接まとめることはしない
+- **由来で束ねる**: 種に「由来キー」を持たせる。移住で生まれた種(移入先に交配できる種がなく、`newSpecies` で作った種)は、移民が出身の島で属していた種の由来キーを受け継ぐ。それ以外の種(創始集団や、島の中の種分化で生まれた種)は `<島番号>:<種 id>`。同じ由来キーの種を同じ種として数える。移住なし(0x0)では島:種の値と同じになる
+- **CPU 合計 ms/ステップ**: 各島の `computeMs` の合計 ÷ ステップ数。**CPU ms/個体**: CPU 合計 ms/ステップ ÷ 群島の個体数
+- 群島はシードを 1 つずつ順に動かした(`--serial-seeds`、同時に 4 worker)。単一世界は 3 シードを並行に動かした(同時に 3 worker)。単一世界は `--islands 1` で測った(島と同じコードで時間を測るため)
+
+### 決定性
+
+`node tools/scaling/island-hash-compare.mjs` に 3 つの JSON を渡した出力。
+
+| 条件 | シード | v4check-hash-1.json | v4check-hash-2.json | v4check-hash-jitter.json | 結果 |
+| --- | --- | --- | --- | --- | --- |
+| 0x0 | 1 | 77e1384ace9c2ac8 | 77e1384ace9c2ac8 | 77e1384ace9c2ac8 | 一致 |
+| 0x0 | 2 | cc5f552f8e49d8c2 | cc5f552f8e49d8c2 | cc5f552f8e49d8c2 | 一致 |
+| 1500x8 | 1 | fda7fa5b45ac3745 | fda7fa5b45ac3745 | fda7fa5b45ac3745 | 一致 |
+| 1500x8 | 2 | ab85329f10f4d1d4 | ab85329f10f4d1d4 | ab85329f10f4d1d4 | 一致 |
+
+4 行すべてが一致した。`--jitter` で worker の応答の順を揺らしても、`--serial-seeds` でシードを順に動かしても、同じシード・同じ条件なら状態ハッシュは変わらない。**移住の順序や worker の実行順に依存せず、決定性は保てる**。
+
+### 群島
+
+`node tools/scaling/island-summary.mjs` に 8 つのファイルを渡した出力(表 1)。
+
+| 条件 | 群島 実効種数(島:種) | 交配で束ねる | 0x0 比 | 由来で束ねる | 島平均 実効種数 | 群島 個体数 | 島平均 個体数 | CPU ms/ステップ | CPU ms/個体 | 壁 ms/ステップ |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 0x0 | 9.2 | 9.2 | 1.00 | 9.2 | 2.6 | 110.0 | 26.3 | 9.06 | 0.085 | 3.00 |
+| 1500x2 | 15.1 | 8.5 | 0.92 | 8.9 | 4.2 | 131.3 | 32.2 | 11.23 | 0.086 | 4.00 |
+| 1500x8 | 15.7 | 6.1 | 0.66 | 5.8 | 5.0 | 207.3 | 52.6 | 14.45 | 0.071 | 5.58 |
+| 6000x2 | 12.3 | 9.8 | 1.07 | 9.7 | 3.6 | 105.0 | 26.1 | 9.34 | 0.087 | 2.75 |
+| 6000x8 | 15.8 | 9.5 | 1.03 | 9.4 | 4.5 | 108.7 | 27.1 | 9.69 | 0.093 | 3.87 |
+
+#18 の V4 では島:種の実効種数が 7.5〜20.2 だったが、今回は 9.2〜15.8 で幅が狭くなった。移住なしは 7.5 → 9.2 に上がり、最も高い条件の値は 20.2 → 15.8 に下がっている(V1 適用後のコードで測り直した値)。
+
+### 単一世界
+
+`node tools/scaling/island-summary.mjs` の出力(表 2)。
+
+| 広さ | 個体数 | 実効種数 | CPU ms/ステップ | CPU ms/個体 |
+| --- | --- | --- | --- | --- |
+| 90 | 56.3 | 3.0 | 3.61 | 0.076 |
+| 100 | 62.0 | 4.2 | 4.16 | 0.085 |
+| 110 | 51.3 | 4.4 | 3.13 | 0.073 |
+| 120 | 166.7 | 4.5 | 12.49 | 0.071 |
+| 130 | 228.7 | 2.7 | 17.98 | 0.079 |
+| 140 | 255.0 | 3.5 | 18.30 | 0.072 |
+
+### 個体数をそろえた比較
+
+群島の条件ごとに、群島の個体数(シード平均)がいちばん近い広さの単一世界を比べる相手にした(表 3)。群島の実効種数は「交配で束ねる」の値。
+
+| 条件 | 群島 個体数 | 単一世界 | 実効種数 群島(交配) | 実効種数 単一 | 比 | CPU ms/ステップ 群島 | CPU ms/ステップ 単一 | 比 | CPU ms/個体 群島 | CPU ms/個体 単一 | 比 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 0x0 | 110.0 | 100 m(62.0 体) | 9.2 | 4.2 | 2.21 | 9.06 | 4.16 | 2.18 | 0.085 | 0.085 | 1.00 |
+| 1500x2 | 131.3 | 120 m(166.7 体) | 8.5 | 4.5 | 1.90 | 11.23 | 12.49 | 0.90 | 0.086 | 0.071 | 1.20 |
+| 1500x8 | 207.3 | 130 m(228.7 体) | 6.1 | 2.7 | 2.22 | 14.45 | 17.98 | 0.80 | 0.071 | 0.079 | 0.91 |
+| 6000x2 | 105.0 | 100 m(62.0 体) | 9.8 | 4.2 | 2.36 | 9.34 | 4.16 | 2.25 | 0.087 | 0.085 | 1.03 |
+| 6000x8 | 108.7 | 100 m(62.0 体) | 9.5 | 4.2 | 2.27 | 9.69 | 4.16 | 2.33 | 0.093 | 0.085 | 1.09 |
+
+### 判断
+
+- **決定性: 保てる**。T4 の比較で 4 行すべてが一致した(上記「決定性」)
+- **移住の効果**: 「交配で束ねる」の 0x0 比は 1500x2 が 0.92、1500x8 が 0.66、6000x2 が 1.07、6000x8 が 1.03。いずれも 1.20 未満なので、**「移住の効果あり」の条件はない**。移住を入れても交配で束ねた実効種数は移住なし(9.2)を上回らず、1500x8 では 6.1 まで下がる
+- **単一世界との比較**: 表 3 の実効種数の比は 0x0 が 2.21、1500x2 が 1.90、1500x8 が 2.22、6000x2 が 2.36、6000x8 が 2.27 で、**5 条件すべてが 1.20 以上**。したがって **5 条件すべてが「多様性に効果あり」**。CPU ms/ステップの比は 0x0 が 2.18、1500x2 が 0.90、1500x8 が 0.80、6000x2 が 2.25、6000x8 が 2.33 で、1500 ごとの 2 条件は単一世界より短く、0x0 と 6000 ごとの 2 条件は 2 倍を超える
+- **由来で束ねた値(参考)**: 0x0 比は 1500x2 が 0.97、1500x8 が 0.63、6000x2 が 1.05、6000x8 が 1.02。交配で束ねた値と同じく、移住で増えてはいない(判断には使わない)
+- **総合**: 決定性は保て、「多様性に効果あり」の条件は 5 つすべてある。そのうち CPU ms/ステップの比が 1.50 以下なのは 1500x2(0.90)と 1500x8(0.80)で、この中で「交配で束ねる」が最も高いのは 1500x2(8.5)。よって**本番に入れることを勧める**。勧める構成は **80 m の島を 4 つ並べ、1500 ステップごとに 2 体を移す**。最終的な採否は利用者が判断する
+
 ## まとめと提案
 
 各節の結果を 1 つの表にまとめた。速くなる比率は各節で比べた量が違うので、何の比率かを括弧書きで示す。実装の手間は試作の大きさから「小 = 本番では src/sim の 1〜2 ファイルの変更」「中 = 3〜5 ファイルか新しいモジュール」「大 = 世界の持ち方やループの構造を変える」で付けた。
