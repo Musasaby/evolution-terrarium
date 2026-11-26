@@ -1,57 +1,78 @@
 {
-  "source": "https://github.com/Musasaby/evolution-terrarium/issues/22",
-  "branch": "develop/physics-groups16",
-  "updated_at": "2026-11-26T16:15:54+09:00",
+  "source": "https://github.com/Musasaby/evolution-terrarium/issues/23",
+  "branch": "develop/island-model-check",
   "group": "",
+  "updated_at": "2026-11-26T16:38:37+09:00",
   "tasks": [
     {
       "id": "T1",
-      "title": "sim の体節を衝突グループで分け、接触フックを外す",
-      "status": "done",
+      "title": "島の worker に、種の代表ゲノム・由来キー・状態ハッシュ・応答の揺らしを足す",
+      "status": "pending",
       "retries": 0,
-      "commit": "4efbdd4f2e78ffe48179e838c10bcf9fd3f95872"
+      "commit": null
     },
     {
       "id": "T2",
-      "title": "旧方式を再現する variant と、variant ごとの状態ハッシュを出すツール",
-      "status": "done",
+      "title": "群島の集計に、交配可能性・由来で束ねた実効種数、CPU 合計時間、状態ハッシュを足す",
+      "status": "pending",
       "retries": 0,
-      "commit": "383dd19530381e9793b4eedfef3a5f590001ae57"
+      "commit": null
     },
     {
       "id": "T3",
-      "title": "別の個体どうしのめり込みを測るツール",
-      "status": "done",
+      "title": "群島と単一世界の結果を表にまとめるツール",
+      "status": "pending",
       "retries": 0,
-      "commit": "ea48fce8b0fc70602caa5326ceca6d4879e8bc32"
+      "commit": null
     },
     {
       "id": "T4",
-      "title": "変更前後の計測を実行してデータを保存する",
-      "status": "done",
+      "title": "決定性を確かめる計測と、ハッシュを比べるツール",
+      "status": "pending",
       "retries": 0,
-      "commit": "286aaf1c5033973268b0a5285897077b0bebdf83"
+      "commit": null
     },
     {
       "id": "T5",
-      "title": "結果と採否の判断を検証記録にまとめる",
-      "status": "done",
-      "retries": 1,
-      "commit": "83d25371368caf6b7ef38df3de7a7d9b79402bd5"
+      "title": "群島の本計測(前半: 移住なしと 1500 ステップごと)",
+      "status": "pending",
+      "retries": 0,
+      "commit": null
     },
     {
       "id": "T6",
-      "title": "捕食の減少がシードの振れかを確かめる追加計測と、シードごとの表を出すツール",
-      "status": "done",
+      "title": "群島の本計測(後半: 6000 ステップごと)",
+      "status": "pending",
       "retries": 0,
-      "commit": "fa3680790d2b9f61dbb36132d6a2cfb961bc0f44"
+      "commit": null
     },
     {
       "id": "T7",
-      "title": "捕食の減少の調査結果と採否の判断を検証記録に足す",
-      "status": "done",
+      "title": "単一世界の計測(90・100・110 m)",
+      "status": "pending",
       "retries": 0,
-      "commit": "74d164e3b01cf26473fef9f7165095794ef823e9"
+      "commit": null
+    },
+    {
+      "id": "T8",
+      "title": "単一世界の計測(120・130・140 m)",
+      "status": "pending",
+      "retries": 0,
+      "commit": null
+    },
+    {
+      "id": "T9",
+      "title": "検証の結果と判断を検証記録にまとめる",
+      "status": "pending",
+      "retries": 0,
+      "commit": null
+    },
+    {
+      "id": "T10",
+      "title": "本番に入れる場合の構成案を検証記録に足す",
+      "status": "pending",
+      "retries": 0,
+      "commit": null
     }
   ]
 }
