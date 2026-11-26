@@ -2,7 +2,7 @@
   "source": "https://github.com/Musasaby/evolution-terrarium/issues/22",
   "branch": "develop/physics-groups16",
   "group": "",
-  "updated_at": "2026-11-26T14:14:04+09:00",
+  "updated_at": "2026-11-26T14:18:28+09:00",
   "tasks": [
     {
       "id": "T1",
@@ -21,9 +21,9 @@
     {
       "id": "T3",
       "title": "別の個体どうしのめり込みを測るツール",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "ea48fce8b0fc70602caa5326ceca6d4879e8bc32"
     },
     {
       "id": "T4",
