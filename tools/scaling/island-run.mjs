@@ -1,14 +1,16 @@
 // 島モデルの試作：独立した世界を worker_threads で並行に動かし、ときどき少数を移住させる
 //   node tools/scaling/island-run.mjs [--islands 4] [--size 80] [--steps 27000] [--seeds 1]
-//     [--conditions 0x0,1500x2] [--out <path>]
+//     [--conditions 0x0,1500x2] [--out <path>] [--serial-seeds] [--jitter]
 //
 // 条件は <間隔>x<人数>。間隔 0 は移住なし。島 i のシードは seed * 100 + i。
-// シードは並行に、条件は順に実行する。
+// シードは並行に、条件は順に実行する。--serial-seeds でシードを 1 つずつ実行し、
+// --jitter で worker の応答を揺らす。
 // 2250 ステップ（0.25 年）ごとに全島の stats を集め、島ごとの値と群島全体の値を記録する。
 import { Worker } from 'node:worker_threads';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
-import { CFG } from '../../src/sim/index.js';
+import { createHash } from 'node:crypto';
+import { CFG, interfertile } from '../../src/sim/index.js';
 
 const workerUrl = new URL('./island-worker.mjs', import.meta.url);
 
@@ -29,6 +31,8 @@ function parseArgs(argv) {
     else if (a === '--seeds') out.seeds = argv[++i];
     else if (a === '--conditions') out.conditions = argv[++i];
     else if (a === '--out') out.out = argv[++i];
+    else if (a === '--serial-seeds') out.serialSeeds = true;
+    else if (a === '--jitter') out.jitter = true;
   }
   return out;
 }
@@ -90,6 +94,29 @@ function effFromCounts(counts) {
   return Math.exp(h);
 }
 
+// (a) 交配可能性: 別の島の種どうしで、代表ゲノムのどれか 1 組が交配できれば同じ種にまとめる(推移的)
+function fertileCounts(statsList) {
+  const groups = [];
+  statsList.forEach((st, i) => { for (const s of st.speciesInfo) groups.push({ island: i, n: s.n, genomes: s.genomes }); });
+  const parent = groups.map((_, i) => i);
+  const find = (x) => { while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; } return x; };
+  for (let a = 0; a < groups.length; a++) {
+    for (let b = a + 1; b < groups.length; b++) {
+      if (groups[a].island === groups[b].island || find(a) === find(b)) continue;
+      if (groups[a].genomes.some((ga) => groups[b].genomes.some((gb) => interfertile(ga, gb)))) parent[find(a)] = find(b);
+    }
+  }
+  const counts = new Map();
+  groups.forEach((g, i) => { const r = find(i); counts.set(r, (counts.get(r) || 0) + g.n); });
+  return [...counts.values()];
+}
+// (b) 移住の由来: 同じ由来キーの種を同じ種として数える
+function lineageCounts(statsList) {
+  const counts = new Map();
+  for (const st of statsList) for (const s of st.speciesInfo) counts.set(s.key, (counts.get(s.key) || 0) + s.n);
+  return [...counts.values()];
+}
+
 function median(xs) {
   if (!xs.length) return 0;
   const s = [...xs].sort((a, b) => a - b);
@@ -126,6 +153,9 @@ function buildRow(step, wallMs, stepsRun, statsList, computeList) {
   const effSpecies = effFromCounts([...spCounts.values()]);
   const effDiet = effFromCounts(dietCounts);
   const msPerStep = wallMs / stepsRun;
+  const fertile = fertileCounts(statsList);
+  const lineage = lineageCounts(statsList);
+  const cpuMsPerStep = computeList.reduce((a, c) => a + c.computeMs, 0) / stepsRun;
 
   return {
     step,
@@ -138,6 +168,12 @@ function buildRow(step, wallMs, stepsRun, statsList, computeList) {
       diet: dietCounts,
       msPerStep,
       msPerIndividual: pop > 0 ? msPerStep / pop : 0,
+      speciesFertile: fertile.length,
+      effSpeciesFertile: effFromCounts(fertile),
+      speciesLineage: lineage.length,
+      effSpeciesLineage: effFromCounts(lineage),
+      cpuMsPerStep,
+      cpuMsPerIndividual: pop > 0 ? cpuMsPerStep / pop : 0,
     },
     islands,
   };
@@ -148,6 +184,13 @@ function summarize(rows, steps) {
   const lo = years * 2 / 3 - 1e-6, hi = years + 1e-6;
   const sel = rows.filter((r) => r.year >= lo && r.year <= hi);
   const pick = (fn) => median(sel.map(fn));
+  const islandMed = (fn) => {
+    const n = sel.length ? sel[0].islands.length : 0;
+    if (!n) return 0;
+    let sum = 0;
+    for (let i = 0; i < n; i++) sum += median(sel.map((r) => fn(r.islands[i])));
+    return sum / n;
+  };
   return {
     fromYear: lo,
     toYear: years,
@@ -156,16 +199,24 @@ function summarize(rows, steps) {
     species: pick((r) => r.archipelago.species),
     effSpecies: pick((r) => r.archipelago.effSpecies),
     effDiet: pick((r) => r.archipelago.effDiet),
+    speciesFertile: pick((r) => r.archipelago.speciesFertile),
+    effSpeciesFertile: pick((r) => r.archipelago.effSpeciesFertile),
+    speciesLineage: pick((r) => r.archipelago.speciesLineage),
+    effSpeciesLineage: pick((r) => r.archipelago.effSpeciesLineage),
+    cpuMsPerStep: pick((r) => r.archipelago.cpuMsPerStep),
+    cpuMsPerIndividual: pick((r) => r.archipelago.cpuMsPerIndividual),
+    islandEffSpecies: islandMed((i) => i.effSpecies),
+    islandPop: islandMed((i) => i.pop),
     msPerStep: pick((r) => r.archipelago.msPerStep),
     msPerIndividual: pick((r) => r.archipelago.msPerIndividual),
   };
 }
 
 async function runOne(seed, interval, k, opts) {
-  const { islands: nIslands, size, steps } = opts;
+  const { islands: nIslands, size, steps, jitter } = opts;
   const workers = [];
   for (let i = 0; i < nIslands; i++) {
-    workers.push(spawnIsland({ index: i, seed: seed * 100 + i, size }));
+    workers.push(spawnIsland({ index: i, seed: seed * 100 + i, size, jitter }));
   }
   try {
     await Promise.all(workers.map((w) => w.ready));
@@ -218,6 +269,7 @@ async function runOne(seed, interval, k, opts) {
       }
     }
 
+    const hashes = (await Promise.all(workers.map((w) => w.ask('hash')))).map((m) => m.hash);
     return {
       seed,
       interval,
@@ -225,6 +277,8 @@ async function runOne(seed, interval, k, opts) {
       rows,
       migrated,
       dropped,
+      hashes,
+      hash: createHash('sha1').update(hashes.join(',')).digest('hex').slice(0, 16),
       summary: summarize(rows, steps),
     };
   } finally {
@@ -241,13 +295,21 @@ const conditions = parseConditions(args.conditions);
 
 const runs = [];
 for (const { interval, migrants } of conditions) {
-  const results = await Promise.all(seeds.map((seed) => runOne(seed, interval, migrants, { islands, size, steps })));
+  let results;
+  if (args.serialSeeds) {
+    results = [];
+    for (const seed of seeds) results.push(await runOne(seed, interval, migrants, { islands, size, steps, jitter: !!args.jitter }));
+  } else {
+    results = await Promise.all(seeds.map((seed) => runOne(seed, interval, migrants, { islands, size, steps, jitter: !!args.jitter })));
+  }
   runs.push(...results);
   for (const r of results) {
     const s = r.summary;
     console.log(`seed ${r.seed}・間隔 ${r.interval}・${r.migrants} 体：移住 ${r.migrated}（捨て ${r.dropped}）・`
       + `個体数 ${s.pop.toFixed(1)}・実効種数 ${s.effSpecies.toFixed(2)}・食性実効 ${s.effDiet.toFixed(2)}・`
-      + `${s.msPerStep.toFixed(3)} ms/ステップ`);
+      + `${s.msPerStep.toFixed(3)} ms/ステップ`
+      + `・交配で束ねた実効種数 ${s.effSpeciesFertile.toFixed(2)}・由来で束ねた実効種数 ${s.effSpeciesLineage.toFixed(2)}`
+      + `・CPU ${s.cpuMsPerStep.toFixed(3)} ms/ステップ・ハッシュ ${r.hash}`);
   }
 }
 
@@ -256,6 +318,8 @@ const result = {
   islands,
   size,
   steps,
+  serialSeeds: !!args.serialSeeds,
+  jitter: !!args.jitter,
   runs,
 };
 
