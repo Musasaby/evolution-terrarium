@@ -2,7 +2,7 @@
   "source": "https://github.com/Musasaby/evolution-terrarium/issues/23",
   "branch": "develop/island-model-check",
   "group": "",
-  "updated_at": "2026-11-26T17:03:01+09:00",
+  "updated_at": "2026-11-26T17:14:38+09:00",
   "tasks": [
     {
       "id": "T1",
@@ -28,9 +28,9 @@
     {
       "id": "T4",
       "title": "決定性を確かめる計測と、ハッシュを比べるツール",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "e5bec0864a9c348a0efd37b4638c0fad7271ea1e"
     },
     {
       "id": "T5",
