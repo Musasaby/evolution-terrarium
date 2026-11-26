@@ -1,7 +1,7 @@
 {
   "source": "https://github.com/Musasaby/evolution-terrarium/issues/22",
   "branch": "develop/physics-groups16",
-  "updated_at": "2026-11-26T16:12:31+09:00",
+  "updated_at": "2026-11-26T16:15:54+09:00",
   "group": "",
   "tasks": [
     {
@@ -49,9 +49,9 @@
     {
       "id": "T7",
       "title": "捕食の減少の調査結果と採否の判断を検証記録に足す",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "74d164e3b01cf26473fef9f7165095794ef823e9"
     }
   ]
 }
