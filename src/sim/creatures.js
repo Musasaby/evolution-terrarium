@@ -36,7 +36,7 @@ export function spawnCreature(sim, genome, x, z, opts = {}) {
   c.energy = c.maxE * (opts.energyFrac ?? 0.6);
   if (opts.energy !== undefined) c.energy = Math.min(c.maxE, opts.energy);
   const yaw = opts.yaw ?? sim.rng() * Math.PI * 2;
-  const body = buildBody(sim.R, sim.world, genome, x, z, (a, b) => sim.heightAt(a, b), yaw, opts.lift || 0);
+  const body = buildBody(sim.R, sim.world, genome, x, z, (a, b) => sim.heightAt(a, b), yaw, opts.lift || 0, c.id);
   Object.assign(c, body);
   readPose(c);
   body.cols.forEach((col, i) => sim.colliderOwner.set(col.handle, { kind: 'c', obj: c, part: i }));

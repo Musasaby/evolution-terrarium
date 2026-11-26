@@ -119,7 +119,7 @@ for (const s of chosen) {
   for (const b of c.bodies) sim.world.removeRigidBody(b);
   const t1 = process.hrtime.bigint();
 
-  const body = buildBody(sim.R, sim.world, c.genome, x, z, (a, b) => sim.heightAt(a, b), yaw);
+  const body = buildBody(sim.R, sim.world, c.genome, x, z, (a, b) => sim.heightAt(a, b), yaw, 0, c.id);
   Object.assign(c, body);
   body.cols.forEach((col, i) => sim.colliderOwner.set(col.handle, { kind: 'c', obj: c, part: i }));
   readPose(c);

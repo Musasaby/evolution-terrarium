@@ -10,8 +10,15 @@ function partShape(R, p) {
   return h > 0.005 ? R.ColliderDesc.capsule(h, p.r) : R.ColliderDesc.ball(p.r);
 }
 
+// 体節の衝突グループ。個体 id を 16 で割った余りのビットを所属にし、同じビットの体節とは衝突しない
+// (同じ個体の体節どうしがぶつからないようにする。別の個体でも余りが同じなら衝突しない)
+export function bodyCollisionGroups(id) {
+  const bit = 1 << (id % 16);
+  return ((bit << 16) | (0xFFFF ^ bit)) >>> 0;
+}
+
 // ゲノムから剛体・関節を組み立てる。groundFn(x,z) で地面高さを与える
-export function buildBody(R, world, genome, x, z, groundFn, yaw, lift = 0) {
+export function buildBody(R, world, genome, x, z, groundFn, yaw, lift = 0, group = null) {
   const parts = genome.parts;
   const tf = [];
   let q0 = qAxis({ x: 0, y: 0, z: 1 }, Math.PI / 2); // 根を横倒し
@@ -37,9 +44,11 @@ export function buildBody(R, world, genome, x, z, groundFn, yaw, lift = 0) {
     const p = parts[i];
     const b = world.createRigidBody(R.RigidBodyDesc.dynamic().setTranslation(x + tf[i].p.x, tf[i].p.y + dy, z + tf[i].p.z)
       .setRotation(tf[i].q).setCanSleep(false).setLinearDamping(0.1).setAngularDamping(0.3));
-    const col = world.createCollider(partShape(R, p).setDensity(CFG.DENSITY).setFriction(1.0)
-      .setActiveEvents(R.ActiveEvents.CONTACT_FORCE_EVENTS | R.ActiveEvents.COLLISION_EVENTS).setContactForceEventThreshold(0)
-      .setActiveHooks(R.ActiveHooks.FILTER_CONTACT_PAIRS), b);
+    const desc = partShape(R, p).setDensity(CFG.DENSITY).setFriction(1.0)
+      .setActiveEvents(R.ActiveEvents.CONTACT_FORCE_EVENTS | R.ActiveEvents.COLLISION_EVENTS).setContactForceEventThreshold(0);
+    if (group === null) desc.setActiveHooks(R.ActiveHooks.FILTER_CONTACT_PAIRS); // 祖先の試走用の世界(founder.js)はこちら。従来の設定のまま
+    else desc.setCollisionGroups(bodyCollisionGroups(group));
+    const col = world.createCollider(desc, b);
     bodies.push(b); cols.push(col);
   }
   const sub = parts.map((p, i) => bodies[i].mass());
