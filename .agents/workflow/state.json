@@ -2,7 +2,7 @@
   "source": "https://github.com/Musasaby/evolution-terrarium/issues/23",
   "branch": "develop/island-model-check",
   "group": "",
-  "updated_at": "2026-11-26T18:48:48+09:00",
+  "updated_at": "2026-11-26T18:52:25+09:00",
   "tasks": [
     {
       "id": "T1",
@@ -70,9 +70,9 @@
     {
       "id": "T10",
       "title": "本番に入れる場合の構成案を検証記録に足す",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "a791dd91feb79097887b734d881c0dc32e2af9e4"
     }
   ]
 }
