@@ -1,50 +1,64 @@
 {
-  "source": "https://github.com/Musasaby/evolution-terrarium/issues/26",
-  "branch": "develop/archipelago-sim",
-  "updated_at": "2026-11-28T02:04:57+09:00",
-  "group": "",
+  "source": "https://github.com/Musasaby/evolution-terrarium/issues/27",
+  "branch": "develop/archipelago-worker",
+  "updated_at": "2026-11-28T03:10:36+09:00",
+  "group": "node-parallel",
   "tasks": [
     {
       "id": "T1",
-      "title": "世界の設定に島の数・島の広さ・移住の間隔と人数を足す",
-      "status": "done",
+      "title": "IslandHost を切り出し、Archipelago をそれに載せ替える",
+      "status": "pending",
       "retries": 0,
-      "commit": "a696a8c06ba22df61f71d778e01cc0d7f9f41ce3"
+      "commit": null
     },
     {
       "id": "T2",
-      "title": "島をまたいだ実効種数(交配で束ねる)を diversity.js に足す",
-      "status": "done",
+      "title": "島を worker_threads で並行に動かす ParallelArchipelago と確認ツールの --workers を足す",
+      "status": "pending",
       "retries": 0,
-      "commit": "44a5e349b481ed35a6efaf09b391e86fcfb05bce"
+      "commit": null
     },
     {
       "id": "T3",
-      "title": "Archipelago と移住を src/sim に入れ、群島の状態ハッシュを出すツールを足す",
-      "status": "done",
+      "title": "4 島を 1 スレッドと worker で測り、検証記録に書く",
+      "status": "pending",
       "retries": 0,
-      "commit": "997bb35bc697b3cb2ec35f559e6bad9ed1dc4b6f"
+      "commit": null
     },
     {
       "id": "T4",
-      "title": "群島の多様性を複数シードで長く測るツールを足す",
-      "status": "done",
+      "title": "見ている島の毎フレームの写し(個体・姿勢・気候)を作る",
+      "status": "pending",
       "retries": 0,
-      "commit": "0871294b458b2896bc6d906969ffb9688d0697af"
+      "commit": null
     },
     {
       "id": "T5",
-      "title": "群島を 3 年・シード 1〜3 で測り、#23 の結果と比べて検証記録に書く",
-      "status": "done",
+      "title": "写しにパネル用の中身(種・植物・地形・統計・出来事・選択中の個体)を足す",
+      "status": "pending",
       "retries": 0,
-      "commit": "ddee767a8b6e63bca63f9f6fb62d46e218191dcf"
+      "commit": null
     },
     {
       "id": "T6",
-      "title": "ARCHITECTURE.md と AGENTS.md に群島と確認ツールを書く",
-      "status": "done",
+      "title": "ブラウザの島の Web Worker と、全島を進める IslandRunner を作る",
+      "status": "pending",
       "retries": 0,
-      "commit": "8e4198b1371bdd1f94255afa0741cf2f7c417000"
+      "commit": null
+    },
+    {
+      "id": "T7",
+      "title": "画面を IslandRunner と写しで動かす",
+      "status": "pending",
+      "retries": 0,
+      "commit": null
+    },
+    {
+      "id": "T8",
+      "title": "ARCHITECTURE.md と AGENTS.md に Worker 化と確認ツールを書く",
+      "status": "pending",
+      "retries": 0,
+      "commit": null
     }
   ]
 }
