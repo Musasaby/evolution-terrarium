@@ -1,7 +1,7 @@
 {
   "source": "https://github.com/Musasaby/evolution-terrarium/issues/27",
   "branch": "develop/archipelago-worker-browser",
-  "updated_at": "2026-11-28T04:03:36+09:00",
+  "updated_at": "2026-11-28T04:07:00+09:00",
   "group": "browser-worker",
   "tasks": [
     {
@@ -35,9 +35,9 @@
     {
       "id": "T5",
       "title": "写しにパネル用の中身(種・植物・地形・統計・出来事・選択中の個体)を足す",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "317aa6c836a78ae722745118540325e11a36415a"
     },
     {
       "id": "T6",
