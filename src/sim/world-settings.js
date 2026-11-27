@@ -14,6 +14,10 @@ export const DEFAULT_SETTINGS = Object.freeze({
   tempOffset: 0,                   // 平均気温のずれ（℃）-8〜+8
   seasonAmp: 1,                    // 季節の振れ幅の倍率 0.5〜1.5
   wetness: 0,                      // 降水の傾向 -1〜1（雨・干ばつの起こりやすさ）
+  islands: 4,                      // 島の数 1〜8（1 なら単一世界。archipelago.js が読む）
+  islandSize: 80,                  // 島が 2 つ以上のときの島の一辺（m）80〜160。島が 1 つなら size を使う
+  migrateEvery: 1500,              // 移住の間隔（ステップ）0〜100000。0 は移住なし
+  migrants: 2,                     // 1 回の移住で各島から移す人数 0〜20
 });
 
 // 広さから決まる値。格子の大きさは既定（CFG.BASE_SIZE / CFG.BASE_GRID）を保ち、
@@ -38,6 +42,7 @@ export function worldGeometry(size) {
 
 const num = (v, lo, hi, def) => (Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : def);
 const count = (v, hi) => (v === null || v === undefined || !Number.isFinite(v) ? null : Math.round(Math.min(hi, Math.max(0, v))));
+const int = (v, lo, hi, def) => Math.round(num(v, lo, hi, def));
 
 // 欠けた項目を既定値で埋め、範囲外をクランプした凍結済みの新しいオブジェクトを返す（引数は書き換えない）
 export function normalizeSettings(partial) {
@@ -55,6 +60,10 @@ export function normalizeSettings(partial) {
     tempOffset: num(p.tempOffset, -8, 8, D.tempOffset),
     seasonAmp: num(p.seasonAmp, 0.5, 1.5, D.seasonAmp),
     wetness: num(p.wetness, -1, 1, D.wetness),
+    islands: int(p.islands, 1, 8, D.islands),
+    islandSize: num(p.islandSize, 80, 160, D.islandSize),
+    migrateEvery: int(p.migrateEvery, 0, 100000, D.migrateEvery),
+    migrants: int(p.migrants, 0, 20, D.migrants),
   });
 }
 
