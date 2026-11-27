@@ -6,7 +6,7 @@ export { CFG, SCHEDULE, NI, NH, NO } from './config.js';
 export { PLANT_SPECIES } from './plant-species.js';
 export { makeRng } from './random.js';
 export { qRot } from './math.js';
-export { computeDiversity } from './diversity.js';
+export { computeDiversity, computeArchipelagoDiversity } from './diversity.js';
 export { interfertile } from './speciation.js';
 export { SectionProfiler, NULL_PROFILER } from './profiler.js';
 export {
