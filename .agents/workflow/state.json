@@ -1,7 +1,7 @@
 {
   "source": "https://github.com/Musasaby/evolution-terrarium/issues/26",
   "branch": "develop/archipelago-sim",
-  "updated_at": "2026-11-28T01:58:22+09:00",
+  "updated_at": "2026-11-28T02:04:57+09:00",
   "group": "",
   "tasks": [
     {
@@ -42,9 +42,9 @@
     {
       "id": "T6",
       "title": "ARCHITECTURE.md と AGENTS.md に群島と確認ツールを書く",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "8e4198b1371bdd1f94255afa0741cf2f7c417000"
     }
   ]
 }
