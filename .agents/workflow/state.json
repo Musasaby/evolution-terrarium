@@ -1,78 +1,50 @@
 {
-  "source": "https://github.com/Musasaby/evolution-terrarium/issues/23",
-  "branch": "develop/scaling-study-html",
+  "source": "https://github.com/Musasaby/evolution-terrarium/issues/26",
+  "branch": "develop/archipelago-sim",
+  "updated_at": "2026-11-28T02:04:57+09:00",
   "group": "",
-  "updated_at": "2026-11-28T00:39:36+09:00",
   "tasks": [
     {
       "id": "T1",
-      "title": "島の worker に、種の代表ゲノム・由来キー・状態ハッシュ・応答の揺らしを足す",
+      "title": "世界の設定に島の数・島の広さ・移住の間隔と人数を足す",
       "status": "done",
       "retries": 0,
-      "commit": "ee74e95a4f484f89eb7bf36fe9f72b3a79ae6a20"
+      "commit": "a696a8c06ba22df61f71d778e01cc0d7f9f41ce3"
     },
     {
       "id": "T2",
-      "title": "群島の集計に、交配可能性・由来で束ねた実効種数、CPU 合計時間、状態ハッシュを足す",
+      "title": "島をまたいだ実効種数(交配で束ねる)を diversity.js に足す",
       "status": "done",
       "retries": 0,
-      "commit": "f8191288c12d1181d94f40067332670b30f99131"
+      "commit": "44a5e349b481ed35a6efaf09b391e86fcfb05bce"
     },
     {
       "id": "T3",
-      "title": "群島と単一世界の結果を表にまとめるツール",
+      "title": "Archipelago と移住を src/sim に入れ、群島の状態ハッシュを出すツールを足す",
       "status": "done",
       "retries": 0,
-      "commit": "e515adaae73777f9756205277bda36de0316aef3"
+      "commit": "997bb35bc697b3cb2ec35f559e6bad9ed1dc4b6f"
     },
     {
       "id": "T4",
-      "title": "決定性を確かめる計測と、ハッシュを比べるツール",
+      "title": "群島の多様性を複数シードで長く測るツールを足す",
       "status": "done",
       "retries": 0,
-      "commit": "e5bec0864a9c348a0efd37b4638c0fad7271ea1e"
+      "commit": "0871294b458b2896bc6d906969ffb9688d0697af"
     },
     {
       "id": "T5",
-      "title": "群島の本計測(前半: 移住なしと 1500 ステップごと)",
+      "title": "群島を 3 年・シード 1〜3 で測り、#23 の結果と比べて検証記録に書く",
       "status": "done",
       "retries": 0,
-      "commit": "88f1666710b35d18f97be001e14e9c3423b5d594"
+      "commit": "ddee767a8b6e63bca63f9f6fb62d46e218191dcf"
     },
     {
       "id": "T6",
-      "title": "群島の本計測(後半: 6000 ステップごと)",
+      "title": "ARCHITECTURE.md と AGENTS.md に群島と確認ツールを書く",
       "status": "done",
       "retries": 0,
-      "commit": "776da63a487cb3a3a3e9a0bbd2c4a055b6f15966"
-    },
-    {
-      "id": "T7",
-      "title": "単一世界の計測(90・100・110 m)",
-      "status": "done",
-      "retries": 0,
-      "commit": "338556842779a6b28889ca61eb7433e1e9d8bd5c"
-    },
-    {
-      "id": "T8",
-      "title": "単一世界の計測(120・130・140 m)",
-      "status": "done",
-      "retries": 0,
-      "commit": "29b3afde8933ceac19c5fbad40650954d151dae0"
-    },
-    {
-      "id": "T9",
-      "title": "検証の結果と判断を検証記録にまとめる",
-      "status": "done",
-      "retries": 1,
-      "commit": "d0e97c6a55422dff74a3eaf4e264ad12cebb3dfd"
-    },
-    {
-      "id": "T10",
-      "title": "本番に入れる場合の構成案を検証記録に足す",
-      "status": "done",
-      "retries": 0,
-      "commit": "a791dd91feb79097887b734d881c0dc32e2af9e4"
+      "commit": "8e4198b1371bdd1f94255afa0741cf2f7c417000"
     }
   ]
 }

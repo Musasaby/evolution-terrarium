@@ -51,9 +51,10 @@ app/main.js ──▶ render/ ──┐
 | `speciation.js` | 生物学的種概念による種分化 | 同上 |
 | `founder.js` | 祖先の事前進化（別の小さな物理世界で試走） | 同上 |
 | `stats.js` | グラフ用の時系列 | 同上 |
-| `diversity.js` | `computeDiversity`：多様性指標（純粋関数。sim を読むだけ） | creatures |
+| `diversity.js` | `computeDiversity`：多様性指標（純粋関数。sim を読むだけ）。`computeArchipelagoDiversity`：群島全体の多様性 | creatures, speciation |
 | `profiler.js` | 処理区間の時間計測（使わないときは何もしない） | なし |
 | `sim.js` | `Sim`：部品の組み立てと `step()` の手順 | すべて |
+| `archipelago.js` | `Archipelago`：島 = `Sim` を並べ、`migrateEvery` ステップごとに移住する | sim, creatures, world-settings |
 
 `Sim#step()` は「環境 → 生物 → 物理 → 接触 → 集計」の順に進み、各区間を `profiler.begin/end` で囲んでいます。`sim.on('log', fn)` で出来事を購読できます。
 
@@ -76,6 +77,16 @@ app/main.js ──▶ render/ ──┐
 | `traitSd` | 体積・体節数・`diet`・`topt` の標準偏差（`tTol` `aqua` はまだ 0） |
 
 `stats.js` はこの結果を時系列に記録し、右パネルのグラフが読むだけです。指標を増やすときは `computeDiversity` の戻り値に足し、`stats.js` の記録と `ui/` の表示を合わせて更新します。
+
+### 群島（`archipelago.js`）
+
+`Archipelago` は独立した世界（島 = `Sim`）を複数並べ、ときどき少数を移住させる入れ物です。`new Archipelago(RAPIER, seed, { settings, profiler })` で作り、`step()` を呼ぶと島を 1 ステップずつ進めます。設定は `world-settings.js` の `islands`（島の数 1〜8、既定 4）・`islandSize`（島の一辺 80〜160 m、既定 80）・`migrateEvery`（移住の間隔ステップ、既定 1500）・`migrants`（1 回に各島から移す人数、既定 2）です。
+
+- **島のシードと広さ**: 島 i のシードは `seed * 100 + i`。島が 1 つ（`islands` = 1）ならシードは `seed` のまま、広さも `size` のままで、単一世界と同じ計算になります（`check:sim` と同じ状態ハッシュ）。島が 2 つ以上なら広さは各島とも `islandSize` で、`worldGeometry` が格子の大きさを保ったまま上限だけを面積比で増減します。
+- **進め方**: `step()` は島番号の順に各 `Sim.step()` を呼び、`stepCount` を 1 進めます。島が 2 つ以上で `migrateEvery > 0` かつ `migrants > 0` のとき、`stepCount` が `migrateEvery` の倍数になるたびに移住します。
+- **移住の順序と乱数**: 乱数の種は `seed * 1e6 + stepCount`。まず全島から島番号の順に `migrants` 体を選んで移出し（島 i の種は `base + i`。生きている個体を id の小さい順に並べ、Fisher-Yates で選ぶ）、そのあと島番号の順に移入します。島 i は島 `(i - 1 + n) % n` から受け取り（種は `base + src`）、陸地を最大 20 回試して置き場所を探します。見つからなければ捨てます（`dropped`）。受け入れ先は交配可能な種のうち個体数が最も多いもの。なければ新しい種を作り、移住で生まれた種は出身の種のキー（`originKey`）を引き継ぎます。
+- **集計**: `computeArchipelagoDiversity(sims)` は島ごと・種ごとに代表ゲノムを最大 3 つ取り、別の島の種どうしで `interfertile` な組があれば union-find で同じ種に束ねます（同じ島どうしは束ねません）。`effSpecies` は「島番号:種 id」を別の種として数えた実効種数、`effSpeciesFertile` は交配可能性で束ねたあとの実効種数です。
+- **画面**: いまは `app/main.js` などが `Sim` を直接作っており、群島は確認ツールからだけ使います。タイトル画面や 3D 画面を群島に切り替えるのは #27・#28 で行います。
 
 ### 生態のニッチ形質
 
@@ -155,11 +166,13 @@ npm run check:sim             # 600 ステップ進めて状態ハッシュと�
 node tools/sim-check.mjs 1500 # ステップ数（とシード）を指定
 npm run check:diversity       # 27000 ステップ（3 年）・シード 1,2,3 を並行実行して多様性を表にする
 node tools/diversity-check.mjs 9000 1 # ステップ数とシード（カンマ区切りで複数可）を指定
+npm run check:archipelago     # 群島を 600 ステップ進めて状態ハッシュ・島ごとの内訳・移住の回数を表示
+npm run check:archipelago-diversity # 群島の多様性を 27000 ステップ・シード 1,2,3 で測る
 node tools/sim-check.mjs 600 1 --settings terrain:mountain # 世界の設定を指定
 ```
 
 同じシード・同じステップ数なら状態ハッシュは常に同じです。**振る舞いを変えないつもりの変更（リファクタリング）では、前後でハッシュが一致すること**を確かめてください。パラメータや規則を変えた場合はハッシュが変わるのが正常です。
 
-`--settings` は `sim-check` と `diversity-check` の両方で使えます。`<カテゴリ>:<ID>`（例 `terrain:mountain`）をカンマ区切りで重ねるか、`'{"lakeCount":4}'` のような JSON を渡します。カテゴリは `size` `terrain` `soil` `climate` です。詳細は `AGENTS.md` の「テスト・検証の注意」を参照してください。
+`--settings` は `sim-check`・`diversity-check`・`archipelago-check`・`archipelago-diversity` で使えます。`<カテゴリ>:<ID>`（例 `terrain:mountain`）をカンマ区切りで重ねるか、`'{"lakeCount":4}'` のような JSON を渡します。カテゴリは `size` `terrain` `soil` `climate` です。群島の島の数・広さ・移住は `--settings '{"islands":1}'` のように JSON で指定します。詳細は `AGENTS.md` の「テスト・検証の注意」を参照してください。
 
 個体数と土地を増やす案の調査用に、`tools/scaling/`(Node で動く調査用スクリプト。`run.mjs`・`ab-bench.mjs`・`region-bench.mjs`・`island-run.mjs`・`lod-check.mjs` など)と `tools/bench/`(ブラウザの計測ページ。`npm run serve` のあと `worker-bench.html`・`render-bench.html` を開く)があります。結果は `docs/plans/scaling-study.md` にまとめてあります。

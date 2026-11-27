@@ -1,0 +1,170 @@
+{
+  "date": "2026-11-27T16:55:21.813Z",
+  "steps": 27000,
+  "seeds": [
+    3
+  ],
+  "settings": {
+    "size": 120,
+    "mtnCount": null,
+    "mtnHeight": 1,
+    "lakeCount": null,
+    "lakeSize": 1,
+    "soil": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "tempOffset": 0,
+    "seasonAmp": 1,
+    "wetness": 0,
+    "islands": 4,
+    "islandSize": 80,
+    "migrateEvery": 1500,
+    "migrants": 2
+  },
+  "runs": [
+    {
+      "seed": 3,
+      "steps": 27000,
+      "hash": "1a1eb71e726f88a9",
+      "migrated": 144,
+      "dropped": 0,
+      "rows": [
+        {
+          "year": 0.25,
+          "pop": 280,
+          "species": 57,
+          "effSpecies": 44.661979587134866,
+          "effDiet": 2.586683829108131,
+          "speciesFertile": 50,
+          "effSpeciesFertile": 41.77578571951399,
+          "msPerStep": 20.820113511111114
+        },
+        {
+          "year": 0.5,
+          "pop": 268,
+          "species": 59,
+          "effSpecies": 33.35182554828163,
+          "effDiet": 2.384335719324197,
+          "speciesFertile": 44,
+          "effSpeciesFertile": 28.22784908603983,
+          "msPerStep": 20.962136977777778
+        },
+        {
+          "year": 0.75,
+          "pop": 230,
+          "species": 58,
+          "effSpecies": 30.825052858565062,
+          "effDiet": 2.4465560127366803,
+          "speciesFertile": 40,
+          "effSpeciesFertile": 24.404509674868663,
+          "msPerStep": 20.546871911111115
+        },
+        {
+          "year": 1,
+          "pop": 194,
+          "species": 51,
+          "effSpecies": 25.508166000560507,
+          "effDiet": 2.196874533714073,
+          "speciesFertile": 36,
+          "effSpeciesFertile": 18.545912236849098,
+          "msPerStep": 17.458025066666668
+        },
+        {
+          "year": 1.25,
+          "pop": 195,
+          "species": 48,
+          "effSpecies": 19.16551969394846,
+          "effDiet": 2.3886142882019357,
+          "speciesFertile": 34,
+          "effSpeciesFertile": 14.330324566392896,
+          "msPerStep": 16.598452800000008
+        },
+        {
+          "year": 1.5,
+          "pop": 140,
+          "species": 49,
+          "effSpecies": 27.751197538820342,
+          "effDiet": 2.4232756569732823,
+          "speciesFertile": 34,
+          "effSpeciesFertile": 18.532146396861794,
+          "msPerStep": 15.365636311111118
+        },
+        {
+          "year": 1.75,
+          "pop": 142,
+          "species": 49,
+          "effSpecies": 23.035865514004627,
+          "effDiet": 2.398291310928794,
+          "speciesFertile": 35,
+          "effSpeciesFertile": 14.41440768000701,
+          "msPerStep": 13.010483644444443
+        },
+        {
+          "year": 2,
+          "pop": 167,
+          "species": 41,
+          "effSpecies": 15.87850378638904,
+          "effDiet": 2.2996430876154568,
+          "speciesFertile": 34,
+          "effSpeciesFertile": 10.153424145969687,
+          "msPerStep": 14.386186311111112
+        },
+        {
+          "year": 2.25,
+          "pop": 199,
+          "species": 41,
+          "effSpecies": 16.41592564044342,
+          "effDiet": 2.2912582663587746,
+          "speciesFertile": 32,
+          "effSpeciesFertile": 10.822741846187075,
+          "msPerStep": 15.808210177777775
+        },
+        {
+          "year": 2.5,
+          "pop": 214,
+          "species": 39,
+          "effSpecies": 14.880790104338631,
+          "effDiet": 2.3023232165471805,
+          "speciesFertile": 28,
+          "effSpeciesFertile": 7.862796482654439,
+          "msPerStep": 19.730382488888896
+        },
+        {
+          "year": 2.75,
+          "pop": 200,
+          "species": 39,
+          "effSpecies": 12.81192031554379,
+          "effDiet": 2.10377812054491,
+          "speciesFertile": 25,
+          "effSpeciesFertile": 6.258454611327322,
+          "msPerStep": 19.598095777777775
+        },
+        {
+          "year": 3,
+          "pop": 193,
+          "species": 33,
+          "effSpecies": 13.465610599761593,
+          "effDiet": 2.1993303637738553,
+          "speciesFertile": 21,
+          "effSpeciesFertile": 6.3080797342598744,
+          "msPerStep": 18.29432853333334
+        }
+      ],
+      "summary": {
+        "fromYear": 1.999999,
+        "toYear": 3,
+        "rows": 5,
+        "pop": 199,
+        "species": 39,
+        "effSpecies": 14.880790104338631,
+        "effDiet": 2.2912582663587746,
+        "speciesFertile": 28,
+        "effSpeciesFertile": 7.862796482654439,
+        "msPerStep": 18.29432853333334
+      }
+    }
+  ]
+}
