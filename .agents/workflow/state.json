@@ -1,7 +1,7 @@
 {
   "source": "https://github.com/Musasaby/evolution-terrarium/issues/26",
   "branch": "develop/archipelago-sim",
-  "updated_at": "2026-11-28T01:27:54+09:00",
+  "updated_at": "2026-11-28T01:39:28+09:00",
   "group": "",
   "tasks": [
     {
@@ -28,9 +28,9 @@
     {
       "id": "T4",
       "title": "群島の多様性を複数シードで長く測るツールを足す",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "0871294b458b2896bc6d906969ffb9688d0697af"
     },
     {
       "id": "T5",
