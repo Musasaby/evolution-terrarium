@@ -1,7 +1,7 @@
 {
   "source": "https://github.com/Musasaby/evolution-terrarium/issues/26",
   "branch": "develop/archipelago-sim",
-  "updated_at": "2026-11-28T01:39:28+09:00",
+  "updated_at": "2026-11-28T01:58:22+09:00",
   "group": "",
   "tasks": [
     {
@@ -35,9 +35,9 @@
     {
       "id": "T5",
       "title": "群島を 3 年・シード 1〜3 で測り、#23 の結果と比べて検証記録に書く",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "ddee767a8b6e63bca63f9f6fb62d46e218191dcf"
     },
     {
       "id": "T6",
