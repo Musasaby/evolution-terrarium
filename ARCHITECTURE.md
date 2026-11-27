@@ -55,12 +55,14 @@ app/main.js ──▶ render/ ──┐
 | `profiler.js` | 処理区間の時間計測（使わないときは何もしない） | なし |
 | `sim.js` | `Sim`：部品の組み立てと `step()` の手順 | すべて |
 | `archipelago.js` | `Archipelago`：島 = `Sim` を並べ、`migrateEvery` ステップごとに移住する | sim, creatures, world-settings |
+| `island-host.js` | `IslandHost`・`islandSpecs` と移住の判定・乱数シードの関数。1 スレッド版と Worker 版で共通 | sim, creatures, world-settings |
+| `parallel-archipelago.js` | `ParallelArchipelago`・`createPort`・`runIslandRequest`。worker の API を知らず、送受信の関数を受け取る | island-host |
 
 `Sim#step()` は「環境 → 生物 → 物理 → 接触 → 集計」の順に進み、各区間を `profiler.begin/end` で囲んでいます。`sim.on('log', fn)` で出来事を購読できます。
 
 ### 剛体の姿勢は写しを読む
 
-物理ステップの直後に、各個体の体節の位置・回転・角速度を `c.pos[i]` `c.rot[i]` `c.angv[i]` に写しています（`body.js` の `readPose`）。剛体の `translation()` などは呼ぶたびに WASM からのコピーとオブジェクト生成が起きるので、sim 内でも描画でも**姿勢はこの写しを読んでください**。物理ステップの外では剛体は動かないので、写しは常に最新です（速度 `linvel()` は写していません）。
+物理ステップの直後に、各個体の体節の位置・回転・角速度を `c.pos[i]` `c.rot[i]` `c.angv[i]` に写しています（`body.js` の `readPose`）。剛体の `translation()` などは呼ぶたびに WASM からのコピーとオブジェクト生成が起きるので、sim 内でも描画でも**姿勢はこの写しを読んでください**。物理ステップの外では剛体は動かないので、写しは常に最新です（速度 `linvel()` は写していません）。描画・パネルは剛体を持たない写しを読むので、`bodies`・`joints` を使わず `pos`・`rot`・`nJoints` を読みます。
 
 体節は個体 id を 16 で割った余りで衝突グループを分けており（`body.js` の `bodyCollisionGroups`）、同じ個体の体節どうしは衝突しません。別の個体でも余りが同じなら衝突しません。接触フックは使っていません（WASM から JS を呼び返す処理が物理の約 14% を占めていたため）。試走用の世界（`founder.js`）だけは従来の設定のままです。
 
@@ -86,7 +88,8 @@ app/main.js ──▶ render/ ──┐
 - **進め方**: `step()` は島番号の順に各 `Sim.step()` を呼び、`stepCount` を 1 進めます。島が 2 つ以上で `migrateEvery > 0` かつ `migrants > 0` のとき、`stepCount` が `migrateEvery` の倍数になるたびに移住します。
 - **移住の順序と乱数**: 乱数の種は `seed * 1e6 + stepCount`。まず全島から島番号の順に `migrants` 体を選んで移出し（島 i の種は `base + i`。生きている個体を id の小さい順に並べ、Fisher-Yates で選ぶ）、そのあと島番号の順に移入します。島 i は島 `(i - 1 + n) % n` から受け取り（種は `base + src`）、陸地を最大 20 回試して置き場所を探します。見つからなければ捨てます（`dropped`）。受け入れ先は交配可能な種のうち個体数が最も多いもの。なければ新しい種を作り、移住で生まれた種は出身の種のキー（`originKey`）を引き継ぎます。
 - **集計**: `computeArchipelagoDiversity(sims)` は島ごと・種ごとに代表ゲノムを最大 3 つ取り、別の島の種どうしで `interfertile` な組があれば union-find で同じ種に束ねます（同じ島どうしは束ねません）。`effSpecies` は「島番号:種 id」を別の種として数えた実効種数、`effSpeciesFertile` は交配可能性で束ねたあとの実効種数です。
-- **画面**: いまは `app/main.js` などが `Sim` を直接作っており、群島は確認ツールからだけ使います。タイトル画面や 3D 画面を群島に切り替えるのは #27・#28 で行います。
+- **画面**: ブラウザは島ごとに Web Worker（`app/island-worker.js`）を持ち、`app/island-runner.js` の `IslandRunner` が全島をそろえて進めます。見ている島（いまは島 0）の Worker だけが姿勢（毎フレーム）とパネル用の中身（250 ms ごと）を送ります。
+- **写し**: 送られた中身は主スレッドの `app/sim-mirror.js` の `SimMirror` が受け、描画・パネルは `Sim` の代わりにこの写しを読みます。中身を詰めるのは `app/island-snapshot.js` です。見る島の切り替えは #28 で行います。
 
 ### 生態のニッチ形質
 
@@ -168,6 +171,8 @@ npm run check:diversity       # 27000 ステップ（3 年）・シード 1,2,3 
 node tools/diversity-check.mjs 9000 1 # ステップ数とシード（カンマ区切りで複数可）を指定
 npm run check:archipelago     # 群島を 600 ステップ進めて状態ハッシュ・島ごとの内訳・移住の回数を表示
 npm run check:archipelago-diversity # 群島の多様性を 27000 ステップ・シード 1,2,3 で測る
+node tools/archipelago-check.mjs 3000 1 --workers [--jitter] # worker_threads で並行に動かす（1 スレッドと同じハッシュになること）
+node tools/mirror-check.mjs   # 写しが Sim と同じ値を持つか（最後の行が「すべて OK」）
 node tools/sim-check.mjs 600 1 --settings terrain:mountain # 世界の設定を指定
 ```
 
