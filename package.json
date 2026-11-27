@@ -6,7 +6,9 @@
   "scripts": {
     "serve": "python3 -m http.server 8000",
     "check:sim": "node tools/sim-check.mjs",
-    "check:diversity": "node tools/diversity-check.mjs"
+    "check:diversity": "node tools/diversity-check.mjs",
+    "check:archipelago": "node tools/archipelago-check.mjs",
+    "check:archipelago-diversity": "node tools/archipelago-diversity.mjs"
   },
   "devDependencies": {
     "@dimforge/rapier3d-compat": "0.21.0"
