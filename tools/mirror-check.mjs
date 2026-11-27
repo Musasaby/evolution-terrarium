@@ -6,7 +6,7 @@
 // 写しが Sim と同じ個体・姿勢・気候を持つかを照らす。NG が 1 件でもあれば終了コード 1。
 import RAPIER from '@dimforge/rapier3d-compat';
 import { Sim } from '../src/sim/index.js';
-import { createSentState, packFrame } from '../src/app/island-snapshot.js';
+import { createSentState, packFrame, packPanels } from '../src/app/island-snapshot.js';
 import { SimMirror } from '../src/app/sim-mirror.js';
 
 const steps = +(process.argv[2] ?? 300);
@@ -61,12 +61,54 @@ function compareFrame() {
   check('年', mirror.year === sim.year, sim.year, mirror.year);
 }
 
+let selectedId = null;
+function comparePanels(selectedId) {
+  const simSpecies = [...sim.species.keys()].sort((a, b) => a - b).join(',');
+  const mirrorSpecies = [...mirror.species.keys()].sort((a, b) => a - b).join(',');
+  check('species の id', simSpecies === mirrorSpecies, simSpecies, mirrorSpecies);
+  const spBad = [];
+  for (const [id, sp] of sim.species) {
+    const m = mirror.species.get(id);
+    if (!m || m.name !== sp.name || m.count !== sp.count) spBad.push(`${id}:${sp.name}/${sp.count} vs ${m?.name}/${m?.count}`);
+  }
+  check('species の name・count', spBad.length === 0, 'すべて一致', spBad.join(','));
+
+  const p0 = sim.plants[0], m0 = mirror.plants[0];
+  check('plants の数', mirror.plants.length === sim.plants.length, sim.plants.length, mirror.plants.length);
+  check('plants 先頭 sp.name・energy', !!p0 === !!m0 && (!p0 || (m0.sp?.name === p0.sp.name && m0.energy === p0.energy)),
+    p0 ? `${p0.sp.name}/${p0.energy}` : 'なし', m0 ? `${m0.sp?.name}/${m0.energy}` : 'なし');
+
+  let hOk = mirror.H && mirror.H.length === sim.H.length;
+  if (hOk) for (let i = 0; i < sim.H.length; i++) if (mirror.H[i] !== sim.H[i]) { hOk = false; break; }
+  check('H の長さと全要素', hOk, sim.H.length, mirror.H ? mirror.H.length : null);
+  check('terrainVersion', mirror.terrainVersion === sim.terrainVersion, sim.terrainVersion, mirror.terrainVersion);
+
+  check('stats の数', mirror.stats.length === sim.stats.length, sim.stats.length, mirror.stats.length);
+  check('events の数', mirror.events.length === sim.events.length, sim.events.length, mirror.events.length);
+  check('litters の数', mirror.litters.length === sim.litters.length, sim.litters.length, mirror.litters.length);
+  check('counters.births', mirror.counters.births === sim.counters.births, sim.counters.births, mirror.counters.births);
+  check('physicsCounts', JSON.stringify(mirror.physicsCounts()) === JSON.stringify(sim.physicsCounts()), JSON.stringify(sim.physicsCounts()), JSON.stringify(mirror.physicsCounts()));
+
+  const sc = selectedId == null ? null : sim.creatures.find((x) => x.id === selectedId && x.alive);
+  if (sc) {
+    const mc = mirror.byId.get(sc.id);
+    const ok = !!mc && mc.energy === sc.energy && mc.age === sc.age && mc.cost.base === sc.cost.base;
+    check('選択中の個体', ok, `${sc.energy}/${sc.age}/${sc.cost.base}`,
+      mc ? `${mc.energy}/${mc.age}/${mc.cost.base}` : 'なし');
+  }
+}
+
 for (let i = 0; i < steps; i++) {
   sim.step();
   if ((i + 1) % 100 === 0) {
     const { packet } = packFrame(sim, sent);
     mirror.applyFrame(structuredClone(packet));
     compareFrame();
+    const live = sim.creatures.filter((c) => c.alive);
+    selectedId = live.length ? live.reduce((a, c) => (c.id < a ? c.id : a), Infinity) : null;
+    const panels = packPanels(sim, sent, selectedId, null);
+    mirror.applyPanels(structuredClone(panels));
+    comparePanels(selectedId);
   }
 }
 

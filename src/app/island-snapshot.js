@@ -28,6 +28,22 @@ function creatureStatic(c) {
   return { id: c.id, genome: c.genome, speciesId: c.species?.id ?? null, gen: c.gen, parents: c.parents, born: c.born,
     vol: c.vol, nParts: c.pos.length, nJoints: c.joints.length, maxE: c.maxE, topt: c.topt, tTol: c.tTol, aqua: c.aqua, eff: c.eff, mutations: c.mutations };
 }
+// 250 ms ごとに送る分。selectedId: 主スレッドで選んでいる個体の id（無ければ null）。sections: 区間計測の値（無ければ null）
+export function packPanels(sim, sent, selectedId, sections) {
+  const out = {
+    species: [...sim.species.values()].map(speciesData),
+    counters: { ...sim.counters }, litters: sim.litters.slice(), physics: sim.physicsCounts(),
+    plants: sim.plants.map((p) => ({ id: p.id, spIdx: p.spIdx, x: p.x, y: p.y, z: p.z, size: p.size, rot: p.rot, shapeSeed: p.shapeSeed, energy: p.energy, maxE: p.maxE })),
+    stats: null, events: null, terrain: null, selected: null, sections,
+  };
+  const st = sim.stats, lastT = st.length ? st[st.length - 1].t : -1;
+  if (st.length !== sent.statsLen || lastT !== sent.statsT) { out.stats = structuredClone(st); sent.statsLen = st.length; sent.statsT = lastT; }   // 間引かれることがあるので丸ごと送る
+  if (sim.events[0] !== sent.eventsTop || sim.events.length !== sent.eventsLen) { out.events = sim.events.map((e) => ({ ...e })); sent.eventsTop = sim.events[0] ?? null; sent.eventsLen = sim.events.length; }
+  if (sim.terrainVersion !== sent.terrainVersion) { out.terrain = { version: sim.terrainVersion, H: sim.H.slice(), distWater: sim.distWater.slice(), soil: sim.soil.slice() }; sent.terrainVersion = sim.terrainVersion; }
+  const c = selectedId == null ? null : sim.creatures.find((x) => x.id === selectedId && x.alive);
+  if (c) out.selected = { id: c.id, energy: c.energy, corpseE: c.corpseE ?? 0, age: c.age, children: c.children, kills: c.kills, eaten: c.eaten, crowd: c.crowd, litter: c.litter ?? 0, cause: c.cause ?? '', cost: { ...c.cost } };
+  return out;
+}
 // 種の情報（代表ゲノム rep は送らない）
 export function speciesData(sp) { const { rep, ...rest } = sp; return rest; }
 // 気候の値（関数の rng・log は送れないので外す）

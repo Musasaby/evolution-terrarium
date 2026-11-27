@@ -1,5 +1,5 @@
 // ===== 見ている島の写し：worker から届いた中身を、描画・パネルが Sim と同じ名前で読めるように持つ =====
-import { Climate, CFG, interfertile } from '../sim/index.js';
+import { Climate, CFG, interfertile, PLANT_SPECIES } from '../sim/index.js';
 import { POSE_STRIDE } from './island-snapshot.js';
 
 export class SimMirror {
@@ -9,6 +9,9 @@ export class SimMirror {
     this.send = send;
     this.t = 0; this.climate = null;
     this.creatures = []; this.byId = new Map(); this.species = new Map();
+    this.plants = []; this.H = null; this.distWater = null; this.soil = null; this.terrainVersion = -1;
+    this.stats = []; this.counters = { births: 0, deaths: 0, predations: 0, matings: 0, stillborn: 0, rejected: 0 };
+    this.litters = []; this.events = []; this.physics = {}; this.sections = null;
     this.listeners = new Map();
   }
   get year() { return this.t / CFG.YEAR; }
@@ -40,6 +43,26 @@ export class SimMirror {
     const live = new Set(f.ids);
     for (const c of this.creatures) if (!live.has(c.id)) { c.alive = false; this.byId.delete(c.id); }
     this.creatures = next;
+  }
+  physicsCounts() { return this.physics; }
+  // 区間計測を取り出してリセットする（SectionProfiler.take と同じ形 { 名前: { ms, n } }）
+  takeSections() { const s = this.sections ?? {}; this.sections = null; return s; }
+  // packPanels の中身を反映する
+  applyPanels(p) {
+    for (const s of p.species) this.mergeSpecies(s);
+    this.counters = p.counters; this.litters = p.litters; this.physics = p.physics;
+    this.plants = p.plants.map((x) => ({ ...x, sp: PLANT_SPECIES[x.spIdx] }));
+    if (p.stats) this.stats = p.stats;
+    if (p.terrain) { this.H = p.terrain.H; this.distWater = p.terrain.distWater; this.soil = p.terrain.soil; this.terrainVersion = p.terrain.version; }
+    if (p.selected) { const c = this.byId.get(p.selected.id); if (c) Object.assign(c, p.selected); }
+    if (p.sections) {
+      if (!this.sections) this.sections = {};
+      for (const [name, v] of Object.entries(p.sections)) {
+        const cur = this.sections[name];
+        if (cur) { cur.ms += v.ms; cur.n += v.n; } else this.sections[name] = { ms: v.ms, n: v.n };
+      }
+    }
+    if (p.events) { this.events = p.events; this.emit('log'); }
   }
   // 種は同じオブジェクトを使い続ける（個体の species が指したまま値だけ更新する）
   mergeSpecies(s) { const cur = this.species.get(s.id); if (cur) Object.assign(cur, s); else this.species.set(s.id, { ...s }); }
