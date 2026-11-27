@@ -1,7 +1,7 @@
 {
   "source": "https://github.com/Musasaby/evolution-terrarium/issues/27",
   "branch": "develop/archipelago-worker-browser",
-  "updated_at": "2026-11-28T04:07:00+09:00",
+  "updated_at": "2026-11-28T04:11:01+09:00",
   "group": "browser-worker",
   "tasks": [
     {
@@ -42,9 +42,9 @@
     {
       "id": "T6",
       "title": "ブラウザの島の Web Worker と、全島を進める IslandRunner を作る",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "fa9fcc9d67e6377a43090afb2876803ce0b55755"
     },
     {
       "id": "T7",
