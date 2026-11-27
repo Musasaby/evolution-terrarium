@@ -1,7 +1,7 @@
 {
   "source": "https://github.com/Musasaby/evolution-terrarium/issues/27",
   "branch": "develop/archipelago-worker",
-  "updated_at": "2026-11-28T03:30:17+09:00",
+  "updated_at": "2026-11-28T03:37:25+09:00",
   "group": "node-parallel",
   "tasks": [
     {
@@ -21,9 +21,9 @@
     {
       "id": "T3",
       "title": "4 島を 1 スレッドと worker で測り、検証記録に書く",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "f3fb2c783228e3210485364b9e356e01734e8ae9"
     },
     {
       "id": "T4",
