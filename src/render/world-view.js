@@ -35,7 +35,7 @@ export class WorldView {
     this.plants.update(now);
     this.creatures.update(selected, now);
     this.env.update(dt);
-    if (follow && selected && selected.alive && selected.bodies[0]) this.stage.panToward(selected.bodies[0].translation(), Math.min(1, dt * 3));
+    if (follow && selected && selected.alive && selected.pos.length) this.stage.panToward(selected.pos[0], Math.min(1, dt * 3));
   }
 
   render() { this.stage.render(); }

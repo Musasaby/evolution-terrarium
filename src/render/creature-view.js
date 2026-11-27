@@ -42,7 +42,7 @@ export class CreatureView {
     for (const cr of this.sim.creatures) {
       if (!cr.alive) continue;
       const parts = cr.genome.parts;
-      for (let i = 0; i < cr.bodies.length && kb < this.maxParts; i++) {
+      for (let i = 0; i < cr.pos.length && kb < this.maxParts; i++) {
         const t = cr.pos[i], r = cr.rot[i];   // 物理ステップ直後に sim が写した姿勢
         const part = parts[i], h = capsuleHalf(part);
         if (cr.dead) c.set(CORPSE_COLOR);
@@ -72,7 +72,7 @@ export class CreatureView {
       m.instanceMatrix.needsUpdate = true;
       if (m.instanceColor) m.instanceColor.needsUpdate = true;
     }
-    if (selected && selected.alive && selected.bodies[0]) {
+    if (selected && selected.alive && selected.pos.length) {
       const t = selected.pos[0];
       this.marker.visible = true;
       this.marker.position.set(t.x, t.y + 1.6 + Math.sin(now / 300) * 0.15, t.z);
