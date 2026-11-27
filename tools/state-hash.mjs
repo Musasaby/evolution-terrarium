@@ -15,9 +15,11 @@ export function stateHash(sim) {
   return h.digest('hex').slice(0, 16);
 }
 
-// 群島の状態ハッシュ。島が 1 つならその島の stateHash と同じ値、2 つ以上なら島ごとのハッシュを
-// カンマでつないだ文字列の sha1 の先頭 16 桁（tools/scaling/island-run.mjs と同じ式）
-export function archipelagoHash(arch) {
-  const hs = arch.sims.map(stateHash);
+// 島ごとのハッシュ（島番号の順）を 1 つにまとめる。島が 1 つならそのまま
+export function combineIslandHashes(hs) {
   return hs.length === 1 ? hs[0] : createHash('sha1').update(hs.join(',')).digest('hex').slice(0, 16);
 }
+
+// 群島の状態ハッシュ。島が 1 つならその島の stateHash と同じ値、2 つ以上なら島ごとのハッシュを
+// カンマでつないだ文字列の sha1 の先頭 16 桁（tools/scaling/island-run.mjs と同じ式）
+export function archipelagoHash(arch) { return combineIslandHashes(arch.sims.map(stateHash)); }
