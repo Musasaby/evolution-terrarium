@@ -14,3 +14,10 @@ export function stateHash(sim) {
   h.update(Array.from(sim.H, r).join(','));
   return h.digest('hex').slice(0, 16);
 }
+
+// 群島の状態ハッシュ。島が 1 つならその島の stateHash と同じ値、2 つ以上なら島ごとのハッシュを
+// カンマでつないだ文字列の sha1 の先頭 16 桁（tools/scaling/island-run.mjs と同じ式）
+export function archipelagoHash(arch) {
+  const hs = arch.sims.map(stateHash);
+  return hs.length === 1 ? hs[0] : createHash('sha1').update(hs.join(',')).digest('hex').slice(0, 16);
+}
