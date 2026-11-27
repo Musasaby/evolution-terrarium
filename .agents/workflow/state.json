@@ -1,7 +1,7 @@
 {
   "source": "https://github.com/Musasaby/evolution-terrarium/issues/27",
   "branch": "develop/archipelago-worker",
-  "updated_at": "2026-11-28T03:23:52+09:00",
+  "updated_at": "2026-11-28T03:30:17+09:00",
   "group": "node-parallel",
   "tasks": [
     {
@@ -14,9 +14,9 @@
     {
       "id": "T2",
       "title": "島を worker_threads で並行に動かす ParallelArchipelago と確認ツールの --workers を足す",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "1793ff9897ac06605ea05265f5a6e29ba3acbf71"
     },
     {
       "id": "T3",
