@@ -1,20 +1,20 @@
 {
   "source": "https://github.com/Musasaby/evolution-terrarium/issues/26",
   "branch": "develop/archipelago-sim",
-  "updated_at": "2026-11-28T01:04:31+09:00",
+  "updated_at": "2026-11-28T01:16:21+09:00",
   "group": "",
   "tasks": [
     {
       "id": "T1",
       "title": "世界の設定に島の数・島の広さ・移住の間隔と人数を足す",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "a696a8c06ba22df61f71d778e01cc0d7f9f41ce3"
     },
     {
       "id": "T2",
       "title": "島をまたいだ実効種数(交配で束ねる)を diversity.js に足す",
-      "status": "pending",
+      "status": "in_progress",
       "retries": 0,
       "commit": null
     },
