@@ -1,0 +1,947 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- docs/plans/scaling-study.md の図解。ブラウザで直接開ける(Google Fonts が読めない環境では代替フォント) -->
+<title>個体数と土地の拡大検証</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: 1 カラムの実験ノート。各検証 (V0〜V6) を「問い → 図 → 結論」の同じ型で並べる */
+:root {
+  --bg: #f2f5f1;
+  --surface: #ffffff;
+  --fg: #1b2620;
+  --muted: #5a6b61;
+  --line: #d3ddd5;
+  --track: #e4ebe5;
+  --accent: #2e7a58;      /* 苔の緑: 採用・効果あり */
+  --accent-soft: #dcefe4;
+  --water: #3a6ea5;       /* 水: 島・worker */
+  --water-soft: #dde8f4;
+  --warn: #b5761a;        /* 琥珀: 基準線・条件付き */
+  --warn-soft: #f6ead4;
+  --bad: #b2473a;         /* 不採用 */
+  --bad-soft: #f5dfdb;
+  --font-body: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif;
+  --font-num: "JetBrains Mono", ui-monospace, "Consolas", monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111915; --surface: #18231d; --fg: #e2ebe5; --muted: #98aa9e; --line: #2b3a32; --track: #24322b;
+    --accent: #6cc59a; --accent-soft: #1f3a2d; --water: #82b2e3; --water-soft: #1d2f42;
+    --warn: #e3b35c; --warn-soft: #3a2e17; --bad: #e57d6e; --bad-soft: #3d221e; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111915; --surface: #18231d; --fg: #e2ebe5; --muted: #98aa9e; --line: #2b3a32; --track: #24322b;
+  --accent: #6cc59a; --accent-soft: #1f3a2d; --water: #82b2e3; --water-soft: #1d2f42;
+  --warn: #e3b35c; --warn-soft: #3a2e17; --bad: #e57d6e; --bad-soft: #3d221e; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--fg);
+  font-family: var(--font-body); font-size: 15.5px; line-height: 1.8;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 32px 64px;
+}
+.wrap { max-width: 880px; margin: 0 auto; display: flex; flex-direction: column; gap: 56px; }
+h1, h2, h3 { line-height: 1.4; text-wrap: balance; margin: 0; font-weight: 700; }
+h1 { font-size: clamp(1.6rem, 4vw, 2.2rem); }
+h2 { font-size: 1.45rem; }
+h3 { font-size: 1.05rem; }
+p { margin: 0; max-width: 42em; }
+.num, td.n { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+.eyebrow { font-family: var(--font-num); font-size: 0.78rem; letter-spacing: 0.08em; color: var(--muted); text-transform: uppercase; }
+.muted { color: var(--muted); }
+.stack { display: flex; flex-direction: column; gap: 16px; }
+section { display: flex; flex-direction: column; gap: 20px; scroll-margin-top: 16px; }
+.sec-head { display: flex; flex-direction: column; gap: 6px; border-top: 2px solid var(--fg); padding-top: 14px; }
+.sec-head .row { display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; }
+.vid { font-family: var(--font-num); font-weight: 600; font-size: 1.45rem; color: var(--accent); }
+.question { font-size: 1.02rem; color: var(--muted); }
+code { font-family: var(--font-num); font-size: 0.88em; background: var(--track); padding: 1px 5px; border-radius: 3px; }
+
+/* ヒーロー */
+.hero { display: flex; flex-direction: column; gap: 18px; }
+.thesis { font-size: 1.12rem; max-width: 40em; }
+.thesis b { color: var(--accent); }
+nav.toc { display: flex; flex-wrap: wrap; gap: 8px; }
+nav.toc a { font-family: var(--font-num); font-size: 0.82rem; text-decoration: none; color: var(--fg); border: 1px solid var(--line); background: var(--surface); padding: 4px 10px; border-radius: 999px; }
+nav.toc a:hover, nav.toc a:focus-visible { border-color: var(--accent); outline: none; }
+
+/* 判定チップ */
+.chip { display: inline-block; font-size: 0.78rem; font-weight: 700; padding: 1px 9px; border-radius: 999px; white-space: nowrap; line-height: 1.7; }
+.chip.ok { background: var(--accent-soft); color: var(--accent); }
+.chip.part { background: var(--warn-soft); color: var(--warn); }
+.chip.no { background: var(--bad-soft); color: var(--bad); }
+.chip.na { background: var(--track); color: var(--muted); }
+
+/* 結論ボックス */
+.verdict { border-left: 4px solid var(--accent); background: var(--surface); padding: 14px 18px; display: flex; flex-direction: column; gap: 6px; }
+.verdict.part { border-left-color: var(--warn); }
+.verdict.no { border-left-color: var(--bad); }
+.verdict .lab { font-size: 0.78rem; letter-spacing: 0.06em; color: var(--muted); font-weight: 700; }
+.note { font-size: 0.9rem; color: var(--muted); }
+.rule { font-size: 0.9rem; background: var(--warn-soft); padding: 10px 14px; border-radius: 4px; }
+.rule b { color: var(--warn); }
+
+/* 図の枠 */
+figure { margin: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 18px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+figcaption { font-size: 0.88rem; color: var(--muted); }
+figure .ttl { font-weight: 700; font-size: 0.95rem; }
+.scroll { overflow-x: auto; }
+.scroll svg { display: block; min-width: 560px; width: 100%; height: auto; }
+svg text { font-family: var(--font-body); }
+svg .t { fill: var(--fg); }
+svg .tm { fill: var(--muted); }
+svg .ta { fill: var(--accent); }
+svg .tw { fill: var(--water); }
+svg .tb { fill: var(--bad); }
+svg .tk { fill: var(--warn); }
+svg .mono { font-family: var(--font-num); }
+
+/* 横棒グラフ */
+.bars { display: flex; flex-direction: column; gap: 9px; }
+.bar-row { display: grid; grid-template-columns: minmax(0, 12rem) minmax(0, 1fr) 5.2rem; gap: 12px; align-items: center; }
+.bar-row .bl { font-size: 0.88rem; line-height: 1.4; min-width: 0; }
+.bar-row .bl small { display: block; color: var(--muted); font-size: 0.76rem; }
+.track { position: relative; height: 18px; background: var(--track); border-radius: 3px; }
+.fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; background: var(--muted); }
+.fill.hi { background: var(--accent); }
+.fill.w { background: var(--water); }
+.fill.bad { background: var(--bad); }
+.fill.dim { background: var(--muted); opacity: 0.55; }
+.th { position: absolute; top: -5px; bottom: -5px; border-left: 2px dashed var(--warn); }
+.bv { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-size: 0.88rem; text-align: right; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 0.8rem; color: var(--muted); }
+.legend i { display: inline-block; width: 18px; height: 0; border-top: 2px dashed var(--warn); vertical-align: middle; margin-right: 6px; }
+.legend s { display: inline-block; width: 12px; height: 12px; border-radius: 2px; vertical-align: -1px; margin-right: 6px; text-decoration: none; }
+@media (max-width: 560px) {
+  .bar-row { grid-template-columns: minmax(0, 1fr) 4.6rem; gap: 2px 10px; }
+  .bar-row .bl { grid-column: 1 / -1; }
+}
+
+/* カード格子 */
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.card .head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.card .id { font-family: var(--font-num); font-weight: 600; color: var(--muted); font-size: 0.85rem; }
+.card .name { font-weight: 700; }
+.card p { font-size: 0.88rem; color: var(--muted); }
+a.card { color: inherit; text-decoration: none; }
+a.card:hover, a.card:focus-visible { border-color: var(--accent); outline: none; }
+
+/* 用語 */
+dl.terms { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px 24px; margin: 0; }
+dl.terms div { min-width: 0; }
+dl.terms dt { font-weight: 700; }
+dl.terms dd { margin: 0; font-size: 0.9rem; color: var(--muted); }
+
+/* 表 */
+.tbl { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 0.86rem; }
+th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 0.78rem; color: var(--muted); font-weight: 700; white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+td.n { text-align: right; white-space: nowrap; }
+td.okc { color: var(--accent); font-weight: 700; }
+td.ngc { color: var(--bad); font-weight: 700; background: var(--bad-soft); }
+tr.pick td { background: var(--accent-soft); }
+
+/* 二列 */
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+
+.steps { display: flex; flex-direction: column; gap: 0; counter-reset: s; }
+.steps li { list-style: none; }
+ol.issues { margin: 0; padding-left: 1.4em; display: flex; flex-direction: column; gap: 4px; }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+<header class="hero">
+  <div class="eyebrow">evolution-terrarium · Issue #18 / #22 / #23 · 検証記録の図解</div>
+  <h1>個体数と土地を増やすと、多様性は上がるか</h1>
+  <p class="thesis">
+    「個体数が少なく土地が狭いから多様性が出にくい」という仮説を確かめ、重くせずに増やす案を 6 つ試した記録です。
+    結論は 3 つ。<b>個体数と餌を一緒に増やすと多様性は上がる</b>。<b>世界を 4 つの島に分けると単一世界の約 2 倍の多様性</b>になる。
+    <b>物理は groups16 で約 2 割軽くなり、本実装済み</b>。
+  </p>
+  <p class="note">元の文書: <code>docs/plans/scaling-study.md</code>(計測日 2026-11-25〜26)</p>
+  <nav class="toc" aria-label="目次">
+    <a href="#map">全体図</a><a href="#terms">用語</a><a href="#now">現状</a>
+    <a href="#v0">V0</a><a href="#v1">V1</a><a href="#v2">V2</a><a href="#v3">V3</a>
+    <a href="#v4">V4</a><a href="#v5">V5</a><a href="#v6">V6</a><a href="#v1impl">#22</a><a href="#v4check">#23</a><a href="#summary">まとめ</a>
+  </nav>
+</header>
+
+<!-- ============ 全体図 ============ -->
+<section id="map">
+  <div class="sec-head"><div class="eyebrow">overview</div><h2>検証の流れと結論</h2></div>
+  <p>まず V0 で「そもそも増やせば多様性は上がるのか」を確かめ、そのあと重さを減らす案を並行して試しました。V3・V4 は V2(Worker 化)の仕組みを前提にしています。V1 と V4 は、良い結果が出たので別の Issue で確かめ直しました。</p>
+  <figure>
+    <div class="scroll">
+      <svg viewBox="0 0 760 300" role="img" aria-label="検証の依存関係図">
+        <defs>
+          <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/>
+          </marker>
+        </defs>
+        <g stroke="var(--muted)" stroke-width="1.5" fill="none" marker-end="url(#ar)">
+          <path d="M380 72 C380 96, 100 96, 100 118"/>
+          <path d="M380 72 C380 96, 280 96, 280 118"/>
+          <path d="M380 72 C380 96, 460 96, 460 118"/>
+          <path d="M380 72 C380 96, 640 96, 640 118"/>
+          <path d="M100 172 L100 216"/>
+          <path d="M280 172 L280 216"/>
+          <path d="M280 172 C280 196, 460 196, 460 216"/>
+          <path d="M540 245 L556 245"/>
+        </g>
+        <g id="nodes"></g>
+      </svg>
+    </div>
+    <div class="legend">
+      <span><s style="background:var(--accent)"></s>採用・効果あり</span>
+      <span><s style="background:var(--warn)"></s>条件付き・一部だけ効く</span>
+      <span><s style="background:var(--bad)"></s>採用しない</span>
+      <span><s style="background:var(--muted)"></s>対応不要</span>
+    </div>
+  </figure>
+</section>
+
+<!-- ============ 用語 ============ -->
+<section id="terms">
+  <div class="sec-head"><div class="eyebrow">glossary</div><h2>読むための用語</h2></div>
+  <dl class="terms">
+    <div><dt>実効種数</dt><dd>多様性の主な指標。種の数を、個体数の偏りも考えて数えた値。10 種いても 1 種がほとんどを占めていれば小さくなる。</dd></div>
+    <div><dt>食性実効</dt><dd>同じ考え方で、食べ方(草食・肉食など)が実質いくつに分かれているか。</dd></div>
+    <div><dt>ms/ステップ</dt><dd>sim を 1 ステップ進めるのにかかる時間。小さいほど速い。うち大半が「物理 ms」(Rapier の計算)。</dd></div>
+    <div><dt>シード</dt><dd>乱数の種。同じ条件でもシードで結果が大きく変わるので、2〜9 個のシードで回して平均する。</dd></div>
+    <div><dt>決定性</dt><dd>同じシード・同じ条件なら、何度回しても状態ハッシュが同じになること。再現できる検証の前提。</dd></div>
+    <div><dt>壁時間 / CPU 時間</dt><dd>壁時間は実際に待つ時間。CPU 時間は全スレッドの計算時間の合計。並行に動かすと壁時間だけが短くなる。</dd></div>
+    <div><dt>3 年 = 27000 ステップ</dt><dd>長時間の計測は 3 年回して、最後の 1 年(2〜3 年目)の中央値で比べる。</dd></div>
+    <div><dt>births / matings / predations</dt><dd>出生・交配・捕食の回数。生態が壊れていないかの確認に使う。</dd></div>
+  </dl>
+</section>
+
+<!-- ============ 現状 ============ -->
+<section id="now">
+  <div class="sec-head"><div class="eyebrow">baseline · 2026-11-25 · seed 1</div><h2>いま何が重いのか</h2></div>
+  <p>標準の 120 m の世界(約 194 体)で 1 ステップ 12.24 ms。そのうち <b>8 割が物理</b>です。物理の中でも約 14% は、接触のたびに WASM から JS を呼び返す処理(<code>filterContactPair</code>)に使われていました。この呼び返しを消したのが後の V1 groups16 です。</p>
+  <figure>
+    <div class="ttl">1 ステップ 12.24 ms の内訳(120 m・1800 ステップ)</div>
+    <div id="stack"></div>
+    <div class="legend">
+      <span><s style="background:var(--water)"></s>物理: 呼び返し以外</span>
+      <span><s style="background:var(--warn)"></s>物理: WASM→JS の呼び返し(約 14%)</span>
+      <span><s style="background:var(--muted);opacity:.55"></s>物理以外(環境・生物・接触・集計)</span>
+    </div>
+    <figcaption>剛体 837 個(1 体あたり体節 4.2 個)、当たり判定 2669 個。150 m・297 体では 16.87 ms で、物理の割合は同じく約 8 割。</figcaption>
+  </figure>
+</section>
+
+<!-- ============ V0 ============ -->
+<section id="v0">
+  <div class="sec-head">
+    <div class="row"><span class="vid">V0</span><h2>仮説の確認</h2><span class="chip ok">条件つきで支持</span></div>
+    <div class="question">個体数や面積を増やすと、本当に実効種数は上がるのか</div>
+  </div>
+  <p>5 つの条件で 3 年ずつ、3 シード回しました。基準は「120 m 既定より実効種数が 20% 以上高く、3 シード中 2 シード以上で高い」こと。</p>
+  <div class="two">
+    <figure>
+      <div class="ttl">実効種数(2〜3 年目の中央値・3 シード平均)</div>
+      <div class="bars" id="v0-eff"></div>
+      <div class="legend"><span><i></i>基準 5.88(既定 4.9 の +20%)</span></div>
+    </figure>
+    <figure>
+      <div class="ttl">その代わりの重さ(ms/ステップ)</div>
+      <div class="bars" id="v0-ms"></div>
+      <figcaption>多様性が上がった唯一の条件は、既定の約 2.5 倍重い。</figcaption>
+    </figure>
+  </div>
+  <div class="two">
+    <div class="card">
+      <div class="name">面積だけ広げても下がる</div>
+      <p>160 m 既定は 349 体まで増えたのに、実効種数は 3.0。3 シードすべてで既定を下回った。</p>
+    </div>
+    <div class="card">
+      <div class="name">個体数の上限だけ上げると不安定</div>
+      <p>maxPop×2 で seed 2 は 395 体に倍増した一方、seed 3 は 194 → 31 体に崩壊。平均では打ち消し合って見えにくい。</p>
+    </div>
+  </div>
+  <div class="verdict">
+    <span class="lab">結論</span>
+    <p><b>個体数と植物の上限を同時に 2 倍</b>にしたときだけ、実効種数が 4.9 → 6.4(+31%)に伸びた。仮説は「増やし方しだいで正しい」。なお植物量はどの条件でも上限近くあり、「餌が足りないから頭打ち」とまでは言えない。</p>
+  </div>
+</section>
+
+<!-- ============ V1 ============ -->
+<section id="v1">
+  <div class="sec-head">
+    <div class="row"><span class="vid">V1</span><h2>物理の軽量化</h2><span class="chip ok">groups16 を採用</span></div>
+    <div class="question">生態を壊さずに、物理の計算を 10% 以上減らせるか</div>
+  </div>
+  <p>5 つの案を試しました。合格条件は 2 段階です。まず物理 ms が 10% 以上短いこと。次に、個体数・実効種数・食性実効が ±15%、出生・交配・捕食が ±20% に収まっていること。</p>
+
+  <figure>
+    <div class="ttl">ステップ 1: 物理 ms(A/B 計測・3 回の中央値)</div>
+    <div class="bars" id="v1-ms"></div>
+    <div class="legend"><span><i></i>基準 7.48 ms(base の 90%)。これより左なら合格</span></div>
+  </figure>
+
+  <figure>
+    <div class="ttl">ステップ 2: 生態への影響(base からの変化)</div>
+    <div class="tbl">
+      <table>
+        <thead><tr><th>案</th><th>個体数</th><th>実効種数</th><th>食性実効</th><th>births</th><th>matings</th><th>predations</th><th>判定</th></tr></thead>
+        <tbody id="v1-eco"></tbody>
+      </table>
+    </div>
+    <figcaption>赤いマスが許容幅を外れた指標。iter3・events-lean は生態は無事でも、ステップ 1 で落ちている。</figcaption>
+  </figure>
+
+  <figure>
+    <div class="ttl">groups16 のしくみ</div>
+    <div class="scroll">
+      <svg viewBox="0 0 720 200" role="img" aria-label="groups16 の衝突グループの説明図">
+        <g id="g16"></g>
+      </svg>
+    </div>
+    <figcaption>個体 id を 16 で割った余りで衝突グループを分けると、Rapier が自前で判定でき、JS への呼び返しが要らなくなる。代わりに、余りがたまたま同じ別の個体どうし(近くにいる組の約 6.5%、15 組に 1 組)はぶつからずにすり抜ける。</figcaption>
+  </figure>
+  <div class="verdict">
+    <span class="lab">結論</span>
+    <p><b>groups16 は物理 17% 短縮で、生態の指標もすべて許容内</b>。iter2(反復回数 4→2)は速いが個体数が 3 割減るので条件付き。残り 3 案は採用しない。</p>
+  </div>
+</section>
+
+<!-- ============ V2 ============ -->
+<section id="v2">
+  <div class="sec-head">
+    <div class="row"><span class="vid">V2</span><h2>sim を Web Worker に移す</h2><span class="chip part">滑らかさだけ改善</span></div>
+    <div class="question">sim を別スレッドに移すと、速く・滑らかになるか</div>
+  </div>
+  <p>main では「sim を進める → 描く」を毎フレーム順番に行います。worker では sim を別スレッドで進め、姿勢だけを <code>postMessage</code> で送り、main は描くだけになります。</p>
+  <figure>
+    <div class="ttl">8 倍速での 1 フレームの流れ(横軸は時間、160 ms 分)</div>
+    <div class="scroll"><svg id="v2-tl" viewBox="0 0 720 250" role="img" aria-label="main と worker のタイムライン比較"></svg></div>
+    <div class="legend">
+      <span><s style="background:var(--water)"></s>sim の計算</span>
+      <span><s style="background:var(--accent)"></s>描画</span>
+    </div>
+  </figure>
+  <div class="two">
+    <figure>
+      <div class="ttl">fps(8 倍速)</div>
+      <div class="bars" id="v2-fps"></div>
+      <figcaption>4.45 倍。フレーム間隔の中央値 26.6 → 6.1 ms。</figcaption>
+    </figure>
+    <figure>
+      <div class="ttl">実効速度(8 倍速、8.0 が理想)</div>
+      <div class="bars" id="v2-sp"></div>
+      <figcaption>どちらも 8 倍に届かず、worker の方がやや遅い(0.84 倍)。</figcaption>
+    </figure>
+  </div>
+  <div class="verdict part">
+    <span class="lab">結論</span>
+    <p>等速(×1)ではどちらも約 164 fps で差なし。8 倍速では<b>画面は滑らかになるが、sim が進む速さは上がらない</b>。sim の計算そのものが重いので、速さを上げたいなら V1 のような sim 側の軽量化が要る。転送は 1 回 23〜30 KB で、遅れはほぼ 0 だった。</p>
+  </div>
+</section>
+
+<!-- ============ V3 ============ -->
+<section id="v3">
+  <div class="sec-head">
+    <div class="row"><span class="vid">V3</span><h2>領域分割</h2><span class="chip part">速いが偏りに弱い</span></div>
+    <div class="question">1 つの世界を区画に分け、区画ごとに並行で計算すると速くなるか</div>
+  </div>
+  <figure>
+    <div class="ttl">区画の分け方と、120 m・4 区画で伸びなかった理由</div>
+    <div class="scroll">
+      <svg viewBox="0 0 720 230" role="img" aria-label="領域分割の図">
+        <g id="v3-svg"></g>
+      </svg>
+    </div>
+    <figcaption>区画をまたいだ個体は隣の区画へ引っ越す(1000 ステップで 123〜169 体)。全区画がそろうまで待つので、いちばん重い区画が全体の速さを決める。</figcaption>
+  </figure>
+  <figure>
+    <div class="ttl">速くなる比率(区画数 1 との比・壁時間・message 方式)</div>
+    <div class="bars" id="v3-sp"></div>
+    <figcaption>同期方式は message と atomics でほぼ同じ(差は最大 1.9%)。同期にかかる時間は全体の 3〜8% で、偏りの方がよく効く。</figcaption>
+  </figure>
+  <div class="verdict part">
+    <span class="lab">結論</span>
+    <p>2 区画で 1.4〜1.6 倍、4 区画では 160 m で 2.3 倍。ただし<b>個体が偏ると伸びない</b>。決定性は「同じ区画構成・同じ同期方式」なら保てるが、区画の境目で別区画の個体どうしがぶつからなくなるので、分割前と同じ結果にはならない。多様性への効果は測っていない。</p>
+  </div>
+</section>
+
+<!-- ============ V4 ============ -->
+<section id="v4">
+  <div class="sec-head">
+    <div class="row"><span class="vid">V4</span><h2>島モデル</h2><span class="chip ok">効果あり(後で確かめ直し)</span></div>
+    <div class="question">小さな島をいくつも並べ、ときどき移住させると多様性は上がるか</div>
+  </div>
+  <figure>
+    <div class="ttl">80 m の島 × 4 は、160 m の世界 1 つと同じ面積</div>
+    <div class="scroll">
+      <svg viewBox="0 0 720 250" role="img" aria-label="島モデルと単一世界の比較図">
+        <g id="v4-svg"></g>
+      </svg>
+    </div>
+    <figcaption>島はそれぞれ別の worker で並行に動く。条件は「移住の間隔 × 1 回に移す人数」の 5 通り(移住なし・1500 ごと 2 体・1500 ごと 8 体・6000 ごと 2 体・6000 ごと 8 体)。</figcaption>
+  </figure>
+  <figure>
+    <div class="ttl">初回の結果: 群島全体の実効種数(島:種で数えた値)</div>
+    <div class="bars" id="v4-first"></div>
+    <div class="legend"><span><i></i>基準 3.6(160 m の 3.0 の +20%)</span></div>
+    <figcaption>5 条件すべてが基準を大きく超えた。ただしこの数え方には落とし穴があった(次の #23 で確かめ直し)。</figcaption>
+  </figure>
+</section>
+
+<!-- ============ V5 ============ -->
+<section id="v5">
+  <div class="sec-head">
+    <div class="row"><span class="vid">V5</span><h2>物理の詳細度の切り替え</h2><span class="chip no">採用しない</span></div>
+    <div class="question">一部の個体を物理から外し、簡単な「試走」で代用できるか</div>
+  </div>
+  <p>遠くの個体などを物理から外し、あらかじめ測った「試走の速さ」で動かす案です。そのためには、試走の速さが実際の物理での速さとよく一致している必要があります。</p>
+  <div class="grid">
+    <div class="card">
+      <div class="head"><span class="name">速さの相関(ピアソン)</span><span class="chip no">不合格</span></div>
+      <div class="meter" id="v5-r"></div>
+      <p>0.143。基準は 0.7 以上。試走の速さでは実際の速さをほとんど予測できない。</p>
+    </div>
+    <div class="card">
+      <div class="head"><span class="name">外す + 付け直す時間</span><span class="chip ok">合格</span></div>
+      <div class="meter" id="v5-t"></div>
+      <p>0.315 ms。基準は 0.5 ms 以下。</p>
+    </div>
+    <div class="card">
+      <div class="head"><span class="name">付け直した後の沈み込み</span><span class="chip ok">合格</span></div>
+      <p class="num" style="font-size:1.6rem;color:var(--fg)">0 / 60 体</p>
+      <p>地面より沈む個体なし。速度の跳ね上がりもなし。</p>
+    </div>
+  </div>
+  <div class="verdict no">
+    <span class="lab">結論</span>
+    <p>切り替えの手間は軽いが、<b>代わりに使う試走の速さが当てにならない</b>ので採用できない。試走の測り方を作り直すか、別の指標で判断する必要がある。</p>
+  </div>
+</section>
+
+<!-- ============ V6 ============ -->
+<section id="v6">
+  <div class="sec-head">
+    <div class="row"><span class="vid">V6</span><h2>描画の上限</h2><span class="chip na">当面対応不要</span></div>
+    <div class="question">個体数を増やしたとき、描画(three.js)が先に限界になるか</div>
+  </div>
+  <figure>
+    <div class="ttl">1 フレームの描画時間(描画更新 + レンダリングの中央値)</div>
+    <div class="bars" id="v6-ms"></div>
+    <div class="legend"><span><i></i>限界の目安 8 ms</span></div>
+    <figcaption>2000 体でも 2.0 ms で、fps はどの規模でも約 164(モニタの上限)。描画命令の数は 9 回で一定で、三角形の数だけが個体数に比例して増える。</figcaption>
+  </figure>
+  <div class="verdict">
+    <span class="lab">結論</span>
+    <p>2000 体まで描画はボトルネックにならない。<b>WebGPU の検討は当面不要</b>。重いのは描画ではなく sim。</p>
+  </div>
+</section>
+
+<!-- ============ V1 本実装 ============ -->
+<section id="v1impl">
+  <div class="sec-head">
+    <div class="row"><span class="vid">#22</span><h2>V1 groups16 を本番に入れて確かめる</h2><span class="chip ok">採用</span></div>
+    <div class="question">本実装でも試作と同じ効果が出て、生態は壊れないか</div>
+  </div>
+  <p>変更前(hooks)と変更後(base)を 3 年・3 シードで比べました。物理は 8.07 → 6.57 ms で <b>18.6% 短縮</b>。ただし捕食回数だけが許容幅の ±20% を外れたので、シードを増やして原因を確かめました。</p>
+  <figure>
+    <div class="ttl">捕食回数の変化(base / hooks)</div>
+    <div class="bars" id="v1i-pred"></div>
+    <div class="legend"><span><i></i>許容の下限 -20%</span></div>
+    <figcaption>捕食はもともと回数が少なく(9 シードで 1〜81 回)、シードによって大きく振れる。仕組みから見積もると、ぶつからなくなる組は全体の約 4.3% で、捕食を直接減らす分もその程度。</figcaption>
+  </figure>
+  <div class="two">
+    <div class="card">
+      <div class="name">めり込みは「すり抜ける組」だけで増えた</div>
+      <p>余りが同じ組(衝突しない組)で深さ 0.1 超の重なりが 1 → 1014 組。これは設計どおり。余りが違う組は 11 → 7 組で増えていない。</p>
+    </div>
+    <div class="card">
+      <div class="name">ほかの指標は許容内</div>
+      <p>個体数 +10.4%、実効種数 +9.1%、食性実効 -10.0%、出生 -4.7%、交配 -4.5%、壊れた個体の割合も増えていない。</p>
+    </div>
+  </div>
+  <div class="verdict">
+    <span class="lab">結論</span>
+    <p>3 シードでの -29% はシードの振れ。9 シードでは -12.4% で基準内なので、<b>採用してよい</b>。</p>
+  </div>
+</section>
+
+<!-- ============ V4 検証 ============ -->
+<section id="v4check">
+  <div class="sec-head">
+    <div class="row"><span class="vid">#23</span><h2>V4 島モデルを数え直す</h2><span class="chip ok">本番投入を推奨</span></div>
+    <div class="question">島の多様性は「数え方」の効果ではないか。移住そのものは効いているのか</div>
+  </div>
+  <p>初回の集計は「島番号:種 id」を別の種として数えていました。これだと、同じ種が 2 つの島にいるだけで 2 種に数えられます。そこで、交配できる種どうしを 1 つにまとめて数え直しました(V1 適用後のコードで再計測)。</p>
+  <figure>
+    <div class="ttl">数え方の違い(例)</div>
+    <div class="scroll">
+      <svg viewBox="0 0 720 200" role="img" aria-label="種の数え方の比較図">
+        <g id="count-svg"></g>
+      </svg>
+    </div>
+    <figcaption>「由来で束ねる」(移住で生まれた種に元の種の由来を引き継がせる)という第 3 の数え方も試したが、結果は「交配で束ねる」とほぼ同じだった。</figcaption>
+  </figure>
+
+  <figure>
+    <div class="ttl">発見 1: 移住そのものは多様性を増やさない</div>
+    <div class="bars" id="v4c-mig"></div>
+    <div class="legend"><span><i></i>「移住の効果あり」の基準 11.0(移住なし 9.2 の +20%)</span></div>
+    <figcaption>交配で束ねた実効種数。移住が多いほど種が混ざり、1500 ごと 8 体では 6.1 まで下がる。</figcaption>
+  </figure>
+
+  <figure>
+    <div class="ttl">発見 2: それでも、島に分けること自体が効く</div>
+    <p class="note">群島と、個体数がいちばん近い単一世界(島と同じコードで測定)を比べた比率。1.0 より右なら群島が上。</p>
+    <div class="tbl">
+      <table>
+        <thead><tr><th>条件</th><th>比べた単一世界</th><th>実効種数 群島 / 単一</th><th>比</th><th>CPU ms/ステップ の比</th></tr></thead>
+        <tbody>
+          <tr><td>移住なし</td><td>100 m(62 体)</td><td class="n">9.2 / 4.2</td><td class="n okc">2.21</td><td class="n">2.18</td></tr>
+          <tr class="pick"><td><b>1500 ごと 2 体</b></td><td>120 m(167 体)</td><td class="n">8.5 / 4.5</td><td class="n okc">1.90</td><td class="n okc">0.90</td></tr>
+          <tr><td>1500 ごと 8 体</td><td>130 m(229 体)</td><td class="n">6.1 / 2.7</td><td class="n okc">2.22</td><td class="n okc">0.80</td></tr>
+          <tr><td>6000 ごと 2 体</td><td>100 m(62 体)</td><td class="n">9.8 / 4.2</td><td class="n okc">2.36</td><td class="n">2.25</td></tr>
+          <tr><td>6000 ごと 8 体</td><td>100 m(62 体)</td><td class="n">9.5 / 4.2</td><td class="n okc">2.27</td><td class="n">2.33</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <figcaption>実効種数はすべて約 2 倍(基準 1.20 以上)。計算の重さが単一世界の 1.5 倍以下に収まるのは 1500 ごとの 2 条件だけで、そのうち実効種数が高い 1500 ごと 2 体を推奨。</figcaption>
+  </figure>
+
+  <div class="grid">
+    <div class="card">
+      <div class="head"><span class="name">決定性</span><span class="chip ok">保てる</span></div>
+      <p>worker の応答順をわざと揺らしても、シードを順番に回しても、状態ハッシュは 4 通りすべて一致。島番号の順に移住を処理しているため。</p>
+    </div>
+    <div class="card">
+      <div class="head"><span class="name">初回との違い</span><span class="chip part">幅が縮んだ</span></div>
+      <p>島:種で数えた値は 7.5〜20.2 → 9.2〜15.8。初回の「移住が多いほど多様」は、数え方の効果がかなり含まれていた。</p>
+    </div>
+  </div>
+
+  <figure>
+    <div class="ttl">本番に入れる場合の構成案</div>
+    <div class="scroll">
+      <svg viewBox="0 0 720 240" role="img" aria-label="Archipelago の構成図">
+        <g id="arch-svg"></g>
+      </svg>
+    </div>
+    <figcaption><code>Sim</code> は 1 島 = 1 世界のまま。<code>Archipelago</code> が全島を同じステップ数だけ進めてから移住させる。島の数を 1 にすれば今と同じ単一世界。設定(<code>world-settings.js</code>)に島の数・広さ・移住の間隔と人数を足し、交配で束ねる実効種数を <code>diversity.js</code> に足す。</figcaption>
+  </figure>
+  <div class="verdict">
+    <span class="lab">結論</span>
+    <p><b>80 m の島を 4 つ並べ、1500 ステップごとに 2 体を移す構成を本番に入れることを勧める</b>。効くのは移住ではなく「分かれていること」。最終的な採否は利用者が決める。</p>
+    <ol class="issues">
+      <li><code>Archipelago</code> と移住を <code>src/sim</code> に入れる</li>
+      <li>島ごとの Worker 化(ブラウザは Web Worker、Node は <code>worker_threads</code>)</li>
+      <li>描画・UI: 描くのは 1 島だけにし、ヘッダーで島を切り替える。ほかの島は右パネルに個体数・種数の表</li>
+    </ol>
+  </div>
+</section>
+
+<!-- ============ まとめ ============ -->
+<section id="summary">
+  <div class="sec-head"><div class="eyebrow">summary</div><h2>まとめ</h2></div>
+  <p>「速くなる比率」は案ごとに測っている量が違います(物理だけ・fps・壁時間など)。横に並べて大小を比べないでください。</p>
+  <div class="tbl">
+    <table>
+      <thead><tr><th>案</th><th>速さ</th><th>多様性</th><th>手間</th><th>決定性</th><th>結論</th></tr></thead>
+      <tbody>
+        <tr><td><b>V0</b> 仮説の確認</td><td>重くなる(約 2.5 倍)</td><td>個体数+植物×2 で +31%</td><td>小</td><td>保てる</td><td><span class="chip ok">支持</span></td></tr>
+        <tr><td><b>V1</b> 物理の軽量化</td><td>物理のみ 約 1.2 倍</td><td>許容内</td><td>小</td><td>保てる</td><td><span class="chip ok">本実装済み</span></td></tr>
+        <tr><td><b>V2</b> Worker 化</td><td>×8 の fps 4.45 倍・処理速度は上がらず</td><td>変わらない</td><td>中</td><td>未確認</td><td><span class="chip part">滑らかさのみ</span></td></tr>
+        <tr><td><b>V3</b> 領域分割</td><td>壁時間 1.4〜2.3 倍</td><td>未計測</td><td>大</td><td>同じ区画構成なら保てる</td><td><span class="chip part">偏りに弱い</span></td></tr>
+        <tr><td><b>V4</b> 島モデル</td><td>1500 ごとなら CPU 0.8〜0.9 倍</td><td>単一世界の約 2 倍</td><td>大</td><td>保てる(#23)</td><td><span class="chip ok">本番を推奨</span></td></tr>
+        <tr><td><b>V5</b> 詳細度の切り替え</td><td>未計測</td><td>未計測</td><td>中</td><td>未確認</td><td><span class="chip no">採用しない</span></td></tr>
+        <tr><td><b>V6</b> 描画の上限</td><td>2000 体でも 2 ms</td><td>関係なし</td><td>—</td><td>影響なし</td><td><span class="chip na">対応不要</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="note">元の文書の「まとめと提案」の表は #23 より前に書かれたもので、V4 の決定性が「未確認」、多様性が初回の 7.5〜20.2 のままになっています。この表では #23 の結果に置き換えました。</p>
+</section>
+
+</div>
+
+<script>
+(function () {
+  const NS = "http://www.w3.org/2000/svg";
+  const el = (tag, attrs, text) => {
+    const e = document.createElementNS(NS, tag);
+    for (const k in attrs) e.setAttribute(k, attrs[k]);
+    if (text != null) e.textContent = text;
+    return e;
+  };
+
+  /* ---- 横棒グラフ ---- */
+  function bars(id, cfg) {
+    const root = document.getElementById(id);
+    if (!root) return;
+    const fmt = cfg.fmt || (v => v.toFixed(cfg.digits ?? 1));
+    cfg.rows.forEach(r => {
+      const row = document.createElement("div");
+      row.className = "bar-row";
+      const lab = document.createElement("div");
+      lab.className = "bl";
+      lab.textContent = r.l;
+      if (r.s) { const sm = document.createElement("small"); sm.textContent = r.s; lab.appendChild(sm); }
+      const tr = document.createElement("div");
+      tr.className = "track";
+      const f = document.createElement("div");
+      f.className = "fill " + (r.c || "");
+      f.style.width = Math.max(0, Math.min(100, (r.v - (cfg.min || 0)) / (cfg.max - (cfg.min || 0)) * 100)) + "%";
+      tr.appendChild(f);
+      if (cfg.th != null) {
+        const t = document.createElement("div");
+        t.className = "th";
+        t.style.left = ((cfg.th - (cfg.min || 0)) / (cfg.max - (cfg.min || 0)) * 100) + "%";
+        tr.appendChild(t);
+      }
+      const v = document.createElement("div");
+      v.className = "bv";
+      v.textContent = r.t || (fmt(r.v) + (cfg.unit || ""));
+      row.append(lab, tr, v);
+      root.appendChild(row);
+    });
+  }
+
+  /* 現状の内訳(積み上げ) */
+  (function () {
+    const root = document.getElementById("stack");
+    const total = 12.24, phys = 9.78, cb = phys * 0.14, other = total - phys;
+    const parts = [
+      { v: phys - cb, c: "var(--water)", t: "物理 " + (phys - cb).toFixed(1) },
+      { v: cb, c: "var(--warn)", t: cb.toFixed(1) },
+      { v: other, c: "var(--muted)", t: "他 " + other.toFixed(1), o: 0.55 }
+    ];
+    const wrap = document.createElement("div");
+    wrap.style.cssText = "display:flex;height:34px;border-radius:4px;overflow:hidden";
+    parts.forEach(p => {
+      const d = document.createElement("div");
+      d.style.cssText = `width:${p.v / total * 100}%;background:${p.c};${p.o ? "opacity:" + p.o + ";" : ""}display:flex;align-items:center;padding-left:8px;font-family:var(--font-num);font-size:.8rem;color:var(--bg);white-space:nowrap;overflow:hidden`;
+      d.textContent = p.t;
+      wrap.appendChild(d);
+    });
+    root.appendChild(wrap);
+    const sc = document.createElement("div");
+    sc.style.cssText = "display:flex;justify-content:space-between;font-family:var(--font-num);font-size:.75rem;color:var(--muted);margin-top:4px";
+    sc.innerHTML = "<span>0 ms</span><span>物理 9.78 ms(80%)</span><span>12.24 ms</span>";
+    root.appendChild(sc);
+  })();
+
+  bars("v0-eff", { max: 7, th: 5.88, rows: [
+    { l: "120 m 既定", s: "比べる基準", v: 4.9, c: "dim" },
+    { l: "160 m 既定", s: "面積だけ広げる", v: 3.0, c: "bad" },
+    { l: "maxPop×2", s: "個体数の上限 400", v: 4.7 },
+    { l: "maxPop×4", s: "個体数の上限 800", v: 5.1 },
+    { l: "maxPop×2+植物×2", s: "個体数と餌を両方", v: 6.4, c: "hi" }
+  ]});
+  bars("v0-ms", { max: 50, unit: " ms", digits: 1, rows: [
+    { l: "120 m 既定", v: 18.50, c: "dim" },
+    { l: "160 m 既定", v: 31.54 },
+    { l: "maxPop×2", v: 14.02 },
+    { l: "maxPop×4", v: 25.61 },
+    { l: "maxPop×2+植物×2", v: 45.37, c: "hi" }
+  ]});
+
+  bars("v1-ms", { min: 6, max: 8.6, th: 7.48, unit: " ms", digits: 2, rows: [
+    { l: "base", s: "比べる基準", v: 8.31, c: "dim" },
+    { l: "groups16", s: "衝突グループを 16 分割", v: 6.89, c: "hi", t: "6.89 ms" },
+    { l: "iter2", s: "ソルバ反復 4→2", v: 7.09, c: "hi" },
+    { l: "iter3", s: "ソルバ反復 4→3", v: 7.67 },
+    { l: "events-lean", s: "体節の衝突イベントを外す", v: 8.33 },
+    { l: "events-root", s: "根以外のイベントも止める", v: 7.71 }
+  ]});
+  (function () {
+    const B = { pop: 174.5, eff: 7.6, diet: 2.45, b: 314.5, m: 157.5, p: 6.5 };
+    const tol = { pop: 15, eff: 15, diet: 15, b: 20, m: 20, p: 20 };
+    const rows = [
+      ["groups16", { pop: 166.8, eff: 8.4, diet: 2.63, b: 297.0, m: 149.5, p: 7.5 }, "ok", "採用"],
+      ["iter2", { pop: 120.0, eff: 8.0, diet: 2.81, b: 245.5, m: 126.5, p: 4.0 }, "part", "条件付き"],
+      ["iter3", { pop: 178.8, eff: 7.5, diet: 2.43, b: 324.0, m: 165.5, p: 6.0 }, "no", "物理が不足"],
+      ["events-lean", { pop: 159.8, eff: 6.7, diet: 2.57, b: 267.0, m: 144.5, p: 5.5 }, "no", "物理が不足"],
+      ["events-root", { pop: 117.8, eff: 7.4, diet: 2.77, b: 203.0, m: 102.5, p: 2.5 }, "no", "不採用"]
+    ];
+    const tb = document.getElementById("v1-eco");
+    rows.forEach(([name, d, cls, lab]) => {
+      const tr = document.createElement("tr");
+      let h = `<td><b>${name}</b></td>`;
+      ["pop", "eff", "diet", "b", "m", "p"].forEach(k => {
+        const pct = (d[k] / B[k] - 1) * 100;
+        const bad = Math.abs(pct) > tol[k];
+        h += `<td class="n ${bad ? "ngc" : ""}">${pct >= 0 ? "+" : "−"}${Math.abs(pct).toFixed(1)}%</td>`;
+      });
+      h += `<td><span class="chip ${cls}">${lab}</span></td>`;
+      tr.innerHTML = h;
+      tb.appendChild(tr);
+    });
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td class="muted" colspan="8">許容幅: 個体数・実効種数・食性実効 ±15%、births・matings・predations ±20%</td>`;
+    tb.appendChild(tr);
+  })();
+
+  /* groups16 図 */
+  (function () {
+    const g = document.getElementById("g16");
+    function creature(x, y, id, color, label) {
+      const grp = el("g", {});
+      for (let i = 0; i < 4; i++) {
+        grp.appendChild(el("rect", { x: x + i * 26, y: y, width: 24, height: 30, rx: 10, fill: color, opacity: 0.85 }));
+      }
+      grp.appendChild(el("text", { x: x + 50, y: y + 50, "text-anchor": "middle", class: "t mono", "font-size": 12 }, "id " + id));
+      grp.appendChild(el("text", { x: x + 50, y: y + 66, "text-anchor": "middle", class: "tm", "font-size": 11 }, label));
+      return grp;
+    }
+    // 左: すり抜ける
+    g.appendChild(el("text", { x: 170, y: 22, "text-anchor": "middle", class: "tb", "font-size": 13, "font-weight": 700 }, "余りが同じ → すり抜ける"));
+    g.appendChild(creature(40, 60, 3, "var(--water)", "3 ÷ 16 の余り 3"));
+    g.appendChild(creature(120, 74, 19, "var(--water)", ""));
+    g.appendChild(el("text", { x: 230, y: 150, class: "tm", "font-size": 11 }, "19 ÷ 16 の余り 3"));
+    g.appendChild(el("text", { x: 170, y: 182, "text-anchor": "middle", class: "tm", "font-size": 11 }, "同じグループ = 同じ個体扱い。重なっても判定しない"));
+    // 区切り
+    g.appendChild(el("line", { x1: 360, y1: 30, x2: 360, y2: 180, stroke: "var(--line)", "stroke-width": 1.5 }));
+    // 右: ぶつかる
+    g.appendChild(el("text", { x: 545, y: 22, "text-anchor": "middle", class: "ta", "font-size": 13, "font-weight": 700 }, "余りが違う → ぶつかる"));
+    g.appendChild(creature(400, 66, 3, "var(--water)", "グループ 3"));
+    g.appendChild(creature(580, 66, 7, "var(--accent)", "グループ 7"));
+    g.appendChild(el("path", { d: "M512 81 L572 81", stroke: "var(--warn)", "stroke-width": 2, "marker-end": "url(#ar)", fill: "none" }));
+    g.appendChild(el("text", { x: 542, y: 72, "text-anchor": "middle", class: "tk", "font-size": 11 }, "接触"));
+    g.appendChild(el("text", { x: 545, y: 182, "text-anchor": "middle", class: "tm", "font-size": 11 }, "Rapier の中だけで判定。JS への呼び返しなし"));
+  })();
+
+  /* V2 タイムライン(1 ms = 4 px) */
+  (function () {
+    const s = document.getElementById("v2-tl");
+    const X0 = 90, PX = 4, W = 160 * PX;
+    const lane = (y, label) => {
+      s.appendChild(el("rect", { x: X0, y, width: W, height: 26, fill: "var(--track)", rx: 3 }));
+      s.appendChild(el("text", { x: X0 - 10, y: y + 18, "text-anchor": "end", class: "t", "font-size": 12 }, label));
+    };
+    s.appendChild(el("text", { x: X0, y: 18, class: "t", "font-size": 13, "font-weight": 700 }, "main だけ(×8)"));
+    s.appendChild(el("text", { x: X0 + W, y: 18, "text-anchor": "end", class: "tm mono", "font-size": 12 }, "37 fps / 実効 3.61 倍"));
+    lane(28, "main");
+    for (let t = 0; t + 26.6 <= 160.1; t += 26.6) {
+      s.appendChild(el("rect", { x: X0 + t * PX + 1, y: 30, width: 24 * PX, height: 22, fill: "var(--water)", rx: 2 }));
+      s.appendChild(el("rect", { x: X0 + (t + 24) * PX + 1, y: 30, width: 2.2 * PX, height: 22, fill: "var(--accent)", rx: 1 }));
+    }
+    s.appendChild(el("text", { x: X0 + 13 * PX, y: 74, "text-anchor": "middle", class: "tm", "font-size": 11 }, "1 フレーム 26.6 ms(sim を進めてから描く)"));
+
+    s.appendChild(el("text", { x: X0, y: 112, class: "t", "font-size": 13, "font-weight": 700 }, "worker(×8)"));
+    s.appendChild(el("text", { x: X0 + W, y: 112, "text-anchor": "end", class: "tm mono", "font-size": 12 }, "165 fps / 実効 3.02 倍"));
+    lane(122, "main");
+    lane(190, "worker");
+    for (let t = 0; t < 160; t += 6.1) {
+      s.appendChild(el("rect", { x: X0 + t * PX + 1, y: 124, width: 1.4 * PX, height: 22, fill: "var(--accent)", rx: 1 }));
+    }
+    for (let t = 0; t + 32 <= 160.1; t += 32) {
+      s.appendChild(el("rect", { x: X0 + t * PX + 1, y: 192, width: 31.4 * PX, height: 22, fill: "var(--water)", rx: 2 }));
+      s.appendChild(el("path", { d: `M${X0 + (t + 31.5) * PX} 190 L${X0 + (t + 31.5) * PX} 150`, stroke: "var(--muted)", "stroke-width": 1.3, fill: "none", "marker-end": "url(#ar)" }));
+    }
+    s.appendChild(el("text", { x: X0 + 2, y: 238, class: "tm", "font-size": 11 },"姿勢を送る(1 回 30 KB・毎秒 31 回)。main は 6.1 ms ごとに描くだけ"));
+  })();
+  bars("v2-fps", { max: 180, digits: 1, rows: [
+    { l: "main", v: 37.00, c: "dim" },
+    { l: "worker", v: 164.77, c: "w" }
+  ]});
+  bars("v2-sp", { max: 8, th: 8, digits: 2, unit: " 倍", rows: [
+    { l: "main", v: 3.61, c: "dim" },
+    { l: "worker", v: 3.02, c: "w" }
+  ]});
+
+  /* V3 図 */
+  (function () {
+    const g = document.getElementById("v3-svg");
+    const box = (x, y, w, h, fill) => g.appendChild(el("rect", { x, y, width: w, height: h, fill, stroke: "var(--fg)", "stroke-width": 1.2 }));
+    // 2 区画
+    g.appendChild(el("text", { x: 100, y: 20, "text-anchor": "middle", class: "t", "font-size": 13, "font-weight": 700 }, "2 区画"));
+    box(20, 32, 80, 160, "var(--water-soft)"); box(100, 32, 80, 160, "var(--accent-soft)");
+    g.appendChild(el("text", { x: 60, y: 116, "text-anchor": "middle", class: "tw", "font-size": 12 }, "worker 1"));
+    g.appendChild(el("text", { x: 140, y: 116, "text-anchor": "middle", class: "ta", "font-size": 12 }, "worker 2"));
+    g.appendChild(el("path", { d: "M84 150 C 96 140, 106 140, 118 150", stroke: "var(--warn)", "stroke-width": 1.8, fill: "none", "marker-end": "url(#ar)" }));
+    g.appendChild(el("text", { x: 100, y: 214, "text-anchor": "middle", class: "tm", "font-size": 11 }, "境目を越えたら引っ越し"));
+    // 4 区画 120m with counts
+    const counts = [11, 0, 72, 111];
+    const ox = 260, oy = 32, sz = 80;
+    g.appendChild(el("text", { x: ox + sz, y: 20, "text-anchor": "middle", class: "t", "font-size": 13, "font-weight": 700 }, "120 m・4 区画"));
+    counts.forEach((c, i) => {
+      const x = ox + (i % 2) * sz, y = oy + Math.floor(i / 2) * sz;
+      box(x, y, sz, sz, c === 0 ? "var(--surface)" : "var(--water-soft)");
+      g.appendChild(el("text", { x: x + sz / 2, y: y + sz / 2 + 2, "text-anchor": "middle", class: c === 0 ? "tb mono" : "t mono", "font-size": 18, "font-weight": 600 }, String(c)));
+      g.appendChild(el("text", { x: x + sz / 2, y: y + sz / 2 + 20, "text-anchor": "middle", class: "tm", "font-size": 10 }, c === 0 ? "空っぽ" : "体"));
+    });
+    g.appendChild(el("text", { x: ox + sz, y: 214, "text-anchor": "middle", class: "tm", "font-size": 11 }, "開始時の個体数。1 区画が空"));
+    // 負荷バー
+    const bx = 470, by = 50, maxc = 111;
+    g.appendChild(el("text", { x: bx, y: 20, class: "t", "font-size": 13, "font-weight": 700 }, "区画ごとの重さ"));
+    counts.forEach((c, i) => {
+      const y = by + i * 32;
+      g.appendChild(el("text", { x: bx, y: y + 14, class: "tm mono", "font-size": 11 }, "区画 " + (i + 1)));
+      g.appendChild(el("rect", { x: bx + 54, y, width: 180, height: 18, fill: "var(--track)", rx: 2 }));
+      g.appendChild(el("rect", { x: bx + 54, y, width: Math.max(1, c / maxc * 180), height: 18, fill: c === maxc ? "var(--bad)" : "var(--water)", rx: 2 }));
+    });
+    g.appendChild(el("text", { x: bx, y: by + 4 * 32 + 14, class: "tm", "font-size": 11 }, "全員が区画 4 の終わりを待つ"));
+    g.appendChild(el("text", { x: bx, y: by + 4 * 32 + 32, class: "tb", "font-size": 11 }, "偏り(imbalance)2.27 → 2 区画より伸びない"));
+  })();
+  bars("v3-sp", { max: 2.5, digits: 2, unit: " 倍", rows: [
+    { l: "120 m・2 区画", v: 1.62, c: "w" },
+    { l: "120 m・4 区画", s: "1 区画が空", v: 1.53, c: "bad" },
+    { l: "160 m・2 区画", v: 1.45, c: "w" },
+    { l: "160 m・4 区画", v: 2.31, c: "hi" }
+  ]});
+
+  /* V4 島図 */
+  (function () {
+    const g = document.getElementById("v4-svg");
+    const islands = [[60, 40], [200, 40], [60, 150], [200, 150]];
+    islands.forEach(([x, y], i) => {
+      g.appendChild(el("rect", { x, y, width: 90, height: 70, rx: 30, fill: "var(--accent-soft)", stroke: "var(--accent)", "stroke-width": 1.5 }));
+      g.appendChild(el("text", { x: x + 45, y: y + 32, "text-anchor": "middle", class: "ta", "font-size": 13, "font-weight": 700 }, "島 " + i));
+      g.appendChild(el("text", { x: x + 45, y: y + 50, "text-anchor": "middle", class: "tm mono", "font-size": 11 }, "80 m"));
+    });
+    g.appendChild(el("rect", { x: 30, y: 20, width: 290, height: 220, rx: 10, fill: "none", stroke: "var(--water)", "stroke-dasharray": "4 4" }));
+    const arr = (d) => g.appendChild(el("path", { d, stroke: "var(--water)", "stroke-width": 1.8, fill: "none", "marker-end": "url(#ar)" }));
+    arr("M152 64 L196 64"); arr("M245 112 L245 146"); arr("M196 196 L152 196"); arr("M105 146 L105 112");
+    g.appendChild(el("text", { x: 175, y: 136, "text-anchor": "middle", class: "tw", "font-size": 11 }, "ときどき移住"));
+    g.appendChild(el("text", { x: 175, y: 14, "text-anchor": "middle", class: "t", "font-size": 13, "font-weight": 700 }, "群島(4 worker で並行)"));
+    // 単一
+    g.appendChild(el("text", { x: 540, y: 14, "text-anchor": "middle", class: "t", "font-size": 13, "font-weight": 700 }, "単一世界 160 m"));
+    g.appendChild(el("rect", { x: 430, y: 20, width: 220, height: 220, rx: 6, fill: "var(--water-soft)", stroke: "var(--water)", "stroke-width": 1.5 }));
+    g.appendChild(el("text", { x: 540, y: 124, "text-anchor": "middle", class: "tw", "font-size": 13 }, "すべての個体が"));
+    g.appendChild(el("text", { x: 540, y: 144, "text-anchor": "middle", class: "tw", "font-size": 13 }, "同じ世界で混ざる"));
+    g.appendChild(el("text", { x: 375, y: 134, "text-anchor": "middle", class: "tm mono", "font-size": 14 }, "="));
+    g.appendChild(el("text", { x: 375, y: 154, "text-anchor": "middle", class: "tm", "font-size": 10 }, "面積"));
+  })();
+  bars("v4-first", { max: 22, th: 3.6, rows: [
+    { l: "160 m 単一世界", s: "V0 の結果", v: 3.0, c: "dim" },
+    { l: "移住なし", v: 7.5, c: "w" },
+    { l: "1500 ごと 2 体", v: 13.1, c: "w" },
+    { l: "1500 ごと 8 体", v: 20.2, c: "w" },
+    { l: "6000 ごと 2 体", v: 9.4, c: "w" },
+    { l: "6000 ごと 8 体", v: 15.2, c: "w" }
+  ]});
+
+  /* 数え方の図 */
+  (function () {
+    const g = document.getElementById("count-svg");
+    const isl = (x, label) => {
+      g.appendChild(el("rect", { x, y: 30, width: 150, height: 100, rx: 36, fill: "var(--accent-soft)", stroke: "var(--accent)", "stroke-width": 1.3 }));
+      g.appendChild(el("text", { x: x + 75, y: 24, "text-anchor": "middle", class: "t", "font-size": 12, "font-weight": 700 }, label));
+    };
+    isl(20, "島 0"); isl(190, "島 1");
+    const sp = (cx, cy, fill, t) => {
+      g.appendChild(el("circle", { cx, cy, r: 20, fill, opacity: 0.9 }));
+      g.appendChild(el("text", { x: cx, y: cy + 5, "text-anchor": "middle", class: "mono", "font-size": 13, fill: "var(--bg)", "font-weight": 600 }, t));
+    };
+    sp(70, 80, "var(--water)", "A"); sp(120, 80, "var(--warn)", "B");
+    sp(240, 80, "var(--water)", "A′"); sp(290, 80, "var(--bad)", "C");
+    g.appendChild(el("path", { d: "M90 108 C 140 150, 190 150, 232 104", stroke: "var(--water)", "stroke-width": 1.5, "stroke-dasharray": "4 3", fill: "none" }));
+    g.appendChild(el("text", { x: 170, y: 160, "text-anchor": "middle", class: "tw", "font-size": 11 }, "A と A′ は交配できる"));
+    // 結果
+    const res = (y, name, n, cls, desc) => {
+      g.appendChild(el("text", { x: 400, y, class: "t", "font-size": 13, "font-weight": 700 }, name));
+      g.appendChild(el("text", { x: 560, y, class: cls + " mono", "font-size": 20, "font-weight": 600 }, n + " 種"));
+      g.appendChild(el("text", { x: 400, y: y + 20, class: "tm", "font-size": 11 }, desc));
+    };
+    res(60, "島:種(初回)", 4, "tb", "0:A, 0:B, 1:A′, 1:C を全部別々に数える");
+    res(130, "交配で束ねる(#23)", 3, "ta", "A と A′ を 1 種にまとめる(sim の種分化と同じ判定)");
+  })();
+  bars("v4c-mig", { max: 12, th: 11.04, rows: [
+    { l: "移住なし", s: "比べる基準", v: 9.2, c: "dim" },
+    { l: "1500 ごと 2 体", v: 8.5, c: "w" },
+    { l: "1500 ごと 8 体", v: 6.1, c: "bad" },
+    { l: "6000 ごと 2 体", v: 9.8, c: "w" },
+    { l: "6000 ごと 8 体", v: 9.5, c: "w" }
+  ]});
+
+  /* Archipelago 構成図 */
+  (function () {
+    const g = document.getElementById("arch-svg");
+    const node = (x, y, w, h, t, sub, fill, stroke, tc) => {
+      g.appendChild(el("rect", { x, y, width: w, height: h, rx: 6, fill, stroke, "stroke-width": 1.4 }));
+      g.appendChild(el("text", { x: x + w / 2, y: y + (sub ? h / 2 - 2 : h / 2 + 5), "text-anchor": "middle", class: tc, "font-size": 13, "font-weight": 700 }, t));
+      if (sub) g.appendChild(el("text", { x: x + w / 2, y: y + h / 2 + 15, "text-anchor": "middle", class: "tm", "font-size": 10.5 }, sub));
+    };
+    node(240, 10, 240, 52, "Archipelago", "src/sim/archipelago.js(新規)", "var(--surface)", "var(--fg)", "t");
+    for (let i = 0; i < 4; i++) {
+      const x = 40 + i * 165;
+      g.appendChild(el("path", { d: `M360 62 C360 80, ${x + 60} 76, ${x + 60} 100`, stroke: "var(--muted)", "stroke-width": 1.3, fill: "none", "marker-end": "url(#ar)" }));
+      node(x, 100, 120, 48, "Sim(島 " + i + ")", "Worker " + i, "var(--accent-soft)", "var(--accent)", "ta");
+    }
+    g.appendChild(el("text", { x: 360, y: 172, "text-anchor": "middle", class: "tm", "font-size": 11 }, "① 全島を同じステップ数だけ進める → ② 島番号の順に移住(1500 ステップごとに 2 体)"));
+    node(40, 186, 285, 44, "描画: 見ている 1 島だけ", null, "var(--water-soft)", "var(--water)", "tw");
+    node(395, 186, 285, 44, "右パネル: 全島の個体数・種数", null, "var(--water-soft)", "var(--water)", "tw");
+  })();
+
+  bars("v5-r", { max: 1, th: 0.7, digits: 3, rows: [{ l: "", v: 0.143, c: "bad" }] });
+  bars("v5-t", { max: 0.6, th: 0.5, digits: 3, unit: " ms", rows: [{ l: "", v: 0.315, c: "hi" }] });
+  document.querySelectorAll("#v5-r .bar-row, #v5-t .bar-row").forEach(r => { r.style.gridTemplateColumns = "minmax(0,1fr) 4.6rem"; r.querySelector(".bl").remove(); });
+
+  bars("v6-ms", { max: 9, th: 8, digits: 2, unit: " ms", rows: [
+    { l: "200 体", v: 0.70, c: "hi" },
+    { l: "500 体", v: 1.10, c: "hi" },
+    { l: "1000 体", v: 1.40, c: "hi" },
+    { l: "2000 体", v: 2.00, c: "hi" }
+  ]});
+
+  bars("v1i-pred", { min: -35, max: 5, th: -20, fmt: v => (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(1) + "%", rows: [
+    { l: "シード 1〜3", s: "40.0 → 28.3 回", v: -29.2, c: "bad" },
+    { l: "シード 1〜9", s: "25.0 → 21.9 回", v: -12.4, c: "hi" },
+    { l: "参考: births(1〜9)", v: 1.2, c: "dim" },
+    { l: "参考: matings(1〜9)", v: 3.9, c: "dim" }
+  ]});
+  // 負の値は 0 から左へ伸びる棒として描き直す
+  document.querySelectorAll("#v1i-pred .track").forEach((tr, i) => {
+    const vals = [-29.2, -12.4, 1.2, 3.9];
+    const v = vals[i], min = -35, max = 5, zero = (0 - min) / (max - min) * 100;
+    const f = tr.querySelector(".fill");
+    const pos = (v - min) / (max - min) * 100;
+    f.style.left = Math.min(pos, zero) + "%";
+    f.style.width = Math.abs(zero - pos) + "%";
+    const z = document.createElement("div");
+    z.style.cssText = `position:absolute;top:-3px;bottom:-3px;left:${zero}%;border-left:1.5px solid var(--fg)`;
+    tr.appendChild(z);
+  });
+
+  /* 全体図のノード */
+  (function () {
+    const g = document.getElementById("nodes");
+    const tone = { ok: ["var(--accent-soft)", "var(--accent)", "ta"], part: ["var(--warn-soft)", "var(--warn)", "tk"], no: ["var(--bad-soft)", "var(--bad)", "tb"], na: ["var(--track)", "var(--muted)", "tm"] };
+    const N = [
+      [300, 20, "V0 仮説の確認", "個体数+餌で多様性↑", "ok", "#v0"],
+      [20, 120, "V1 物理の軽量化", "groups16 を採用", "ok", "#v1"],
+      [200, 120, "V2 Worker 化", "滑らかさだけ改善", "part", "#v2"],
+      [380, 120, "V5 詳細度の切替", "相関不足で不採用", "no", "#v5"],
+      [560, 120, "V6 描画の上限", "2000 体でも余裕", "na", "#v6"],
+      [20, 218, "#22 V1 本実装", "捕食も基準内 → 採用", "ok", "#v1impl"],
+      [200, 218, "V3 領域分割", "速いが偏りに弱い", "part", "#v3"],
+      [380, 218, "V4 島モデル", "多様性に効果あり", "ok", "#v4"],
+      [560, 218, "#23 V4 数え直し", "本番投入を推奨", "ok", "#v4check"]
+    ];
+    N.forEach(([x, y, t, s, k, href]) => {
+      const [f, st, tc] = tone[k];
+      const a = el("a", { href });
+      a.appendChild(el("rect", { x, y, width: 160, height: 54, rx: 6, fill: f, stroke: st, "stroke-width": 1.5 }));
+      a.appendChild(el("text", { x: x + 80, y: y + 23, "text-anchor": "middle", class: "t", "font-size": 13, "font-weight": 700 }, t));
+      a.appendChild(el("text", { x: x + 80, y: y + 42, "text-anchor": "middle", class: tc, "font-size": 11.5 }, s));
+      g.appendChild(a);
+    });
+  })();
+})();
+</script>
+</body>
+</html>
