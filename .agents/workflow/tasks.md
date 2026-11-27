@@ -1,260 +1,246 @@
-# タスク一覧: Issue #23(島モデルの検証: 集計の補正と決定性を確かめ、本番に入れるかを決める(V4))
+# タスク一覧: Issue #26(島モデルを本番に入れる (1/3): Archipelago と移住を src/sim に入れる)
 
 ## 要件
-- R1: 群島の実効種数に、島をまたいで同じ種を同じ種として数える集計を足す。(a) 交配可能性で束ねる方法と (b) 移住の由来で束ねる方法の両方を出す
-- R2: R1 の集計で、移住そのものの効果を V1 適用後のコードで測り直す(#18 の V4 と同じ 5 条件・seed 1,2,3・27000 ステップ)
-- R3: 同じシード・同じ条件で状態ハッシュが毎回一致するかを確かめる(移住の順序や worker の実行順に依存しないか)
-- R4: 処理時間を、群島と個体数をそろえた単一世界と比べ直す
-- R5: 結果をもとに本番に入れるかを判断し、入れる場合の構成(`src/sim` の世界の持ち方、描画で島をどう見せるか)の案を書く
+- R1: `src/sim/archipelago.js` に `Archipelago` を作る。島の数だけ `Sim` を持ち、全島を同じステップ数だけ進めてから移住を行う。`Sim` は 1 島 = 1 世界のまま変えない。島は 1 スレッドで順に進める
+- R2: 移住の処理(移出・移入・由来キー)を `tools/scaling/island-worker.mjs` の `emigrate`・`immigrate` から移す。島 i のシードは `seed * 100 + i`、移住の乱数シードは試作と同じ式にし、島番号の順に処理する
+- R3: `src/sim/world-settings.js` に島の数・島の広さ・移住の間隔と人数を足す。島の数が 1 なら今と同じ単一世界になる。既定値は島 4・80 m・1500 ステップごと 2 体
+- R4: 島をまたいだ実効種数(`interfertile` と union-find で交配可能な種を束ねる)を `src/sim/diversity.js` に足す
+- R5: `src/sim/index.js` から `Archipelago`(と R4 の関数)を公開する
+- R6: 島の数 1 の設定で、状態ハッシュが変更前(`npm run check:sim` の `088bad967edb44ab`)と一致する
+- R7: 島 4・80 m・1500 ステップごと 2 体で、同じシードなら状態ハッシュが毎回一致する
+- R8: `tools/` から群島を回し、交配で束ねた実効種数が #23 の結果(8.5 前後)と同程度になることを確かめる
+- R9: sim は DOM に依存しない(依存の向きは今と同じ)
 
 ## 前提・解釈
-- (a) 交配可能性で束ねる: 各島の種ごとに、生きている個体を id の小さい順に最大 3 体選んで、そのゲノムを代表とする(`sp.rep` は種ができた時点のゲノムで更新されないため使わない)。別の島の 2 種で、代表どうしのどれか 1 組が `interfertile`(`src/sim/speciation.js`。sim の種分化と同じ判定)を満たせば同じ種にまとめる。まとめは推移的に広がる(union-find)ので、同じ島の 2 種が別の島の種を介して 1 つにまとまることもある。同じ島の種どうしを直接まとめることはしない
-- (b) 移住の由来で束ねる: 種に「由来キー」を持たせる。移住で生まれた種(移入先に交配できる種がなく、`newSpecies` で作った種)は、移民が出身の島で属していた種の由来キーを受け継ぐ。それ以外の種(創始集団や、島の中の種分化で生まれた種)は `<島番号>:<種 id>`。同じ由来キーの種を同じ種として数える。各島は別々の創始集団から始まるので、移住なし(0x0)では (b) の値は従来の「島番号:種 id」と同じになる
-- 単一世界は `tools/scaling/island-run.mjs --islands 1 --size <広さ>` で測る(島と同じコードで時間を測るため。`run.mjs` は区間ごとの計測(profile)が入るので使わない)。島 i のシードは `seed * 100 + i` なので、単一世界のシードは 100・200・300 になる
-- 時間は「CPU 合計 ms/ステップ」(各島の `computeMs` の合計 ÷ ステップ数)で比べる。ms/個体は CPU 合計 ms/ステップ ÷ 個体数。#18 の V4 では 3 シード × 4 島 = 12 worker を 12 論理コアで同時に動かしており、CPU の取り合いで島ごとの時間が長く出た可能性がある。そこで群島の本計測はシードを 1 つずつ順に動かす(`--serial-seeds`、同時に 4 worker)。単一世界は 3 シードを並行に動かす(同時に 3 worker)
-- 個体数をそろえる方法: 単一世界を 90・100・110・120・130・140 m で測り、群島の条件ごとに、個体数(シード平均)がいちばん近い広さを比べる相手にする。計画時の試走(2250 ステップ・seed 1)では、80 m × 4 島の個体数は 266〜283、120 m 単一世界は 182 だった。27000 ステップの末尾 1 年では、#18 の V4 の群島が 125.7〜212.3、#22 の 120 m が 177.3
-- T1・T2 の受け入れ基準で使う現在の出力を、計画時に確かめた。`node tools/scaling/island-run.mjs --steps 2250 --seeds 1 --conditions 0x0,750x2` の出力は次の 2 行(ms/ステップの値は実行ごとに揺れる)
-  - `seed 1・間隔 0・0 体：移住 0（捨て 0）・個体数 283.0・実効種数 24.54・食性実効 2.95・5.442 ms/ステップ`
-  - `seed 1・間隔 750・2 体：移住 24（捨て 0）・個体数 266.0・実効種数 31.29・食性実効 2.97・5.463 ms/ステップ`
-  - 所要時間はこのコマンドで約 40 秒。`node tools/sim-check.mjs` の状態ハッシュは `088bad967edb44ab`
-- 計測(T5〜T8)は時間を測るので、ほかの計測と同時に走らせない。そのため T5〜T8 は 1 本の依存の鎖にしてある
-- 判断の基準は T9 の目的欄に書く。最終的な採否は利用者が決める
+- 設定の項目名は `islands`(島の数。整数 1〜8、既定 4)・`islandSize`(島の一辺 m。80〜160、既定 80)・`migrateEvery`(移住の間隔のステップ数。整数 0〜100000、0 は移住なし、既定 1500)・`migrants`(1 回に各島から移す人数。整数 0〜20、既定 2)とする
+- 島の数が 1 のときはシードをそのまま使い、広さは今までどおり `size` を使う(`seed * 100 + i` にしない)。こうすると単一世界の状態ハッシュが今と一致する。島が 2 つ以上のときは、島 i のシードを `seed * 100 + i`、広さを `islandSize` にする。#23 の試作で `--islands 1` を指定したときはシードを 100 倍していたので、その場合とは違う世界になる
+- 既定値を島 4 にしても、画面(`src/app/main.js`)は今までどおり `Sim` を直接作るので、ブラウザの見た目は変わらない。`Sim` は増えた設定項目を読まない。画面を群島に切り替えるのは #28 で行う
+- `Sim` を直接使う `npm run check:sim` の出力は変わらない。群島の状態ハッシュは新しい `tools/archipelago-check.mjs` で出す。島が 1 つならその島の `stateHash`、島が 2 つ以上なら島ごとのハッシュをカンマでつないだ文字列の sha1 の先頭 16 桁にする(試作の `tools/scaling/island-run.mjs` と同じ式)
+- 試作と同じシード・同じ移住の式・同じ処理順にするので、試作と状態ハッシュが一致するはず。計画時に試作で確かめた値は `node tools/scaling/island-run.mjs --steps 3000 --seeds 1 --conditions 1500x2` の出力で `移住 16（捨て 0）`・`ハッシュ 80cdc8d4a3aa0c21`(約 30 秒)。#23 の本計測(`docs/plans/scaling-data/v4check-islands-a.json`、27000 ステップの 1500x2)のハッシュは seed 1 が `ee1b3754a07c3e8a`、seed 2 が `31fe9413e1ba6d50`、seed 3 が `1a1eb71e726f88a9`。交配で束ねた実効種数は 8.82・8.81・7.86 で、平均 8.50
+- 移住の処理は試作の `emigrate`・`immigrate` と同じにする。全島から島番号の順に移出したあと、島番号の順に移入する。島 i は島 (i-1+n)%n から受け取る(環状)。移住の乱数シードは、移出が `seed * 1e6 + stepCount + i`、移入が `seed * 1e6 + stepCount + src`(src は送り出した島)。`stepCount` は群島を進めたステップ数
+- 交配で束ねる集計は試作の `fertileCounts` と同じにする。各島の種ごとに、生きている個体を id の小さい順に最大 3 体選び、そのゲノムを代表にする。別の島の 2 種で、代表どうしのどれか 1 組が `interfertile` を満たせば同じ種にまとめる(推移的。union-find)。同じ島の種どうしを直接まとめることはしない。由来で束ねる集計(試作の `lineageCounts`)は、#23 で判断に使わなかったので入れない
+- 計測(T5)は時間がかかるので、シード 1・2 とシード 3 の 2 回に分ける(子のコマンド実行の上限 10 分に収めるため)
 
 ## 対象外
-- `src/sim` への島モデルの組み込み(本番の実装)。採用が決まったら別の Issue にする。この Issue では構成の案を書くところまで行う
-- 描画・UI の変更とブラウザでの確認
-- 単一世界の広さを、群島の個体数にぴったり合わせて探すこと(6 つの広さから最も近いものを選ぶ)
+- 島ごとの Worker 化(並行化)。#27 で行う
+- 描画・UI での島の切り替えと、タイトル画面への設定欄の追加。#28 で行う
+- 由来で束ねた実効種数(試作の `lineageCounts`)の本番化。#23 で判断に使わなかったため
 
-## T1: 島の worker に、種の代表ゲノム・由来キー・状態ハッシュ・応答の揺らしを足す
-- **目的**: `tools/scaling/island-worker.mjs` に、島をまたいだ集計に必要な情報と、決定性を確かめる仕組みを足す。移住の振る舞い(誰を選ぶか・どこに置くか・どの種に入るか)は変えない。骨格は次のとおりで、ここから変えない
-  - import に `import { stateHash } from '../state-hash.mjs';` を足す
-  - `const { index, seed, size, jitter = false } = workerData;` にする。定数 `const SAMPLE = 3;` と、由来キーの表 `const originKey = new Map(); // 種 id -> 由来キー(移住で生まれた種だけ)` を置く
+## T1: 世界の設定に島の数・島の広さ・移住の間隔と人数を足す
+- **目的**: `src/sim/world-settings.js` の `DEFAULT_SETTINGS` と `normalizeSettings` に、群島の 4 項目を足す。`Sim` はこれらを読まないので、単一世界の振る舞いは変わらない。骨格は次のとおり
+  - `DEFAULT_SETTINGS` の末尾(`wetness` の後)に足す。コメントは既存の項目にそろえる
     ```js
-    // 島をまたいで同じ系統かを見分けるキー。移住で生まれた種は出身の種のキーを受け継ぐ
-    function speciesKey(sp) {
-      return originKey.get(sp.id) ?? `${index}:${sp.id}`;
-    }
+    islands: 4,                      // 島の数 1〜8（1 なら単一世界。archipelago.js が読む）
+    islandSize: 80,                  // 島が 2 つ以上のときの島の一辺（m）80〜160。島が 1 つなら size を使う
+    migrateEvery: 1500,              // 移住の間隔（ステップ）0〜100000。0 は移住なし
+    migrants: 2,                     // 1 回の移住で各島から移す人数 0〜20
     ```
-  - `stats()` の戻り値に `speciesInfo` を足す(既存の項目は残す)。`bySp` の各種について、生きている個体を id の昇順に並べて先頭 `SAMPLE` 体を選ぶ
-    ```js
-    const speciesInfo = [];
-    for (const [sp, n] of bySp) {
-      const members = live.filter((c) => c.species === sp).sort((a, b) => a.id - b.id).slice(0, SAMPLE);
-      speciesInfo.push({ id: sp.id, n, key: speciesKey(sp), genomes: members.map((c) => cloneGenome(c.genome)) });
-    }
-    ```
-  - `emigrate` の `migrants` の各要素に `origin: speciesKey(c.species)` を足す(`removeCreature` より前に作る。今の `chosen.map` の位置でよい)
-  - `immigrate` で `newSpecies` を呼んだときだけ、その種の由来キーを記録する: `if (!best) { best = newSpecies(sim, m.genome, null, true); originKey.set(best.id, m.origin); }`
-  - 新しいメッセージ `{ type: 'hash' }` → `{ hash: stateHash(sim) }` を足す
-  - メッセージの受け取りを `async` にし、`jitter` が true のときは処理の前に `await new Promise((r) => setTimeout(r, Math.floor(Math.random() * 20)));` で 0〜19 ms 待つ(worker の応答の順を揺らして、結果が実行順に依存しないかを確かめるため。sim の乱数には触れない)
-  - 先頭のコメントのメッセージ一覧に `hash` を足し、`stats` の戻り値に `speciesInfo`、`workerData` に `jitter` を書き足す
-- **対象**: `tools/scaling/island-worker.mjs`
-- **要件**: R1, R3
-- **参照ファイル**:
-  - `tools/scaling/island-worker.mjs`(変更対象。110 行の全体)
-  - `tools/state-hash.mjs`(使う関数 stateHash)
-- **受け入れ基準**:
-  - [ ] `node tools/scaling/island-run.mjs --steps 2250 --seeds 1 --conditions 0x0,750x2` の出力が、ms/ステップを除いて「前提・解釈」に書いた 2 行と同じになる(個体数 283.0・実効種数 24.54・食性実効 2.95 と、移住 24(捨て 0)・個体数 266.0・実効種数 31.29・食性実効 2.97)
-  - [ ] 次の確認用スクリプトを `tools/.tmp/worker-probe.mjs` に書いて `node tools/.tmp/worker-probe.mjs` を 2 回実行すると、2 回とも同じ 1 行の JSON が出る。`keys` はすべて `2:` で始まり、`genomes` の各値は 1〜3、`origins` は 2 つでどちらも `2:` で始まり、`hash` は 16 桁の 16 進数(確かめた後 `tools/.tmp/` は消す)
-    ```js
-    import { Worker } from 'node:worker_threads';
-    const w = new Worker(new URL('../scaling/island-worker.mjs', import.meta.url), { workerData: { index: 2, seed: 102, size: 80 } });
-    await new Promise((res) => w.once('message', res)); // ready
-    const ask = (m) => new Promise((res) => { const f = (r) => { if (r.id === m.id) { w.off('message', f); res(r); } }; w.on('message', f); w.postMessage(m); });
-    await ask({ id: 1, type: 'run', steps: 300 });
-    const st = await ask({ id: 2, type: 'stats' });
-    const em = await ask({ id: 3, type: 'emigrate', k: 2, rngSeed: 7 });
-    const h = await ask({ id: 4, type: 'hash' });
-    console.log(JSON.stringify({ keys: st.speciesInfo.map((s) => s.key), genomes: st.speciesInfo.map((s) => s.genomes.length), origins: em.migrants.map((m) => m.origin), hash: h.hash }));
-    await w.terminate();
-    ```
-  - [ ] `node tools/sim-check.mjs` の状態ハッシュが `088bad967edb44ab` のまま(sim 本体は変えていない)
-- **依存**: なし
-
-## T2: 群島の集計に、交配可能性・由来で束ねた実効種数、CPU 合計時間、状態ハッシュを足す
-- **目的**: T1 の worker が返す `speciesInfo` と `hash` を使い、`tools/scaling/island-run.mjs` の集計を広げる。移住の手順と既存の集計値は変えない。骨格は次のとおりで、ここから変えない
-  - `src/sim/index.js` に `export { interfertile } from './speciation.js';` を足し、`island-run.mjs` は `import { CFG, interfertile } from '../../src/sim/index.js';` で使う。`import { createHash } from 'node:crypto';` も足す
-  - 引数に `--serial-seeds`(値なし。`out.serialSeeds = true`)と `--jitter`(値なし。`out.jitter = true`)を足す。`--jitter` は `spawnIsland` の `workerData` に `jitter: true` として渡す。先頭の使い方のコメントにも 2 つを書き足す
-  - 島をまたいだまとめの関数を足す
-    ```js
-    // (a) 交配可能性: 別の島の種どうしで、代表ゲノムのどれか 1 組が交配できれば同じ種にまとめる(推移的)
-    function fertileCounts(statsList) {
-      const groups = [];
-      statsList.forEach((st, i) => { for (const s of st.speciesInfo) groups.push({ island: i, n: s.n, genomes: s.genomes }); });
-      const parent = groups.map((_, i) => i);
-      const find = (x) => { while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; } return x; };
-      for (let a = 0; a < groups.length; a++) {
-        for (let b = a + 1; b < groups.length; b++) {
-          if (groups[a].island === groups[b].island || find(a) === find(b)) continue;
-          if (groups[a].genomes.some((ga) => groups[b].genomes.some((gb) => interfertile(ga, gb)))) parent[find(a)] = find(b);
-        }
-      }
-      const counts = new Map();
-      groups.forEach((g, i) => { const r = find(i); counts.set(r, (counts.get(r) || 0) + g.n); });
-      return [...counts.values()];
-    }
-    // (b) 移住の由来: 同じ由来キーの種を同じ種として数える
-    function lineageCounts(statsList) {
-      const counts = new Map();
-      for (const st of statsList) for (const s of st.speciesInfo) counts.set(s.key, (counts.get(s.key) || 0) + s.n);
-      return [...counts.values()];
-    }
-    ```
-  - `buildRow` の `archipelago` に次を足す: `speciesFertile`(fertileCounts の要素数)、`effSpeciesFertile`(`effFromCounts(fertileCounts(...))`)、`speciesLineage`、`effSpeciesLineage`(lineageCounts で同様)、`cpuMsPerStep`(`computeList` の `computeMs` の合計 ÷ `stepsRun`)、`cpuMsPerIndividual`(`pop > 0 ? cpuMsPerStep / pop : 0`)。行の JSON にゲノムは入れない
-  - `summarize` に、区間の行の中央値として `speciesFertile` `effSpeciesFertile` `speciesLineage` `effSpeciesLineage` `cpuMsPerStep` `cpuMsPerIndividual` を足す。さらに `islandEffSpecies` と `islandPop` を足す: 島 i ごとに区間の行の `islands[i].effSpecies`(または `pop`)の中央値を求め、島について平均した値
-  - `runOne` の最後(`summary` を作る前)に `const hashes = (await Promise.all(workers.map((w) => w.ask('hash')))).map((m) => m.hash);` を取り、戻り値に `hashes` と `hash: createHash('sha1').update(hashes.join(',')).digest('hex').slice(0, 16)` を足す
-  - 条件ごとの実行: `serialSeeds` なら `for (const seed of seeds)` で 1 シードずつ `await runOne(...)` し、そうでなければ今の `Promise.all` のまま
-  - 1 行の出力は今の行の末尾(`ms/ステップ` の後)に `・交配で束ねた実効種数 ${s.effSpeciesFertile.toFixed(2)}・由来で束ねた実効種数 ${s.effSpeciesLineage.toFixed(2)}・CPU ${s.cpuMsPerStep.toFixed(3)} ms/ステップ・ハッシュ ${r.hash}` を足す(前半は変えない)
-  - 結果 JSON の最上位に `serialSeeds: !!args.serialSeeds` と `jitter: !!args.jitter` を足す
-- **対象**: `tools/scaling/island-run.mjs`, `src/sim/index.js`
-- **要件**: R1, R3, R4
-- **参照ファイル**:
-  - `tools/scaling/island-run.mjs`(変更対象。266 行の全体)
-  - `src/sim/index.js`(変更対象。公開窓口)
-  - `src/sim/speciation.js:6-9`(使う関数 interfertile)
-- **受け入れ基準**:
-  - [ ] `node tools/scaling/island-run.mjs --steps 2250 --seeds 1 --conditions 0x0,750x2 --out tools/.tmp/a.json` の 2 行の前半(ms/ステップまで)が「前提・解釈」の値と同じで、後半に交配・由来で束ねた実効種数・CPU・ハッシュが出る
-  - [ ] 同じコマンドに `--jitter` を付けたとき(出力先は `tools/.tmp/j.json`)と `--serial-seeds` を付けたとき(`tools/.tmp/s.json`)も、条件ごとのハッシュが 1 つ目と同じになる
-  - [ ] `tools/.tmp/a.json` の 0x0 の `summary` で `effSpeciesLineage` が `effSpecies` と等しく、どちらの条件でも `effSpeciesFertile` が `effSpecies` 以下で、`cpuMsPerStep` `cpuMsPerIndividual` `islandEffSpecies` `islandPop` が正の数
-  - [ ] `node tools/scaling/island-run.mjs --islands 1 --size 90 --steps 2250 --seeds 1 --out tools/.tmp/one.json` が exit 0 で終わり、その `summary` の `effSpeciesFertile` が `effSpecies` と等しい(確かめた後 `tools/.tmp/` は消す)
-  - [ ] `node tools/sim-check.mjs` の状態ハッシュが `088bad967edb44ab` のまま
-- **依存**: T1
-
-## T3: 群島と単一世界の結果を表にまとめるツール
-- **目的**: T2 の結果 JSON を読み、検証記録に貼る 3 つの表を出すツール `tools/scaling/island-summary.mjs` を作る。骨格は次のとおりで、ここから変えない
-  - 使い方: `node tools/scaling/island-summary.mjs <json...>`。最上位の `islands` が 1 のファイルを単一世界(`size` で区別)、2 以上のファイルを群島(各 `runs[]` の `${interval}x${migrants}` で条件を区別)として扱う
-  - 値は各 run の `summary` を使い、同じ条件(単一世界は同じ広さ)の run について平均する(シード平均)
-  - 表 1「群島」(条件は最初に現れた順): `| 条件 | 群島 実効種数(島:種) | 交配で束ねる | 0x0 比 | 由来で束ねる | 島平均 実効種数 | 群島 個体数 | 島平均 個体数 | CPU ms/ステップ | CPU ms/個体 | 壁 ms/ステップ |`。列の値はそれぞれ `effSpecies` `effSpeciesFertile` (effSpeciesFertile ÷ 0x0 の effSpeciesFertile) `effSpeciesLineage` `islandEffSpecies` `pop` `islandPop` `cpuMsPerStep` `cpuMsPerIndividual` `msPerStep`。0x0 が無ければ「0x0 比」は `-`
-  - 表 2「単一世界」(広さの昇順): `| 広さ | 個体数 | 実効種数 | CPU ms/ステップ | CPU ms/個体 |`(`pop` `effSpecies` `cpuMsPerStep` `cpuMsPerIndividual`)
-  - 表 3「個体数をそろえた比較」: 群島の条件ごとに、個体数(シード平均の `pop`)の差の絶対値が最も小さい単一世界を選ぶ(同じなら広さが小さい方)。列は `| 条件 | 群島 個体数 | 単一世界 | 実効種数 群島(交配) | 実効種数 単一 | 比 | CPU ms/ステップ 群島 | CPU ms/ステップ 単一 | 比 | CPU ms/個体 群島 | CPU ms/個体 単一 | 比 |`。「単一世界」欄は `110 m(152.3 体)` の形。比は群島 ÷ 単一
-  - 数値の桁: 実効種数・個体数は小数 1 桁、ms/ステップは 2 桁、ms/個体は 3 桁、比は 2 桁
-  - 表の前にそれぞれ `### 群島` `### 単一世界` `### 個体数をそろえた比較` の見出し行を出す。群島のファイルが無ければ表 1・3 を、単一世界のファイルが無ければ表 2・3 を出さない。引数が無ければ使い方を stderr に出して exit 1
-- **対象**: `tools/scaling/island-summary.mjs`
-- **要件**: R1, R4
-- **参照ファイル**:
-  - `tools/scaling/island-run.mjs`(T2 で変えた後の結果 JSON の形。`summarize` と最後の `result`)
-  - `tools/scaling/summarize.mjs:44-80`(Markdown の表の出し方を真似る)
-- **受け入れ基準**:
-  - [ ] 確認用のデータを `node tools/scaling/island-run.mjs --steps 2250 --seeds 1,2 --conditions 0x0,750x2 --out tools/.tmp/arc.json`、`node tools/scaling/island-run.mjs --islands 1 --size 90 --steps 2250 --seeds 1,2 --out tools/.tmp/s90.json`、同じく `--size 120` で `tools/.tmp/s120.json` を作り、`node tools/scaling/island-summary.mjs tools/.tmp/arc.json tools/.tmp/s90.json tools/.tmp/s120.json` を実行すると、3 つの見出しと表が出る。表 1 は 2 行(0x0 の「0x0 比」は 1.00)、表 2 は 2 行(90 と 120)、表 3 は 2 行
-  - [ ] 表 1 の 0x0 の「群島 実効種数(島:種)」が、`arc.json` の 0x0 の 2 シードの `summary.effSpecies` の平均を小数 1 桁に丸めた値と一致する
-  - [ ] `node tools/scaling/island-summary.mjs tools/.tmp/arc.json` では表 1 だけが出て、引数なしでは exit 1 で終わる(確かめた後 `tools/.tmp/` は消す)
-- **依存**: T2
-
-## T4: 決定性を確かめる計測と、ハッシュを比べるツール
-- **目的**: 同じシード・同じ条件で状態ハッシュが毎回一致するかを確かめる。応答の順を揺らした場合(`--jitter`)と、シードを順に動かした場合(`--serial-seeds`)も比べる(この 2 つは 1 本の計測にまとめる)。手順は次のとおり
-  1. ツール `tools/scaling/island-hash-compare.mjs` を作る。使い方は `node tools/scaling/island-hash-compare.mjs <json...>`。各ファイル(island-run.mjs の結果 JSON)の `runs[]` から、キー `${interval}x${migrants}` とシードごとの `hash` を集める。出力は Markdown の表 `| 条件 | シード | <ファイル名 1> | <ファイル名 2> | ... | 結果 |`(ファイル名はパスの最後の部分。行はキーの最初に現れた順、その中でシードの昇順)。値が無いファイルは `-` とする。全ファイルで同じ値なら「結果」は `一致`、違う値か `-` があれば `不一致`。表の後に、すべて一致なら `すべて一致`、そうでなければ `不一致 N 件` の 1 行を出し、不一致があれば exit 1、なければ exit 0。引数が無ければ使い方を stderr に出して exit 1
-  2. 次の 3 つを 1 つずつ順に実行する(1 本 2〜4 分)
-     - `node tools/scaling/island-run.mjs --steps 9000 --seeds 1,2 --conditions 0x0,1500x8 --out docs/plans/scaling-data/v4check-hash-1.json`
-     - 同じコマンドで出力先を `docs/plans/scaling-data/v4check-hash-2.json`
-     - 同じコマンドに `--jitter --serial-seeds` を付け、出力先を `docs/plans/scaling-data/v4check-hash-jitter.json`(応答の順を揺らし、シードも順に動かす)
-  3. `node tools/scaling/island-hash-compare.mjs` に 3 つのファイルを渡して実行し、出力を完了報告にそのまま貼る。不一致が出ても直さない(exit 1 は計測の結果として扱い、そのまま報告する)
-- **対象**: `tools/scaling/island-hash-compare.mjs`, `docs/plans/scaling-data/v4check-hash-1.json`, `docs/plans/scaling-data/v4check-hash-2.json`, `docs/plans/scaling-data/v4check-hash-jitter.json`
+  - 整数にそろえる補助関数を `count` の隣に足す: `const int = (v, lo, hi, def) => Math.round(num(v, lo, hi, def));`
+  - `normalizeSettings` の戻り値の末尾に足す: `islands: int(p.islands, 1, 8, D.islands)`・`islandSize: num(p.islandSize, 80, 160, D.islandSize)`・`migrateEvery: int(p.migrateEvery, 0, 100000, D.migrateEvery)`・`migrants: int(p.migrants, 0, 20, D.migrants)`
+  - `SETTING_PRESETS` は変えない
+- **対象**: `src/sim/world-settings.js`
 - **要件**: R3
 - **参照ファイル**:
-  - `tools/scaling/island-run.mjs`(T2 で変えた後の結果 JSON の形。runs の `hash`)
+  - `src/sim/world-settings.js`(変更対象。`DEFAULT_SETTINGS` と `normalizeSettings`)
 - **受け入れ基準**:
-  - [ ] 3 つの JSON(`v4check-hash-1.json` `v4check-hash-2.json` `v4check-hash-jitter.json`)が作られ、どれも `runs` が 4 つ(2 条件 × 2 シード)で、各 run に `hash` がある
-  - [ ] `node tools/scaling/island-hash-compare.mjs docs/plans/scaling-data/v4check-hash-1.json docs/plans/scaling-data/v4check-hash-1.json` が `すべて一致` を出して exit 0 で終わり、引数なしでは exit 1 で終わる
-  - [ ] 完了報告に、手順 3 の出力がそのまま貼られている
-- **依存**: T2
+  - [ ] `node -e "import('./src/sim/index.js').then(m=>console.log(JSON.stringify(m.normalizeSettings())))"` の出力に `"islands":4,"islandSize":80,"migrateEvery":1500,"migrants":2` が含まれる
+  - [ ] `node -e "import('./src/sim/index.js').then(m=>console.log(JSON.stringify(m.normalizeSettings({islands:2.6,islandSize:200,migrateEvery:-5,migrants:30}))))"` の出力に `"islands":3,"islandSize":160,"migrateEvery":0,"migrants":20` が含まれる
+  - [ ] `node tools/world-form-check.mjs` の最後の行が `すべて OK` になる
+  - [ ] `npm run check:sim` の状態ハッシュが `088bad967edb44ab` のまま変わらない
+- **依存**: なし
 
-## T5: 群島の本計測(前半: 移住なしと 1500 ステップごと)
-- **目的**: V1 適用後のコードで、群島の 3 条件を測る。コードは変えない。T3・T4 の後に置くのは、ほかのタスクの試走と同時に走らせず時間の計測を揺らさないためと、T4 で決定性を確かめてから長い計測に入るため。次のコマンドを実行する(25 分前後かかり、その間の出力は 1 条件の 1 シードが終わるごとに 1 行だけ)。10 分出力が無いと打ち切られるため、バックグラウンドで実行し(例: `node tools/scaling/island-run.mjs ... > $TMPDIR/v4a.log 2>&1 &`)、終わるまで 1〜2 分おきに `tail -3` などで進み具合を表示して待つ
-  - `node tools/scaling/island-run.mjs --steps 27000 --seeds 1,2,3 --conditions 0x0,1500x2,1500x8 --serial-seeds --out docs/plans/scaling-data/v4check-islands-a.json`
-  - 終わったら `node tools/scaling/island-summary.mjs docs/plans/scaling-data/v4check-islands-a.json` を実行し、出力とログの 9 行を完了報告にそのまま貼る
-- **対象**: `docs/plans/scaling-data/v4check-islands-a.json`
-- **要件**: R2
-- **参照ファイル**: なし
+## T2: 島をまたいだ実効種数(交配で束ねる)を diversity.js に足す
+- **目的**: 群島全体の多様性を計算する純粋関数 `computeArchipelagoDiversity(sims)` を `src/sim/diversity.js` に足し、`src/sim/index.js` から公開する。試作 `tools/scaling/island-run.mjs` の `fertileCounts`(union-find)と、`tools/scaling/island-worker.mjs` の `stats()` の代表ゲノムの選び方を移す。`Archipelago` には依存させず、島の `Sim` の配列を受け取る。骨格は次のとおり
+    ```js
+    import { interfertile } from './speciation.js';
+    const SAMPLE = 3; // 種ごとの代表ゲノムの数（生きている個体を id の小さい順に）
+
+    // 群島全体の多様性（純粋関数）。sims は島の Sim の配列（島番号の順）。
+    //   effSpecies        … 種を「島番号:種 id」で別の種として数えた実効種数
+    //   effSpeciesFertile … 別の島の種どうしを交配可能性で束ねた実効種数
+    export function computeArchipelagoDiversity(sims) {
+      const groups = [];          // { island, n, genomes }（島ごと・種ごと）
+      const dietCounts = new Map();
+      let living = 0;
+      sims.forEach((sim, island) => {
+        const bySp = new Map();   // 種 -> 生きている個体の配列
+        for (const c of sim.creatures) {
+          if (!isLiving(c)) continue;
+          living++;
+          // bySp に c を足す。食性は computeDiversity と同じ 3 分類で dietCounts に数える
+        }
+        for (const members of bySp.values()) {
+          members.sort((a, b) => a.id - b.id);
+          groups.push({ island, n: members.length, genomes: members.slice(0, SAMPLE).map((c) => c.genome) });
+        }
+      });
+      // union-find：別の島の 2 種で、代表どうしのどれか 1 組が interfertile なら同じ根にまとめる。
+      // 同じ島どうしは直接まとめない（fertileCounts と同じ）。根ごとに n を足して fertile（Map）を作る
+      return {
+        living,
+        species: groups.length,
+        effSpecies: effFromCounts(/* groups の添字 -> n の Map */),
+        effDiet: effFromCounts(dietCounts),
+        speciesFertile: fertile.size,
+        effSpeciesFertile: effFromCounts(fertile),
+      };
+    }
+    ```
+  - 既存の `effFromCounts`(Map を受け取る)と `isLiving` を使う。`computeDiversity` は変えない
+  - `src/sim/index.js` の `export { computeDiversity } from './diversity.js';` を `export { computeDiversity, computeArchipelagoDiversity } from './diversity.js';` にする
+- **対象**: `src/sim/diversity.js`, `src/sim/index.js`
+- **要件**: R4, R5
+- **参照ファイル**:
+  - `src/sim/diversity.js`(変更対象。`effFromCounts` と `computeDiversity` の食性の分類)
+  - `src/sim/index.js`(変更対象。公開窓口)
+  - `tools/scaling/island-run.mjs:89-112`(移す元の `fertileCounts`)
+  - `tools/scaling/island-worker.mjs:38-61`(代表ゲノムの選び方 `stats()`)
 - **受け入れ基準**:
-  - [ ] `v4check-islands-a.json` が作られ、`steps` が 27000、`serialSeeds` が true、`runs` が 9 つ(3 条件 × シード 1,2,3)ある
-  - [ ] 完了報告に、island-summary.mjs の出力とログの 9 行がそのまま貼られている
+  - [ ] `node -e "import('./src/sim/index.js').then(m=>console.log(typeof m.computeArchipelagoDiversity))"` が `function` を出力する
+  - [ ] `src/sim/diversity.js` の import が `./creatures.js` と `./speciation.js` だけである(`grep -n "^import" src/sim/diversity.js` で確かめる)
+  - [ ] `npm run check:sim` の状態ハッシュが `088bad967edb44ab` のまま変わらない
+- **依存**: なし
+
+## T3: Archipelago と移住を src/sim に入れ、群島の状態ハッシュを出すツールを足す
+- **目的**: `src/sim/archipelago.js` に `Archipelago` を作り、`src/sim/index.js` から公開する。移住は `tools/scaling/island-worker.mjs` の `emigrate`・`immigrate` をそのまま移す(選び方・置き方・種の決め方・由来キーを変えない)。T1 の設定項目と T2 の `computeArchipelagoDiversity` を使う。あわせて群島を回して状態ハッシュを出す `tools/archipelago-check.mjs` を足す。試作のファイル(`tools/scaling/`)は変えない。骨格は次のとおり
+  - `src/sim/archipelago.js`
+    ```js
+    // ===== 群島：独立した世界（島 = Sim）を並べ、ときどき少数を移住させる =====
+    // 全島を 1 ステップずつ島番号の順に進め、migrateEvery ステップごとに移住を行う。
+    // 島番号の順に処理するので、同じシード・同じ設定なら結果は常に同じになる。
+    import { Sim } from './sim.js';
+    import { makeRng } from './random.js';
+    import { cloneGenome } from './genetics.js';
+    import { spawnCreature, newSpecies, removeCreature, isLiving } from './creatures.js';
+    import { normalizeSettings } from './world-settings.js';
+
+    export class Archipelago {
+      // opts.settings: 世界の設定（islands・islandSize・migrateEvery・migrants を含む）
+      // opts.profiler: 各島の Sim に渡す計測器（省略可）
+      constructor(RAPIER, seed = 1, opts = {}) {
+        this.seed = seed;
+        this.settings = normalizeSettings(opts.settings);
+        this.stepCount = 0;
+        this.migrated = 0;   // 移入できた個体の累計
+        this.dropped = 0;    // 置き場所が見つからず捨てた個体の累計
+        const n = this.settings.islands;
+        // 島が 1 つなら今までの単一世界と同じ（シードと size をそのまま使う）
+        const islandSettings = n === 1 ? this.settings : { ...this.settings, size: this.settings.islandSize };
+        this.islands = [];
+        for (let i = 0; i < n; i++) {
+          const islandSeed = n === 1 ? seed : seed * 100 + i;
+          this.islands.push({ index: i, sim: new Sim(RAPIER, islandSeed, { settings: islandSettings, profiler: opts.profiler }), originKey: new Map() });
+        }
+      }
+      get sims() { return this.islands.map((isl) => isl.sim); }
+      step() {
+        for (const isl of this.islands) isl.sim.step();
+        this.stepCount++;
+        const { migrateEvery, migrants } = this.settings;
+        if (this.islands.length > 1 && migrateEvery > 0 && migrants > 0 && this.stepCount % migrateEvery === 0) this.migrate();
+      }
+      // 全島から島番号の順に移出し、そのあと島番号の順に移入する。島 i は島 (i-1+n)%n から受け取る
+      migrate() {
+        const n = this.islands.length, k = this.settings.migrants, base = this.seed * 1e6 + this.stepCount;
+        const out = this.islands.map((isl, i) => emigrate(isl, k, base + i));
+        this.islands.forEach((isl, i) => {
+          const src = (i - 1 + n) % n;
+          const r = immigrate(isl, out[src], base + src);
+          this.migrated += r.placed; this.dropped += r.dropped;
+        });
+      }
+      // 島をまたいで同じ系統かを見分けるキー。移住で生まれた種は出身の種のキーを受け継ぐ
+      speciesKey(islandIndex, sp) { return speciesKey(this.islands[islandIndex], sp); }
+    }
+
+    function speciesKey(isl, sp) { return isl.originKey.get(sp.id) ?? `${isl.index}:${sp.id}`; }
+    // emigrate(isl, k, rngSeed) / immigrate(isl, migrants, rngSeed) は island-worker.mjs の同名関数を移す。
+    // sim は isl.sim、由来キーは speciesKey(isl, …)、originKey は isl.originKey に置き換える。戻り値は
+    // emigrate が移民の配列（{ genome, energyFrac, origin }）、immigrate が { placed, dropped }
+    ```
+  - `src/sim/index.js` に `export { Archipelago } from './archipelago.js';` を足す
+  - `tools/state-hash.mjs` に足す
+    ```js
+    // 群島の状態ハッシュ。島が 1 つならその島の stateHash と同じ値、2 つ以上なら島ごとのハッシュを
+    // カンマでつないだ文字列の sha1 の先頭 16 桁（tools/scaling/island-run.mjs と同じ式）
+    export function archipelagoHash(arch) {
+      const hs = arch.sims.map(stateHash);
+      return hs.length === 1 ? hs[0] : createHash('sha1').update(hs.join(',')).digest('hex').slice(0, 16);
+    }
+    ```
+  - `tools/archipelago-check.mjs`(`tools/sim-check.mjs` を真似る)。使い方は `node tools/archipelago-check.mjs [ステップ数=600] [シード=20261007] [--settings ...]`。`extractSettings` で設定を受け、`new Archipelago(RAPIER, seed, { settings })` を作って `arch.step()` を繰り返し、次の行を出す
+    - `seed <シード> / <ステップ数> ステップ / 島 <島の数>（一辺 <m>）/ 移住 <migrateEvery> ステップごと <migrants> 体`
+    - `状態ハッシュ  <archipelagoHash(arch)>`(`sim-check` と同じく空白 2 つ)
+    - 島ごとに `  島 <i>: 生物 <生きている数> / 植物 <数> / 種 <sim.species.size> / ハッシュ <stateHash(sim)>`
+    - `移住 <arch.migrated>（捨て <arch.dropped>）`
+    - `computeArchipelagoDiversity(arch.sims)` から `個体数 <living>・実効種数 <effSpecies>・交配で束ねた実効種数 <effSpeciesFertile>（<species> 種 → <speciesFertile> 種）`(実効種数は小数 2 桁)
+    - `1 ステップ平均 <ms> ms`(全島の合計)
+- **対象**: `src/sim/archipelago.js`, `src/sim/index.js`, `tools/state-hash.mjs`, `tools/archipelago-check.mjs`
+- **要件**: R1, R2, R5, R6, R7, R9
+- **参照ファイル**:
+  - `tools/scaling/island-worker.mjs:19-111`(移す元の `speciesKey`・`emigrate`・`immigrate`)
+  - `tools/sim-check.mjs`(真似る確認ツール)
+  - `tools/state-hash.mjs`(変更対象。`archipelagoHash` を足す)
+  - `src/sim/index.js`(変更対象。公開窓口)
+- **受け入れ基準**:
+  - [ ] Git Bash で `node tools/archipelago-check.mjs 600 20261007 --settings '{"islands":1}'` を実行すると `状態ハッシュ  088bad967edb44ab` が出る(`npm run check:sim` と同じ値)
+  - [ ] `node tools/archipelago-check.mjs 3000 1`(既定の島 4・80 m・1500 ステップごと 2 体)を 2 回実行すると、2 回とも `状態ハッシュ  80cdc8d4a3aa0c21` と `移住 16（捨て 0）` が出る(試作の `island-run.mjs --steps 3000 --seeds 1 --conditions 1500x2` と同じ値。1 回あたり 1 分程度)
+  - [ ] `npm run check:sim` の状態ハッシュが `088bad967edb44ab` のまま変わらない
+  - [ ] `grep -rnE "document\.|window\.|from 'three'" src/sim` が何も出さない。`src/sim/archipelago.js` の import が `./` で始まるパスだけである
+- **依存**: T1, T2
+
+## T4: 群島の多様性を複数シードで長く測るツールを足す
+- **目的**: `Archipelago` を長く回し、0.25 年(2250 ステップ)ごとに `computeArchipelagoDiversity` を記録して、末尾 1/3 の区間の中央値をシードごとに出すツール `tools/archipelago-diversity.mjs` を足す。シードは子プロセスで並行に実行する。`package.json` に確認用の npm スクリプトを足す。T3 の `Archipelago`・`archipelagoHash` を使う。骨格は次のとおり
+  - 使い方: `node tools/archipelago-diversity.mjs [ステップ数=27000] [シード=1,2,3] [--settings ...] [--out <path>]`。`--out` は `extractSettings` の前に argv から取り除く(値を `out` に入れる)
+  - 親: `extractSettings` で設定を受け、シードごとに `spawn(process.execPath, [self, '--child', String(steps), String(seed), JSON.stringify(settings ?? {})])` を起こす(`shell` は使わない)。子の stdout を全部読み、`JSON.parse` して結果にする。子が 0 以外で終わったら stderr を出して `process.exitCode = 1` にする
+  - 子(`argv[2] === '--child'`): `await RAPIER.init()`、`new Archipelago(RAPIER, seed, { settings })` を作り、2250 ステップごとに行 `{ year, pop: div.living, species, effSpecies, effDiet, speciesFertile, effSpeciesFertile, msPerStep }` を記録する(`year = done * CFG.DT / CFG.YEAR`、`msPerStep` はその区間の 1 ステップ平均)。最後に `{ seed, steps, hash: archipelagoHash(arch), migrated, dropped, rows }` を `process.stdout.write(JSON.stringify(...))` で出す
+  - 集計: シードごとに `year` が `years * 2 / 3 - 1e-6` 以上 `years + 1e-6` 以下の行(`years = steps * CFG.DT / CFG.YEAR`)の中央値を求める(`island-run.mjs` の `summarize` と同じ区間)
+  - 出力: シードごとに `seed <s>：ハッシュ <hash>・移住 <migrated>（捨て <dropped>）・個体数 <pop>・実効種数 <effSpecies>・交配で束ねた実効種数 <effSpeciesFertile>・<msPerStep> ms/ステップ`、最後に `平均：個体数 <x>・実効種数 <x>・交配で束ねた実効種数 <x>・<x> ms/ステップ`(値は中央値のシード平均。実効種数は小数 2 桁)
+  - `--out` があれば `{ date, steps, seeds, settings: normalizeSettings(settings), runs }`(`runs` は子の結果に `summary`(中央値)を足したもの)を JSON で書き出す(ディレクトリが無ければ作る)
+  - `package.json` の `scripts` に `"check:archipelago": "node tools/archipelago-check.mjs"` と `"check:archipelago-diversity": "node tools/archipelago-diversity.mjs"` を足す
+- **対象**: `tools/archipelago-diversity.mjs`, `package.json`
+- **要件**: R8
+- **参照ファイル**:
+  - `tools/diversity-check.mjs:1-60`(真似る子プロセスの並行実行と表示)
+  - `tools/scaling/island-run.mjs:182-213`(集計の区間 `summarize`)
+  - `package.json`(変更対象。npm スクリプト)
+- **受け入れ基準**:
+  - [ ] `node tools/archipelago-diversity.mjs 2250 1,2` が exit 0 で終わり、`seed 1：ハッシュ`・`seed 2：ハッシュ` で始まる行と `平均：` で始まる行を出す(1 分程度)
+  - [ ] `node tools/archipelago-diversity.mjs 2250 1 --out <スクラッチの一時パス>/a.json` で書かれた JSON の `runs[0].rows` が 1 行で、`runs[0].summary.effSpeciesFertile` が数値である(確かめた後に一時ファイルは消す)
+  - [ ] `npm run check:archipelago` が `状態ハッシュ` の行を出して exit 0 で終わる
+  - [ ] `npm run check:sim` の状態ハッシュが `088bad967edb44ab` のまま変わらない
+- **依存**: T3
+
+## T5: 群島を 3 年・シード 1〜3 で測り、#23 の結果と比べて検証記録に書く
+- **目的**: T4 のツールで既定の群島(島 4・80 m・1500 ステップごと 2 体)を 27000 ステップ回し、交配で束ねた実効種数と状態ハッシュを #23 の本計測と比べる。結果 JSON を保存し、`docs/plans/scaling-study.md` に節を足す。計測はほかの重い処理と同時に走らせない
+  - 計測は 2 回に分ける(1 回を 10 分以内に収めるため。コマンドのタイムアウトは 600000 ms にする)
+    - `node tools/archipelago-diversity.mjs 27000 1,2 --out docs/plans/scaling-data/archipelago-26-a.json`(目安 4〜5 分)
+    - `node tools/archipelago-diversity.mjs 27000 3 --out docs/plans/scaling-data/archipelago-26-b.json`(目安 8 分)
+  - 比べる相手は #23 の本計測(`docs/plans/scaling-data/v4check-islands-a.json` の 1500x2)。ハッシュは seed 1 が `ee1b3754a07c3e8a`、seed 2 が `31fe9413e1ba6d50`、seed 3 が `1a1eb71e726f88a9`。交配で束ねた実効種数は 8.82・8.81・7.86(平均 8.50)
+  - `docs/plans/scaling-study.md` の `## まとめと提案` の直前に `## 島モデルの本番化(Issue #26)` の節を足す。中身は計測日と 2 つのコマンド、シードごとの表(列: seed・状態ハッシュ・#23 と一致・個体数・実効種数・交配で束ねた実効種数・ms/ステップ)と 3 シード平均の行、#23 の 8.50 との比較を 2〜4 文で書く。ハッシュが一致しない場合は、その事実と値の差を書く(原因の調査はしない)。ms/ステップは 1 スレッドで全島を回した値で、#23 の CPU 合計 ms/ステップと同じ意味であることを添える
+- **対象**: `docs/plans/scaling-study.md`, `docs/plans/scaling-data/archipelago-26-a.json`, `docs/plans/scaling-data/archipelago-26-b.json`
+- **要件**: R8
+- **参照ファイル**:
+  - `docs/plans/scaling-study.md:383-482`(変更対象。#23 の節の書き方を真似る)
+- **受け入れ基準**:
+  - [ ] `docs/plans/scaling-data/archipelago-26-a.json` の `runs` が seed 1・2 の 2 件、`archipelago-26-b.json` の `runs` が seed 3 の 1 件で、各 `steps` が 27000 である
+  - [ ] 3 シードの `summary.effSpeciesFertile` の平均が 7.5 以上 9.5 以下である
+  - [ ] `docs/plans/scaling-study.md` に `## 島モデルの本番化(Issue #26)` の節があり、表の 3 シードの値と状態ハッシュが 2 つの JSON の値と一致する
+- **依存**: T4
+
+## T6: ARCHITECTURE.md と AGENTS.md に群島と確認ツールを書く
+- **目的**: T3・T4 で足した `Archipelago`・`computeArchipelagoDiversity`・設定の 4 項目・確認ツールを文書に書く。コードは変えない
+  - `ARCHITECTURE.md` の「sim/ の中身」の表に `archipelago.js` の行(`Archipelago`：島 = `Sim` を並べ、`migrateEvery` ステップごとに移住する。依存は sim・creatures・world-settings)を足し、`diversity.js` の行に `computeArchipelagoDiversity` を足す。`### 多様性の指標` の節の後に `### 群島(archipelago.js)` の小節を足し、島のシードと広さの決め方(島 1 つなら単一世界と同じ)、移住の順序と乱数シードの式、交配で束ねる集計、画面はまだ `Sim` を直接使うこと(#27・#28 で切り替える)を書く
+  - `ARCHITECTURE.md` の「動作確認」の節のコマンド例に `npm run check:archipelago` と `npm run check:archipelago-diversity` を足す
+  - `AGENTS.md` の「テスト・検証の注意」に 1 項目足す: 群島の確認は `npm run check:archipelago`(`node tools/archipelago-check.mjs <ステップ数> <シード> --settings ...`)、長時間の多様性は `node tools/archipelago-diversity.mjs <ステップ数> <シード,...>`(27000 ステップ・1 シードで目安 4〜8 分)。島の数 1 の設定では `check:sim` と同じハッシュになること
+- **対象**: `ARCHITECTURE.md`, `AGENTS.md`
+- **要件**: なし
+- **参照ファイル**:
+  - `ARCHITECTURE.md:35-80`(変更対象。sim/ の中身と多様性の指標)
+  - `ARCHITECTURE.md:150-165`(変更対象。動作確認)
+  - `AGENTS.md`(変更対象。テスト・検証の注意)
+- **受け入れ基準**:
+  - [ ] `grep -n "archipelago" ARCHITECTURE.md` が、表の行・`### 群島` の小節・動作確認のコマンド例の 3 か所以上を出す
+  - [ ] `grep -n "check:archipelago" AGENTS.md` が 1 行以上を出す
+  - [ ] 文書に書いたコマンド名・関数名・設定項目名(`islands`・`islandSize`・`migrateEvery`・`migrants`)が実装と一致する
 - **依存**: T3, T4
-
-## T6: 群島の本計測(後半: 6000 ステップごと)
-- **目的**: T5 の続きで、残りの 2 条件を測る。コードは変えない。T5 と同じく、バックグラウンドで実行して進み具合を表示しながら待つ(15 分前後)
-  - `node tools/scaling/island-run.mjs --steps 27000 --seeds 1,2,3 --conditions 6000x2,6000x8 --serial-seeds --out docs/plans/scaling-data/v4check-islands-b.json`
-  - 終わったら `node tools/scaling/island-summary.mjs docs/plans/scaling-data/v4check-islands-a.json docs/plans/scaling-data/v4check-islands-b.json` を実行し、出力とログの 6 行を完了報告にそのまま貼る
-- **対象**: `docs/plans/scaling-data/v4check-islands-b.json`
-- **要件**: R2
-- **参照ファイル**: なし
-- **受け入れ基準**:
-  - [ ] `v4check-islands-b.json` が作られ、`steps` が 27000、`serialSeeds` が true、`runs` が 6 つ(2 条件 × シード 1,2,3)ある
-  - [ ] island-summary.mjs の表 1 に 5 条件(0x0・1500x2・1500x8・6000x2・6000x8)の行がある
-  - [ ] 完了報告に、island-summary.mjs の出力とログの 6 行がそのまま貼られている
-- **依存**: T5
-
-## T7: 単一世界の計測(90・100・110 m)
-- **目的**: 群島と個体数をそろえて比べるため、単一世界を 3 つの広さで測る。コードは変えない。次の 3 つを 1 つずつ順に実行する(合わせて 10 分前後。T5 と同じく、バックグラウンドで実行して進み具合を表示しながら待つ)
-  - `node tools/scaling/island-run.mjs --islands 1 --size 90 --steps 27000 --seeds 1,2,3 --out docs/plans/scaling-data/v4check-single-90.json`
-  - 同じコマンドで `--size 100`、出力先 `docs/plans/scaling-data/v4check-single-100.json`
-  - 同じコマンドで `--size 110`、出力先 `docs/plans/scaling-data/v4check-single-110.json`
-  - 終わったら `node tools/scaling/island-summary.mjs` に 3 つのファイルを渡して実行し、出力を完了報告にそのまま貼る
-- **対象**: `docs/plans/scaling-data/v4check-single-90.json`, `docs/plans/scaling-data/v4check-single-100.json`, `docs/plans/scaling-data/v4check-single-110.json`
-- **要件**: R4
-- **参照ファイル**: なし
-- **受け入れ基準**:
-  - [ ] 3 つの JSON が作られ、どれも `islands` が 1、`steps` が 27000、`runs` が 3 つ(シード 1,2,3)ある
-  - [ ] 完了報告に、island-summary.mjs の出力(表 2 に 90・100・110 の 3 行)がそのまま貼られている
-- **依存**: T6
-
-## T8: 単一世界の計測(120・130・140 m)
-- **目的**: T7 の続きで、残りの 3 つの広さを測る。コードは変えない。進め方は T7 と同じ(合わせて 15 分前後)
-  - `node tools/scaling/island-run.mjs --islands 1 --size 120 --steps 27000 --seeds 1,2,3 --out docs/plans/scaling-data/v4check-single-120.json`
-  - 同じコマンドで `--size 130`、出力先 `docs/plans/scaling-data/v4check-single-130.json`
-  - 同じコマンドで `--size 140`、出力先 `docs/plans/scaling-data/v4check-single-140.json`
-  - 終わったら、群島と単一世界の 8 つのファイルすべて(`v4check-islands-a.json` `v4check-islands-b.json` `v4check-single-90.json` 〜 `v4check-single-140.json`)を `node tools/scaling/island-summary.mjs` に渡して実行し、出力を完了報告にそのまま貼る。群島のどれかの条件の個体数が、単一世界の 6 つの個体数の範囲(最小〜最大)の外にあれば、その条件を完了報告に書く(広さは足さない)
-- **対象**: `docs/plans/scaling-data/v4check-single-120.json`, `docs/plans/scaling-data/v4check-single-130.json`, `docs/plans/scaling-data/v4check-single-140.json`
-- **要件**: R4
-- **参照ファイル**: なし
-- **受け入れ基準**:
-  - [ ] 3 つの JSON が作られ、どれも `islands` が 1、`steps` が 27000、`runs` が 3 つ(シード 1,2,3)ある
-  - [ ] 8 つのファイルでの island-summary.mjs の出力に表 1(5 行)・表 2(6 行)・表 3(5 行)がそろっていて、完了報告にそのまま貼られている
-  - [ ] 完了報告に、単一世界の個体数の範囲の外にある群島の条件があるかどうかが書かれている
-- **依存**: T7
-
-## T9: 検証の結果と判断を検証記録にまとめる
-- **目的**: T4〜T8 の結果(各タスクの完了報告に出力がある)を `docs/plans/scaling-study.md` にまとめ、判断を書く。「## V1 の本実装の確認(Issue #22)」節の後、「## まとめと提案」の直前に「## V4 の検証(Issue #23)」の節を足し、次の順で書く。既存の節の本文は書き換えない
-  1. 計測日と実行したコマンド(T4 の 3 つ、T5〜T8 の island-run.mjs)、生データのパス
-  2. 集計の方法: 3 つの実効種数の数え方(島:種、交配で束ねる、由来で束ねる。tasks.md の「前提・解釈」の 1〜2 項目めの内容)、CPU 合計 ms/ステップと ms/個体の求め方、群島はシードを順に、単一世界は 3 シード並行で動かしたこと、単一世界は `--islands 1` で測ったこと
-  3. `### 決定性`: T4 の比較表と結論
-  4. `### 群島` `### 単一世界` `### 個体数をそろえた比較`: 8 つのファイルでの island-summary.mjs の 3 つの表(T8 の完了報告)。#18 の V4 の値(島:種で 7.5〜20.2)と比べて変わった点を 1〜2 文で添える
-  5. `### 判断`: 次の規則で書く
-     - 決定性: T4 で全条件・全シードが一致なら「保てる」、不一致があれば「保てない」
-     - 移住の効果: 条件ごとに「交配で束ねる」の 0x0 比を書き、1.20 以上の条件を「移住の効果あり」とする
-     - 単一世界との比較: 表 3 の実効種数の比が 1.20 以上の条件を「多様性に効果あり」とする。CPU ms/ステップの比も条件ごとに書く
-     - 由来で束ねた値は参考として 0x0 比を添える(判断には使わない)
-     - 総合: 決定性が保て、かつ「多様性に効果あり」の条件が 1 つ以上あり、そのうち CPU ms/ステップの比が 1.50 以下の条件があれば「**本番に入れることを勧める**」とし、その中で「交配で束ねる」が最も高い条件を勧める構成として挙げる。「多様性に効果あり」の条件がすべて CPU 比 1.50 を超えるなら「**条件付き**(島を並行に動かせることが前提)」、決定性が保てないか「多様性に効果あり」の条件が無ければ「**勧めない**」。最後に「最終的な採否は利用者が判断する」と書く
-- **対象**: `docs/plans/scaling-study.md`
-- **要件**: R2, R3, R4, R5
-- **参照ファイル**:
-  - `docs/plans/scaling-study.md:199-225`(変更対象。#18 の V4 の節。表の形と書き方を真似る)
-  - `docs/plans/scaling-study.md:278-300`(変更対象。#22 の節。計測日・コマンドの書き方を真似る)
-  - `.agents/workflow/tasks.md`(「前提・解釈」の集計の方法)
-- **受け入れ基準**:
-  - [ ] 「## V4 の検証(Issue #23)」が「## V1 の本実装の確認(Issue #22)」の後、「## まとめと提案」の前にあり、目的欄の 1〜5 がこの順で書かれている
-  - [ ] 表の数値が、8 つのファイルでの `node tools/scaling/island-summary.mjs` の出力と、3 つのファイルでの `node tools/scaling/island-hash-compare.mjs` の出力に一致する
-  - [ ] 判断の結論が目的欄 5 の規則と表の値に合っている
-  - [ ] `git diff docs/plans/scaling-study.md` が追加行だけになっている
-- **依存**: T4, T8
-
-## T10: 本番に入れる場合の構成案を検証記録に足す
-- **目的**: T9 で書いた「## V4 の検証(Issue #23)」節の最後(「## まとめと提案」の前)に「### 本番に入れる場合の構成案」を足し、「### 提案」の 1. の末尾に参照の一文を足す。T9 の判断が「勧めない」の場合も、小見出しの直後に「判断は『勧めない』となったが、今後の検討のために残す」旨の一文を置いて同じ内容を書く。中身は次のとおりで、項目と方針はここから変えない(文は整えてよい)
-  - 世界の持ち方: `Sim` は 1 島 = 1 世界のまま変えない。新しい `src/sim/archipelago.js` の `Archipelago` が島の数だけ `Sim` を持ち、全島を同じステップ数だけ進めてから移住を行う。移住の処理(移出・移入・由来キー)は `tools/scaling/island-worker.mjs` の `emigrate`・`immigrate` を移す。島 i のシードは `seed * 100 + i`、移住の乱数シードは試作と同じ式にし、島番号の順に処理して決定性を保つ(T4 の結果を根拠として書く)
-  - 並行化: ブラウザでは V2 の Worker 化と組み合わせ、島ごとに Worker を 1 つ持つ。Node の tools では `worker_threads` を使う。どちらでも sim 本体は DOM に依存しない(依存の向きは今と同じ)
-  - 設定: `src/sim/world-settings.js` に島の数・島の広さ・移住の間隔と人数を足す。島の数が 1 なら今と同じ単一世界になる。既定値は T9 で勧めた条件(勧める条件が無ければ「未定」)
-  - 集計: 島をまたいだ実効種数(交配で束ねる)を `src/sim/diversity.js` に足す
-  - 描画: 一度に描くのは 1 島だけにし、ヘッダーの切り替えで見る島を選ぶ。ほかの島は右パネルに島ごとの個体数・種数を表で出し、移住はイベントログで知らせる。理由として、V6 で描画は 2000 体でもボトルネックではないが、V2 の姿勢の転送が 1 島分で済むことを書く
-  - Issue の分け方の案: (1) `Archipelago` と移住を `src/sim` に入れる (2) 島ごとの Worker 化 (3) 描画・UI の島の切り替え
-  - 「### 提案」の 1. の末尾に「検証の結果は『V4 の検証(Issue #23)』を参照。」を足す。「## まとめと提案」の表は書き換えない
-- **対象**: `docs/plans/scaling-study.md`
-- **要件**: R5
-- **参照ファイル**:
-  - `docs/plans/scaling-study.md:146-152`(V2 の判断。Worker 化と転送量)
-  - `docs/plans/scaling-study.md:270-277`(V6 の判断。描画の負荷)
-  - `docs/plans/scaling-study.md:383-402`(変更対象。まとめと提案)
-  - `ARCHITECTURE.md:9-35`(ディレクトリと依存の向き)
-- **受け入れ基準**:
-  - [ ] 「### 本番に入れる場合の構成案」が「## V4 の検証(Issue #23)」節の中の最後にあり、目的欄の 6 項目(世界の持ち方・並行化・設定・集計・描画・Issue の分け方)がそろっている
-  - [ ] 「### 提案」の 1. の末尾に「V4 の検証(Issue #23)」を参照する一文がある
-  - [ ] `git diff docs/plans/scaling-study.md` が追加行だけになっている
-- **依存**: T9
