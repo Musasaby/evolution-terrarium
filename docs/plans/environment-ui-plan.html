@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- 湖・山・移動・体節・系統樹・UI の改善計画の図解(Issue #12 #34〜#39)。ブラウザで直接開ける -->
+<title>環境と UI の改善計画</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: 1 カラム。「要望と Issue の対応 → 原因の図 → 実施順 → 確かめ方」の順に読む */
+:root {
+  --bg: #f2f5f1;
+  --surface: #ffffff;
+  --fg: #1b2620;
+  --muted: #5a6b61;
+  --line: #d3ddd5;
+  --track: #e4ebe5;
+  --accent: #2e7a58;
+  --accent-soft: #dcefe4;
+  --water: #3a6ea5;
+  --water-soft: #dde8f4;
+  --warn: #b5761a;
+  --warn-soft: #f6ead4;
+  --bad: #b2473a;
+  --bad-soft: #f5dfdb;
+  --ground: #a58f6a;
+  --ground-soft: #ece3d2;
+  --font-body: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif;
+  --font-num: "JetBrains Mono", ui-monospace, "Consolas", monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111915; --surface: #18231d; --fg: #e2ebe5; --muted: #98aa9e; --line: #2b3a32; --track: #24322b;
+    --accent: #6cc59a; --accent-soft: #1f3a2d; --water: #82b2e3; --water-soft: #1d2f42;
+    --warn: #e3b35c; --warn-soft: #3a2e17; --bad: #e57d6e; --bad-soft: #3d221e;
+    --ground: #b9a27a; --ground-soft: #33291b; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111915; --surface: #18231d; --fg: #e2ebe5; --muted: #98aa9e; --line: #2b3a32; --track: #24322b;
+  --accent: #6cc59a; --accent-soft: #1f3a2d; --water: #82b2e3; --water-soft: #1d2f42;
+  --warn: #e3b35c; --warn-soft: #3a2e17; --bad: #e57d6e; --bad-soft: #3d221e;
+  --ground: #b9a27a; --ground-soft: #33291b; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--fg);
+  font-family: var(--font-body); font-size: 15.5px; line-height: 1.8;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 32px 64px;
+}
+.wrap { max-width: 880px; margin: 0 auto; }
+h1 { font-size: 1.7rem; line-height: 1.35; margin: 0 0 6px; }
+h2 { font-size: 1.2rem; margin: 48px 0 12px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+h3 { font-size: 1rem; margin: 0 0 6px; }
+p { margin: 0 0 10px; }
+.lead { color: var(--muted); margin-bottom: 24px; }
+.num { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; margin: 14px 0; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 680px) { .grid2 { grid-template-columns: 1fr; } }
+.cap { font-size: .85rem; color: var(--muted); margin-top: 6px; }
+svg { display: block; width: 100%; height: auto; }
+svg text { font-family: var(--font-body); fill: var(--fg); }
+svg .m { fill: var(--muted); }
+svg .n { font-family: var(--font-num); }
+
+/* 要望 → Issue の対応表 */
+table { width: 100%; border-collapse: collapse; font-size: .92rem; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--muted); font-weight: 500; font-size: .82rem; }
+.tag { display: inline-block; font-family: var(--font-num); font-size: .78rem; padding: 1px 8px; border-radius: 999px; white-space: nowrap; }
+.t-sim { background: var(--accent-soft); color: var(--accent); }
+.t-ui { background: var(--water-soft); color: var(--water); }
+.t-bug { background: var(--bad-soft); color: var(--bad); }
+.tablewrap { overflow-x: auto; }
+
+/* 計測の棒 */
+.bars { display: grid; grid-template-columns: 7.5em 1fr 4em; gap: 6px 10px; align-items: center; font-size: .9rem; }
+.bar { height: 14px; background: var(--track); border-radius: 3px; overflow: hidden; }
+.bar > i { display: block; height: 100%; }
+
+/* 実施順 */
+.lanes { display: grid; gap: 14px; }
+.lane h3 { display: flex; align-items: center; gap: 8px; }
+.steps { display: flex; flex-wrap: wrap; align-items: stretch; gap: 0; }
+.step { flex: 1 1 150px; min-width: 150px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; position: relative; margin: 0 22px 10px 0; }
+.step:not(:last-child)::after { content: ""; position: absolute; right: -18px; top: 50%; width: 12px; height: 12px; border-top: 2px solid var(--muted); border-right: 2px solid var(--muted); transform: translateY(-50%) rotate(45deg); }
+.step .no { font-family: var(--font-num); font-size: .8rem; color: var(--muted); }
+.step b { display: block; font-size: .95rem; line-height: 1.45; margin: 2px 0 4px; }
+.step small { display: block; color: var(--muted); font-size: .8rem; line-height: 1.5; }
+.step.sim { border-left: 4px solid var(--accent); }
+.step.ui { border-left: 4px solid var(--water); }
+.step.bug { border-left: 4px solid var(--bad); }
+.hash { display: inline-block; margin-top: 6px; font-size: .75rem; padding: 0 6px; border-radius: 4px; }
+.hash.same { background: var(--accent-soft); color: var(--accent); }
+.hash.diff { background: var(--warn-soft); color: var(--warn); }
+
+ul.check { margin: 0; padding-left: 1.2em; }
+ul.check li { margin: 4px 0; }
+code { font-family: var(--font-num); font-size: .88em; background: var(--track); padding: 0 4px; border-radius: 3px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>環境と UI の改善計画</h1>
+<p class="lead">湖・山・移動・体の複雑さ・系統樹・UI についての 8 つの要望を、原因の調査結果と、Issue ごとの実施順にまとめたもの。計測は既定の設定・1 年(9000 ステップ)・seed 1 と 2。画面の確認は 4 島の群島・12.7 年目。</p>
+
+<!-- ===== 1. 要望と Issue ===== -->
+<h2>1. 要望と Issue の対応</h2>
+<div class="card tablewrap">
+<table>
+  <thead><tr><th>要望</th><th>Issue</th><th>種類</th><th>主な原因</th></tr></thead>
+  <tbody>
+    <tr><td>湖に落ちると戻れない</td><td class="num">#34</td><td><span class="tag t-bug">bug</span></td><td>浮力がない。湖が深い甕状で岸が急</td></tr>
+    <tr><td>山に登らない</td><td class="num">#35</td><td><span class="tag t-sim">sim</span></td><td>祖先は平地で選ばれ、坂を知らない。登っても得がない</td></tr>
+    <tr><td>湖に住む種がいない</td><td class="num">#12</td><td><span class="tag t-sim">sim</span></td><td>水中に餌がない。#34 が前提</td></tr>
+    <tr><td>積極的に移動しない</td><td class="num">#35</td><td><span class="tag t-sim">sim</span></td><td>近くに餌がある限り遠くへ行く理由がない</td></tr>
+    <tr><td>種が増えると系統樹が見づらい</td><td class="num">#36</td><td><span class="tag t-ui">UI</span></td><td>種の数だけ縦に伸び、横軸は全期間に引き伸ばす</td></tr>
+    <tr><td>選んだ種の特徴を見たい</td><td class="num">#36</td><td><span class="tag t-ui">UI</span></td><td>系統樹は操作を受け付けない</td></tr>
+    <tr><td>文章の説明が多い</td><td class="num">#37</td><td><span class="tag t-ui">UI</span></td><td>数値を文章で並べている。ボタンが文字</td></tr>
+    <tr><td>体節の多い種が増えない</td><td class="num">#38</td><td><span class="tag t-sim">sim</span></td><td>体節を増やすと費用と繁殖の不利だけが増える</td></tr>
+    <tr><td>(調査中に発見)</td><td class="num">#39</td><td><span class="tag t-bug">bug</span></td><td>移住で全個体が出た種が絶滅扱いにならない。個体数の少ない種は移住させないようにする</td></tr>
+  </tbody>
+</table>
+</div>
+
+<!-- ===== 2. 原因 ===== -->
+<h2>2. 原因の図</h2>
+
+<h3>湖: 沈んで、急な岸を登れない(#34)</h3>
+<div class="grid2">
+  <div class="card">
+    <svg viewBox="0 0 360 230" role="img" aria-label="今の湖の断面。急な岸と深い底。個体は沈み、底が転落の判定より深いこともある">
+      <text x="10" y="18" font-size="13" font-weight="700">今</text>
+      <!-- 水 -->
+      <path d="M40 60 L320 60 L300 200 L60 200 Z" fill="var(--water-soft)"/>
+      <line x1="10" y1="60" x2="350" y2="60" stroke="var(--water)" stroke-width="1.5"/>
+      <text x="300" y="54" font-size="11" class="m">水面</text>
+      <!-- 地面: 甕状 -->
+      <path d="M0 52 L40 52 C70 52 70 200 110 205 L250 205 C290 200 290 52 320 52 L360 52 L360 230 L0 230 Z" fill="var(--ground-soft)" stroke="var(--ground)" stroke-width="1.5"/>
+      <!-- 転落の判定 -->
+      <line x1="10" y1="190" x2="350" y2="190" stroke="var(--bad)" stroke-dasharray="5 4"/>
+      <text x="14" y="184" font-size="11" fill="var(--bad)">y = −20 で「転落」死</text>
+      <!-- 個体: 沈む -->
+      <rect x="168" y="120" width="28" height="11" rx="5.5" fill="var(--warn)"/>
+      <line x1="182" y1="134" x2="182" y2="168" stroke="var(--warn)" stroke-width="2"/>
+      <path d="M176 162 L182 170 L188 162" fill="none" stroke="var(--warn)" stroke-width="2"/>
+      <text x="200" y="152" font-size="11">重力だけ(浮力なし)</text>
+      <!-- 勾配 -->
+      <text x="18" y="120" font-size="11">岸 40〜70°</text>
+    </svg>
+    <p class="cap">深さは縁の高さの 2.2〜3.0 倍、形は <code>exp(−(d/r)³)</code>。水中で変わるのは減衰と費用だけ。</p>
+  </div>
+  <div class="card">
+    <svg viewBox="0 0 360 230" role="img" aria-label="改善後の湖の断面。遠浅の棚と浅い底。浮力で体が持ち上がる">
+      <text x="10" y="18" font-size="13" font-weight="700">改善後</text>
+      <path d="M30 60 L330 60 L250 150 L110 150 Z" fill="var(--water-soft)"/>
+      <line x1="10" y1="60" x2="350" y2="60" stroke="var(--water)" stroke-width="1.5"/>
+      <path d="M0 52 L20 52 C40 54 60 72 90 80 C110 86 115 150 140 152 L220 152 C245 150 250 86 270 80 C300 72 320 54 340 52 L360 52 L360 230 L0 230 Z" fill="var(--ground-soft)" stroke="var(--ground)" stroke-width="1.5"/>
+      <line x1="10" y1="190" x2="350" y2="190" stroke="var(--bad)" stroke-dasharray="5 4" opacity=".5"/>
+      <text x="14" y="184" font-size="11" class="m">底は −20 より浅く</text>
+      <!-- 遠浅の棚 -->
+      <text x="34" y="100" font-size="11">遠浅の棚</text>
+      <!-- 浮力 -->
+      <rect x="176" y="86" width="28" height="11" rx="5.5" fill="var(--accent)"/>
+      <line x1="190" y1="126" x2="190" y2="100" stroke="var(--accent)" stroke-width="2"/>
+      <path d="M184 106 L190 98 L196 106" fill="none" stroke="var(--accent)" stroke-width="2"/>
+      <text x="200" y="124" font-size="11">浮力</text>
+      <!-- 上陸 -->
+      <path d="M120 74 C100 62 80 62 62 66" fill="none" stroke="var(--accent)" stroke-width="2" stroke-dasharray="4 3"/>
+      <path d="M68 60 L60 66 L69 71" fill="none" stroke="var(--accent)" stroke-width="2"/>
+      <text x="64" y="44" font-size="11" fill="var(--accent)">上陸できる</text>
+    </svg>
+    <p class="cap">A 浮力 + B 遠浅の岸を先に入れる。足りなければ C「陸の方向」の感覚、D 浅瀬での祖先の試走。</p>
+  </div>
+</div>
+<div class="card">
+  <h3>入水と上陸の回数(1 年)</h3>
+  <div class="bars">
+    <span>入水</span><div class="bar"><i style="width:100%;background:var(--water)"></i></div><span class="num">175</span>
+    <span>上陸</span><div class="bar"><i style="width:0.6%;background:var(--accent)"></i></div><span class="num">1</span>
+    <span>水中で死亡</span><div class="bar"><i style="width:90.9%;background:var(--bad)"></i></div><span class="num">159</span>
+  </div>
+  <p class="cap">seed 1 と 2 の合計。seed 2 は上陸 0 回。水中に長くいた個体の水棲度は平均と変わらず、適応して住んでいるのではなく出られないだけ。</p>
+</div>
+
+<h3 style="margin-top:28px">山: 麓から上に行かない(#35)</h3>
+<div class="card">
+  <svg viewBox="0 0 720 220" role="img" aria-label="山の断面と、個体が達した最高の高さ。山頂は 20〜26 m、個体は 4.8〜8.8 m まで">
+    <!-- 目盛 -->
+    <g class="m" font-size="11">
+      <line x1="60" y1="190" x2="700" y2="190" stroke="var(--line)"/>
+      <line x1="60" y1="20" x2="60" y2="190" stroke="var(--line)"/>
+      <text x="22" y="194" class="n m">0 m</text>
+      <text x="18" y="125" class="n m">10 m</text>
+      <text x="18" y="60" class="n m">20 m</text>
+      <line x1="60" y1="125" x2="700" y2="125" stroke="var(--line)" stroke-dasharray="2 4"/>
+      <line x1="60" y1="60" x2="700" y2="60" stroke="var(--line)" stroke-dasharray="2 4"/>
+    </g>
+    <!-- 山: 頂上 26 m ≒ y 21 -->
+    <path d="M60 188 C200 186 260 160 330 80 C360 40 380 22 395 21 C410 22 430 40 460 80 C530 160 590 186 700 188 L700 190 L60 190 Z" fill="var(--ground-soft)" stroke="var(--ground)" stroke-width="1.5"/>
+    <!-- 置かない帯: 12 m 以上 -->
+    <line x1="60" y1="112" x2="700" y2="112" stroke="var(--warn)" stroke-dasharray="6 4"/>
+    <text x="520" y="106" font-size="11" fill="var(--warn)">12 m 以上には祖先を置かない</text>
+    <!-- 到達した高さ -->
+    <rect x="60" y="133" width="640" height="57" fill="var(--accent)" opacity=".12"/>
+    <line x1="60" y1="133" x2="700" y2="133" stroke="var(--accent)" stroke-width="2"/>
+    <text x="70" y="148" font-size="11" fill="var(--accent)">個体が 1 年で達した最高 4.8〜8.8 m</text>
+    <text x="405" y="18" font-size="11">山頂 20〜26 m</text>
+    <text x="468" y="92" font-size="11" class="m">斜面 27〜50°</text>
+  </svg>
+  <p class="cap">祖先の試走は平らな床だけで、坂の感覚 <code>slope</code> は 0 に固定。山の上は寒さの費用が増えるだけで、得がない。移動の速さの中央値は 0.2〜0.4 m/秒(一辺 120 m の世界)。</p>
+</div>
+
+<h3 style="margin-top:28px">体節: 増やすと損だけが増える(#38)</h3>
+<div class="card">
+  <svg viewBox="0 0 720 190" role="img" aria-label="体節を 1 つ増やしたときの損と得の比較。損が 3 つ、得はほぼない">
+    <!-- 天秤 -->
+    <line x1="360" y1="64" x2="360" y2="170" stroke="var(--muted)" stroke-width="2"/>
+    <path d="M340 175 L380 175 L360 158 Z" fill="var(--muted)"/>
+    <line x1="165" y1="86" x2="575" y2="40" stroke="var(--fg)" stroke-width="2"/>
+    <circle cx="360" cy="64" r="4" fill="var(--fg)"/>
+    <!-- 損(重い側、左下) -->
+    <rect x="40" y="86" width="250" height="88" rx="8" fill="var(--bad-soft)" stroke="var(--bad)"/>
+    <text x="54" y="108" font-size="12" font-weight="700" fill="var(--bad)">損</text>
+    <text x="54" y="128" font-size="11.5">基礎代謝 +0.055 / 体節、+0.03 / 関節</text>
+    <text x="54" y="146" font-size="11.5">体節数が 2 違うと子ができない</text>
+    <text x="54" y="164" font-size="11.5">新しい関節は神経が噛み合わない</text>
+    <!-- 得(軽い側、右上) -->
+    <rect x="460" y="40" width="230" height="56" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/>
+    <text x="474" y="62" font-size="12" font-weight="700" fill="var(--accent)">得</text>
+    <text x="474" y="82" font-size="11.5">ほぼない(必要とする環境がない)</text>
+  </svg>
+  <p class="cap">画面では平均の体節数が 6 年目に約 4 から約 5.5 へ上がり、12 年目まで横ばい。時間を延ばすだけでは増えない。体節の得を作り、費用と繁殖の壁を見直す。重さは「体節の合計で個体数の上限を決める」などで抑える。</p>
+</div>
+
+<!-- ===== 3. 実施順 ===== -->
+<h2>3. 実施順</h2>
+<p>シミュレーションと UI は互いに依存しないので、2 本の列で進められる。シミュレーションの列は前の段の結果を使うので、上から順に行う。</p>
+<div class="lanes">
+  <div class="lane">
+    <h3><span class="tag t-sim">sim</span> シミュレーション</h3>
+    <div class="steps">
+      <div class="step bug"><span class="no">1 · #39</span><b>少数の種を移住させない</b><small>島での個体数がしきい値未満の種からは選ばない。系統樹の表示の前提</small><span class="hash diff">群島のみハッシュ変化</span></div>
+      <div class="step sim"><span class="no">2 · #34</span><b>浮力と遠浅の湖</b><small>上陸の割合 3 割以上、転落死ほぼ 0</small><span class="hash diff">ハッシュ変化</span></div>
+      <div class="step sim"><span class="no">3 · #35</span><b>坂と探索</b><small>祖先の試走に坂と浅瀬を入れる(#34 の D と共通)。山の上に得を作る</small><span class="hash diff">ハッシュ変化</span></div>
+      <div class="step sim"><span class="no">4 · #12</span><b>湖の植物</b><small>#34 で決めた水深に合わせて、水中の植物を足す</small><span class="hash diff">ハッシュ変化</span></div>
+      <div class="step sim"><span class="no">5 · #38</span><b>体節の得と軽さ</b><small>移動と地形が変わったあとで、体の形の選択圧を作る</small><span class="hash diff">ハッシュ変化</span></div>
+    </div>
+  </div>
+  <div class="lane">
+    <h3><span class="tag t-ui">UI</span> 画面</h3>
+    <div class="steps">
+      <div class="step ui"><span class="no">A · #37 前半</span><b>共通部品とアイコン</b><small>SVG のアイコン(絵文字は使わない)、食性・適温・水棲度の帯、天候のアイコン</small><span class="hash same">ハッシュ不変</span></div>
+      <div class="step ui"><span class="no">B · #36</span><b>系統樹と種のカード</b><small>絞り込み・横軸の範囲・クリックで種のカード。A の部品を使う</small><span class="hash same">ハッシュ不変</span></div>
+      <div class="step ui"><span class="no">C · #37 後半</span><b>ヘッダーと統計タブ</b><small>重複を統計タブへ。年・季節・気温・湖面・天候の図。グラフの表示範囲</small><span class="hash same">ハッシュ不変</span></div>
+    </div>
+  </div>
+</div>
+<p class="cap">sim の列は振る舞いを変えるので、各段で <code>npm run check:diversity</code> と群島の多様性の計測をやり直す。UI の列は sim を変えないので、状態ハッシュが変わらないことを確かめる。</p>
+
+<!-- ===== 4. 確かめ方 ===== -->
+<h2>4. 確かめ方</h2>
+<div class="grid2">
+  <div class="card">
+    <h3>sim の列</h3>
+    <ul class="check">
+      <li>入水と上陸の回数、標高の帯ごとの個体数、移動の速さ、体節数の分布を、同じ計測で前後比較する</li>
+      <li><code>npm run check:diversity</code>(3 年・3 シード)で、個体数と実効種数が悪くならない</li>
+      <li>群島は <code>node tools/archipelago-diversity.mjs</code> で確認する</li>
+      <li>性能は <code>docs/plans/biodiversity.md</code> の「性能の判定方法」を満たす。体節が増えても物理の負荷を抑える</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h3>UI の列</h3>
+    <ul class="check">
+      <li>ブラウザで、島 1 つの世界と群島の両方を確認する(ヘッドレスでは確認できない)</li>
+      <li>10 年以上動かした状態で、グラフと系統樹の直近の変化が読み取れる</li>
+      <li>幅 900 px 前後でも、ヘッダーのボタンが 3 段に折り返さない</li>
+      <li>絵文字を使っていない</li>
+    </ul>
+  </div>
+</div>
+
+</div>
+</body>
+</html>
