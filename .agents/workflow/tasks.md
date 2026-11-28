@@ -568,3 +568,44 @@
   - [ ] `grep -c "\-\-workers" ARCHITECTURE.md AGENTS.md` が両方のファイルで 1 以上を出す
   - [ ] `grep -c "mirror-check" ARCHITECTURE.md AGENTS.md` が両方のファイルで 1 以上を出す
 - **依存**: T7
+
+## T9: IslandRunner が遅れを消費する前に捨てて止まる不具合と、性能表示の 1 ステップ時間を直す
+- **目的**: フレームが遅いブラウザ(ヘッドレスで 8 fps)で 8 倍速にすると、シミュレーションがほとんど進まない(性能表示が「実効 ×0.00 · 1ステップ —」)。原因は `src/app/island-runner.js` の `advance` にある。進めるべき時間 `acc` が `MAX_BACKLOG`(0.5 シム秒)を超えると、ステップ数 `n` を決める**前に** 0 へ捨てている。しかも Worker の応答待ち(`busy`)のフレームでも `acc` が増え続ける。そのため、1 フレームでためる時間が 0.5 秒を超えると、毎回 `n = 0` になる。`SimRunner`(`src/app/sim-runner.js`)と同じく「先に消費し、残りが多すぎたら捨てる」順にする。性能表示の「1ステップ」は main スレッドの 'シム' の時間をステップ数で割っているので、Worker で動かすと実際の 1 ステップ時間を表さない。`IslandRunner` が測っている `msPerStep` を使うように変える。変更点は次のとおり
+  - `src/app/island-runner.js` の `advance` を次の流れにする(ほかのメソッドは変えない)
+    ```js
+    advance(dtr, speed, { selectedId = null, profile = false } = {}) {
+      let dropped = 0, n = 0;
+      if (speed > 0 && speed < SPEED_MAX) this.acc += dtr * speed;
+      if (this.busy || this.disposed || this.error) {
+        // 応答待ちの間は遅れを MAX_BACKLOG で頭打ちにする(全部は捨てない)
+        if (this.acc > MAX_BACKLOG) { dropped = this.acc - MAX_BACKLOG; this.acc = MAX_BACKLOG; }
+        return { steps: 0, simSeconds: 0, dropped, workerMs: 0 };
+      }
+      if (speed >= SPEED_MAX) n = Math.max(1, Math.floor(BUDGET_MAX_MS / this.msPerStep));
+      else if (speed > 0) { n = Math.min(Math.floor(this.acc / CFG.DT), Math.max(1, Math.floor(BUDGET_MS / this.msPerStep))); this.acc -= n * CFG.DT; }
+      // 消費した後に、残りが多すぎるときだけ捨てる(SimRunner と同じ順)
+      if (this.acc > MAX_BACKLOG) { dropped += this.acc; this.acc = 0; }
+      // ここから下(selectedId・profile・panels・busy・arch.advance の then/catch)は今のまま
+      ...
+      return { steps: n, simSeconds: n * CFG.DT, dropped, workerMs: n * this.msPerStep };
+    }
+    ```
+  - `src/app/main.js` のループの 'シム' で、`perf.add('dropped', r.dropped);` の後に `perf.add('workerMs', r.workerMs);` を足す
+  - `src/perf/perf-overlay.js` の `render` の `stepMs` を `const stepMs = steps ? fmtMs((s.counters.workerMs ?? simMs * s.frames) / steps) + ' ms' : '—';` にする(`workerMs` が無い計測では今の計算のまま)
+  - 新規 `tools/island-runner-check.mjs`(ブラウザ不要の確認): `IslandRunner` を `new IslandRunner(workers, ports, arch, mirror, 0)` で直接作る。偽物は `workers = []`、`ports = [{ ask: async () => ({ frame: null }) }]`、`mirror = { applyFrame() {}, applyPanels() {}, dispose() {} }`、`arch = { settings: {}, advance: async (n) => { total += n; } }`(`total` は進めたステップの合計)。次の 2 つを確かめ、`OK` / `NG` を 1 行ずつ出し、最後の行に NG が無ければ `すべて OK`、あれば `NG あり` を出して終了コード 1 にする
+    1. 応答をすぐ返す場合: `dtr = 0.125`・`speed = 8` で 40 フレーム、毎フレーム `advance` を呼んで `await new Promise(r => setTimeout(r, 0))` で応答を待つ。`total * CFG.DT` が 0 より大きい(直す前は 0 になる)
+    2. 応答が 3 フレームに 1 回しか返らない場合: `arch.advance` を、呼ばれたら Promise を配列に積んで返す形にし、3 フレームごとに積んだ Promise を解決してから `setTimeout(0)` を待つ。`dtr = 1 / 60`・`speed = 8` で 180 フレーム(実時間 3 秒・目標 24 シム秒)回して、`total` が 0 より大きい
+- **対象**: `src/app/island-runner.js`, `src/app/main.js`, `src/perf/perf-overlay.js`, `tools/island-runner-check.mjs`
+- **グループ**: browser-worker
+- **要件**: R8
+- **参照ファイル**:
+  - `src/app/island-runner.js`(変更対象。`advance`)
+  - `src/app/sim-runner.js`(真似る消費と捨て方の順)
+  - `src/app/main.js:100-107`(変更対象。ループの 'シム')
+  - `src/perf/perf-overlay.js:80-96`(変更対象。`stepMs`)
+- **受け入れ基準**:
+  - [ ] `node tools/island-runner-check.mjs` の最後の行が `すべて OK` になり、終了コード 0 で終わる
+  - [ ] `node --check` を `src/app/island-runner.js`・`src/app/main.js`・`src/perf/perf-overlay.js` に実行し、すべて exit 0 で終わる
+  - [ ] `npm run check:sim` の状態ハッシュが `088bad967edb44ab` のまま変わらない
+  - [ ] 報告に「ブラウザでの確認(等速・8 倍速で年数・気温が進むこと、性能表示の 1 ステップに ms が出ること)はしていない」旨を書く(親が行う)
+- **依存**: T7

@@ -1,7 +1,7 @@
 {
   "source": "https://github.com/Musasaby/evolution-terrarium/issues/27",
   "branch": "develop/archipelago-worker-browser",
-  "updated_at": "2026-11-28T04:17:00+09:00",
+  "updated_at": "2026-11-28T11:02:08+09:00",
   "group": "browser-worker",
   "tasks": [
     {
@@ -59,6 +59,13 @@
       "status": "done",
       "retries": 0,
       "commit": "76a5c2d9ab67dff7d1c84ece6e711b9a6a64cb90"
+    },
+    {
+      "id": "T9",
+      "title": "IslandRunner が遅れを消費する前に捨てて止まる不具合と、性能表示の 1 ステップ時間を直す",
+      "status": "pending",
+      "retries": 0,
+      "commit": null
     }
   ]
 }
