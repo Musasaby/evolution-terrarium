@@ -2,7 +2,7 @@
   "source": "docs/plans/environment-ui-plan.html",
   "branch": "develop/environment-ui-lake",
   "group": "lake",
-  "updated_at": "2026-11-28T17:38:49+09:00",
+  "updated_at": "2026-11-28T17:44:18+09:00",
   "tasks": [
     {
       "id": "T1",
@@ -56,9 +56,9 @@
     {
       "id": "T8",
       "title": "#39・#34 の結果を計画の記録に書く",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "eb7a6147eee72a580d7606bc6a6ff712198d45f2"
     },
     {
       "id": "T9",
