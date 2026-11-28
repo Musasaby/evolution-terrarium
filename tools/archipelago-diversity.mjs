@@ -96,6 +96,7 @@ async function runChildMain() {
     hash: archipelagoHash(arch),
     migrated: arch.migrated,
     dropped: arch.dropped,
+    skipped: arch.skipped,
     rows,
   }));
 }
@@ -124,7 +125,7 @@ if (process.argv[2] === '--child') {
   if (results.length > 0) {
     for (const r of results) {
       const s = r.summary;
-      console.log(`seed ${r.seed}：ハッシュ ${r.hash}・移住 ${r.migrated}（捨て ${r.dropped}）・個体数 ${fmt1(s.pop)}・実効種数 ${fmt2(s.effSpecies)}・交配で束ねた実効種数 ${fmt2(s.effSpeciesFertile)}・${fmt2(s.msPerStep)} ms/ステップ`);
+      console.log(`seed ${r.seed}：ハッシュ ${r.hash}・移住 ${r.migrated}（捨て ${r.dropped}・少数で見送り ${r.skipped}）・個体数 ${fmt1(s.pop)}・実効種数 ${fmt2(s.effSpecies)}・交配で束ねた実効種数 ${fmt2(s.effSpeciesFertile)}・${fmt2(s.msPerStep)} ms/ステップ`);
     }
     const n = results.length;
     const avg = (fn) => results.reduce((a, r) => a + fn(r.summary), 0) / n;

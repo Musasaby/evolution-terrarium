@@ -26,7 +26,10 @@ export function createPort(post, listen) {
 // worker 側の共通の要求（run / emigrate / immigrate）。知らない type なら null を返す
 export function runIslandRequest(host, msg) {
   if (msg.type === 'run') { const t0 = performance.now(); host.run(msg.steps); return { computeMs: performance.now() - t0 }; }
-  if (msg.type === 'emigrate') return { migrants: host.emigrate(msg.k, msg.rngSeed) };
+  if (msg.type === 'emigrate') {
+    const migrants = host.emigrate(msg.k, msg.rngSeed);
+    return { migrants, skipped: host.lastSkipped };
+  }
   if (msg.type === 'immigrate') return host.immigrate(msg.migrants, msg.rngSeed);
   return null;
 }
@@ -37,7 +40,7 @@ export class ParallelArchipelago {
     this.ports = ports; this.seed = seed;
     this.settings = normalizeSettings(settings);
     this.specs = islandSpecs(seed, this.settings);
-    this.stepCount = 0; this.migrated = 0; this.dropped = 0;
+    this.stepCount = 0; this.migrated = 0; this.dropped = 0; this.skipped = 0;
     this.onMigrate = null;   // 移住のたびに呼ぶ関数（使う側が代入する）
     this.computeMs = this.specs.map(() => 0);   // 島ごとの run の計算時間の累計
   }
@@ -57,6 +60,7 @@ export class ParallelArchipelago {
   async migrate() {
     const n = this.ports.length, k = this.settings.migrants;
     const out = await Promise.all(this.ports.map((p, i) => p.ask('emigrate', { k, rngSeed: migrationSeed(this.seed, this.stepCount, i) })));
+    for (const o of out) this.skipped += o.skipped;
     const imm = await Promise.all(this.ports.map((p, i) => {
       const src = migrationSource(i, n);
       return p.ask('immigrate', { migrants: out[src].migrants, rngSeed: migrationSeed(this.seed, this.stepCount, src) });

@@ -13,6 +13,7 @@ export class Archipelago {
     this.stepCount = 0;
     this.migrated = 0;   // 移入できた個体の累計
     this.dropped = 0;    // 置き場所が見つからず捨てた個体の累計
+    this.skipped = 0;    // 少数の種を守るために移住を見送った個体の累計
     this.islands = islandSpecs(seed, this.settings).map((spec) => new IslandHost(RAPIER, spec, { profiler: opts.profiler }));
   }
   get sims() { return this.islands.map((isl) => isl.sim); }
@@ -25,6 +26,7 @@ export class Archipelago {
   migrate() {
     const n = this.islands.length, k = this.settings.migrants;
     const out = this.islands.map((isl, i) => isl.emigrate(k, migrationSeed(this.seed, this.stepCount, i)));
+    this.islands.forEach((isl) => { this.skipped += isl.lastSkipped; });
     this.islands.forEach((isl, i) => {
       const src = migrationSource(i, n);
       const r = isl.immigrate(out[src], migrationSeed(this.seed, this.stepCount, src));

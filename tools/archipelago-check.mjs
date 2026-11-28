@@ -42,7 +42,7 @@ if (workersFlag) {
     console.log(`seed ${seed} / ${steps} ステップ / 島 ${n}（一辺 ${side} m）/ 移住 ${arch.settings.migrateEvery} ステップごと ${arch.settings.migrants} 体（worker ${n} 個${jitter ? '・応答を揺らす' : ''}）`);
     console.log(`状態ハッシュ  ${combineIslandHashes(hs)}`);
     hs.forEach((h, i) => console.log(`  島 ${i}: ハッシュ ${h}`));
-    console.log(`移住 ${arch.migrated}（捨て ${arch.dropped}）`);
+    console.log(`移住 ${arch.migrated}（捨て ${arch.dropped}・少数で見送り ${arch.skipped}）`);
     const cpuMs = arch.computeMs.reduce((a, b) => a + b, 0);
     console.log(`1 ステップ平均 ${(wallMs / steps).toFixed(2)} ms（壁時間。CPU 合計 ${(cpuMs / steps).toFixed(2)} ms）`);
   } finally {
@@ -63,8 +63,11 @@ if (workersFlag) {
     const live = sim.creatures.filter(c => c.alive && !c.dead).length;
     console.log(`  島 ${i}: 生物 ${live} / 植物 ${sim.plants.length} / 種 ${sim.species.size} / ハッシュ ${stateHash(sim)}`);
   });
-  console.log(`移住 ${arch.migrated}（捨て ${arch.dropped}）`);
+  console.log(`移住 ${arch.migrated}（捨て ${arch.dropped}・少数で見送り ${arch.skipped}）`);
   const div = computeArchipelagoDiversity(arch.sims);
   console.log(`個体数 ${div.living}・実効種数 ${div.effSpecies.toFixed(2)}・交配で束ねた実効種数 ${div.effSpeciesFertile.toFixed(2)}（${div.species} 種 → ${div.speciesFertile} 種）`);
+  let goneButListed = 0;
+  for (const sim of arch.sims) for (const sp of sim.species.values()) if (sp.extinct === null && sp.count === 0) goneButListed++;
+  console.log(`現存なのに個体 0 の種 ${goneButListed}`);
   console.log(`1 ステップ平均 ${(runMs / steps).toFixed(2)} ms`);
 }
