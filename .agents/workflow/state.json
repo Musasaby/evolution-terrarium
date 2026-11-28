@@ -1,57 +1,260 @@
 {
-  "source": "https://github.com/Musasaby/evolution-terrarium/issues/28",
-  "branch": "develop/environment-ui-plan",
-  "group": "",
-  "updated_at": "2026-11-28T14:22:18+09:00",
+  "source": "docs/plans/environment-ui-plan.html",
+  "branch": "develop/environment-ui",
+  "group": "migrate",
+  "updated_at": "2026-11-28T15:32:26+09:00",
   "tasks": [
     {
       "id": "T1",
-      "title": "群島の多様性の集計を「1 島分の材料」と「束ねる計算」に分ける",
+      "title": "移住で選ぶ個体から、島での個体数が少ない種を外す",
       "status": "done",
       "retries": 0,
-      "commit": "2208f8201f7d955503756644dd5d12e005f176a0"
+      "commit": "dd5472d5db23e5c5286949ca372197c3c19f7bc9"
     },
     {
       "id": "T2",
-      "title": "移住の結果を知らせる onMigrate と、Worker の要求 summary・profile・frame の fresh を足す",
+      "title": "少数の種を守って見送った数を群島で数え、確認の道具に出す",
       "status": "done",
       "retries": 0,
-      "commit": "daf02e0eb8a62200e6c557e75d8eaf601e8ad954"
+      "commit": "054de5ab3c0ae7f7371813b590be1b8a35e95bf6"
     },
     {
       "id": "T3",
-      "title": "IslandRunner に見る島の切り替え・群島の集計・移住のログを足す",
+      "title": "移住を見送るしきい値を 4・6・8 で比べて決める",
       "status": "done",
       "retries": 0,
-      "commit": "41b7eb76c481fce2d89fae981715cd354c9044f9"
+      "commit": "93ec5f3"
     },
     {
       "id": "T4",
-      "title": "ヘッダーに見る島のセレクトボックスを足し、ストアに島の状態を置く",
-      "status": "done",
+      "title": "水・標高・移動の速さ・体節数を測る道具 environment-check を足す",
+      "status": "pending",
       "retries": 0,
-      "commit": "daea8c9953b732f77e8d081d58655a5f13143428"
+      "commit": null
     },
     {
       "id": "T5",
-      "title": "見る島の切り替えを配線し、カメラを保って描き直す",
-      "status": "done",
+      "title": "水面より下の体節に浮力をかける",
+      "status": "pending",
       "retries": 0,
-      "commit": "14db4a35233c27ece9714719b8cd613a8488b735"
+      "commit": null
     },
     {
       "id": "T6",
-      "title": "統計タブの先頭に群島の表と全体の実効種数を出す",
-      "status": "done",
+      "title": "湖を遠浅にして、底を浅くする",
+      "status": "pending",
       "retries": 0,
-      "commit": "aeec4b995848e4af3fede43d4eec56cb498969ea"
+      "commit": null
     },
     {
       "id": "T7",
-      "title": "ARCHITECTURE.md に見る島の切り替えと群島の集計を書く",
-      "status": "done",
+      "title": "浮力と湖の形を計測して調整する",
+      "status": "pending",
       "retries": 0,
-      "commit": "050337abcaeeab301a09fe437770977728aba062"
+      "commit": null
+    },
+    {
+      "id": "T8",
+      "title": "#39・#34 の結果を計画の記録に書く",
+      "status": "pending",
+      "retries": 0,
+      "commit": null
+    },
+    {
+      "id": "T9",
+      "title": "高山草を足し、地面の摩擦を上げる",
+      "status": "pending",
+      "retries": 0,
+      "commit": null
+    },
+    {
+      "id": "T10",
+      "title": "高山草の形と色を描く",
+      "status": "pending",
+      "retries": 0,
+      "commit": null
+    },
+    {
+      "id": "T11",
+      "title": "祖先の試走に坂と浅瀬を入れる",
+      "status": "pending",
+      "retries": 0,
+      "commit": null
+    },
+    {
+      "id": "T12",
+      "title": "同種が密集しているほど、遠くへ動くようにする",
+      "status": "pending",
+      "retries": 0,
+      "commit": null
+    },
+    {
+      "id": "T13",
+      "title": "山と移動を計測して調整する",
+      "status": "pending",
+      "retries": 0,
+      "commit": null
+    },
+    {
+      "id": "T14",
+      "title": "#35 の結果を計画の記録に書く",
+      "status": "pending",
+      "retries": 0,
+      "commit": null
+    },
+    {
+      "id": "T15",
+      "title": "水面に浮かぶ草「浮草」を足す",
+      "status": "pending",
+      "retries": 0,
+      "commit": null
+    },
+    {
+      "id": "T16",
+      "title": "水棲度の高い個体ほど浮草から多く得る。水棲度のばらつきを集計する",
+      "status": "pending",
+      "retries": 0,
+      "commit": null
+    },
+    {
+      "id": "T17",
+      "title": "浮草の形と色を描く",
+      "status": "pending",
+      "retries": 0,
+      "commit": null
+    },
+    {
+      "id": "T18",
+      "title": "湖の植物を計測して調整する",
+      "status": "pending",
+      "retries": 0,
+      "commit": null
+    },
+    {
+      "id": "T19",
+      "title": "#12 の結果を計画の記録に書く",
+      "status": "pending",
+      "retries": 0,
+      "commit": null
+    },
+    {
+      "id": "T20",
+      "title": "水の抵抗を体節の向きで変える",
+      "status": "pending",
+      "retries": 0,
+      "commit": null
+    },
+    {
+      "id": "T21",
+      "title": "体節を増やしたときの人為的な不利を減らす",
+      "status": "pending",
+      "retries": 0,
+      "commit": null
+    },
+    {
+      "id": "T22",
+      "title": "3 年動かして体節数の分布を確かめ、調整する",
+      "status": "pending",
+      "retries": 0,
+      "commit": null
+    },
+    {
+      "id": "T23",
+      "title": "#38 の結果を計画の記録に書く",
+      "status": "pending",
+      "retries": 0,
+      "commit": null
+    },
+    {
+      "id": "T24",
+      "title": "SVG のアイコンを作る",
+      "status": "pending",
+      "retries": 0,
+      "commit": null
+    },
+    {
+      "id": "T25",
+      "title": "食性・適温・水棲度の帯を共通の部品にする",
+      "status": "pending",
+      "retries": 0,
+      "commit": null
+    },
+    {
+      "id": "T26",
+      "title": "グラフの表示範囲を切り替え、長い期間は振れ幅の帯で描く",
+      "status": "pending",
+      "retries": 0,
+      "commit": null
+    },
+    {
+      "id": "T27",
+      "title": "種ごとの個体数の推移を記録し、体の静止姿勢を求める関数を切り出す",
+      "status": "pending",
+      "retries": 0,
+      "commit": null
+    },
+    {
+      "id": "T28",
+      "title": "選んだ種の詳しい情報を Worker から写しへ届ける",
+      "status": "pending",
+      "retries": 0,
+      "commit": null
+    },
+    {
+      "id": "T29",
+      "title": "系統樹で選んだ種をストアに置き、要求に載せる",
+      "status": "pending",
+      "retries": 0,
+      "commit": null
+    },
+    {
+      "id": "T30",
+      "title": "系統樹に絞り込み・表示範囲・太さ・選択を入れる",
+      "status": "pending",
+      "retries": 0,
+      "commit": null
+    },
+    {
+      "id": "T31",
+      "title": "系統樹の下に、選んだ種のカードを出す",
+      "status": "pending",
+      "retries": 0,
+      "commit": null
+    },
+    {
+      "id": "T32",
+      "title": "ヘッダーの年・季節・気温・湖面・天候を図で見せる",
+      "status": "pending",
+      "retries": 0,
+      "commit": null
+    },
+    {
+      "id": "T33",
+      "title": "ヘッダーのボタンをアイコンにする",
+      "status": "pending",
+      "retries": 0,
+      "commit": null
+    },
+    {
+      "id": "T34",
+      "title": "統計タブの先頭に「見ている島」と「群島全体」の数値カードを置く",
+      "status": "pending",
+      "retries": 0,
+      "commit": null
+    },
+    {
+      "id": "T35",
+      "title": "統計タブの「最大の種・疫病」と「繁殖」を数値のタイルにする",
+      "status": "pending",
+      "retries": 0,
+      "commit": null
+    },
+    {
+      "id": "T36",
+      "title": "UI の新しい部品と、種の詳しい情報の流れを ARCHITECTURE.md に書く",
+      "status": "pending",
+      "retries": 0,
+      "commit": null
     }
   ]
 }
