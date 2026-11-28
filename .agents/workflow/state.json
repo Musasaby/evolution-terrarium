@@ -2,12 +2,12 @@
   "source": "https://github.com/Musasaby/evolution-terrarium/issues/28",
   "branch": "develop/archipelago-view",
   "group": "",
-  "updated_at": "2026-11-28T11:49:20+09:00",
+  "updated_at": "2026-11-28T12:22:38+09:00",
   "tasks": [
     {
       "id": "T1",
       "title": "群島の多様性の集計を「1 島分の材料」と「束ねる計算」に分ける",
-      "status": "pending",
+      "status": "in_progress",
       "retries": 0,
       "commit": null
     },
@@ -28,9 +28,9 @@
     {
       "id": "T4",
       "title": "ヘッダーに見る島のセレクトボックスを足し、ストアに島の状態を置く",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "daea8c9953b732f77e8d081d58655a5f13143428"
     },
     {
       "id": "T5",
