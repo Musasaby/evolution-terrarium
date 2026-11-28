@@ -2,7 +2,7 @@
   "source": "docs/plans/environment-ui-plan.html",
   "branch": "develop/environment-ui-lake",
   "group": "lake",
-  "updated_at": "2026-11-28T16:27:22+09:00",
+  "updated_at": "2026-11-28T16:33:15+09:00",
   "tasks": [
     {
       "id": "T1",
@@ -42,9 +42,9 @@
     {
       "id": "T6",
       "title": "湖を遠浅にして、底を浅くする",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "5809d00633ea4c4c954fdf759a7b1b679a172530"
     },
     {
       "id": "T7",
