@@ -10,6 +10,7 @@ import { think } from './brain.js';
 import { speciesName } from './naming.js';
 import { PLANT_CELL } from './flora.js';
 import { evolvedFounder } from './founder.js';
+import { applyWater } from './water.js';
 
 // 生物の空間グリッド（8m 四方）のキー
 const CREATURE_CELL = 8;
@@ -38,6 +39,7 @@ export function spawnCreature(sim, genome, x, z, opts = {}) {
   const yaw = opts.yaw ?? sim.rng() * Math.PI * 2;
   const body = buildBody(sim.R, sim.world, genome, x, z, (a, b) => sim.heightAt(a, b), yaw, opts.lift || 0, c.id);
   Object.assign(c, body);
+  c.masses = body.bodies.map((b) => b.mass());
   readPose(c);
   body.cols.forEach((col, i) => sim.colliderOwner.set(col.handle, { kind: 'c', obj: c, part: i }));
   if (c.species) { c.species.count++; c.species.total++; c.species.peak = Math.max(c.species.peak, c.species.count); }
@@ -216,7 +218,7 @@ export function updateCreatures(sim, dt) {
     // 水棲適応 aqua：浸かった部分の水中の費用と減衰が下がり（最大 AQUA_WATER_CUT 減）、
     // 陸に上がっている部分では基礎代謝が増える
     let wet = 0, sub = 0;
-    for (const P of c.pos) if (P.y < wl) sub++;
+    sub = applyWater(c, wl, dt);
     const wetK = 1 - CFG.AQUA_WATER_CUT * c.aqua;
     if (sub) {
       wet = (CFG.WATER_COST + CFG.WATER_COST_VOL * c.vol) * sub / c.bodies.length * wetK;
