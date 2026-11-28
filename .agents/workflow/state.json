@@ -2,7 +2,7 @@
   "source": "https://github.com/Musasaby/evolution-terrarium/issues/28",
   "branch": "develop/archipelago-view",
   "group": "",
-  "updated_at": "2026-11-28T12:24:43+09:00",
+  "updated_at": "2026-11-28T12:28:13+09:00",
   "tasks": [
     {
       "id": "T1",
@@ -14,9 +14,9 @@
     {
       "id": "T2",
       "title": "移住の結果を知らせる onMigrate と、Worker の要求 summary・profile・frame の fresh を足す",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "daf02e0eb8a62200e6c557e75d8eaf601e8ad954"
     },
     {
       "id": "T3",
