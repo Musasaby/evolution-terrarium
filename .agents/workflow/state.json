@@ -2,7 +2,7 @@
   "source": "https://github.com/Musasaby/evolution-terrarium/issues/28",
   "branch": "develop/archipelago-view",
   "group": "",
-  "updated_at": "2026-11-28T12:28:13+09:00",
+  "updated_at": "2026-11-28T12:32:32+09:00",
   "tasks": [
     {
       "id": "T1",
@@ -21,9 +21,9 @@
     {
       "id": "T3",
       "title": "IslandRunner に見る島の切り替え・群島の集計・移住のログを足す",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "41b7eb76c481fce2d89fae981715cd354c9044f9"
     },
     {
       "id": "T4",
