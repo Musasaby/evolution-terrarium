@@ -90,11 +90,17 @@ export function kill(sim, c, cause) {
   const sp = c.species;
   if (sp) {
     sp.count--;
-    if (sp.count <= 0 && !sim.creatures.some(o => o.alive && !o.dead && o.species === sp)) {
-      sp.extinct = sim.t;
-      sim.log(`種「${sp.name}」が絶滅した`, 'extinct');
-    }
+    markGoneIfEmpty(sim, sp, (s) => `種「${s.name}」が絶滅した`);
   }
+}
+
+// 種の生きている個体が 0 になっていたら、いなくなった時刻を記録してログを出す。記録したら true
+export function markGoneIfEmpty(sim, sp, message) {
+  if (!sp || sp.extinct !== null || sp.count > 0) return false;
+  if (sim.creatures.some(o => o.alive && !o.dead && o.species === sp)) return false;
+  sp.extinct = sim.t;
+  sim.log(message(sp), 'extinct');
+  return true;
 }
 
 export function removeCreature(sim, c) {

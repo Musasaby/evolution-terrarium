@@ -2,8 +2,9 @@
 import { Sim } from './sim.js';
 import { makeRng } from './random.js';
 import { cloneGenome } from './genetics.js';
-import { spawnCreature, newSpecies, removeCreature, isLiving } from './creatures.js';
+import { spawnCreature, newSpecies, removeCreature, isLiving, markGoneIfEmpty } from './creatures.js';
 import { normalizeSettings } from './world-settings.js';
+import { CFG } from './config.js';
 
 // 島ごとの { index, seed, settings }。島が 1 つなら今までの単一世界と同じ（シードと size をそのまま使う）
 export function islandSpecs(seed, settings) {
@@ -31,24 +32,30 @@ export class IslandHost {
     this.index = spec.index;
     this.sim = new Sim(RAPIER, spec.seed, { settings: spec.settings, profiler: opts.profiler });
     this.originKey = new Map();
+    this.lastSkipped = 0;
   }
   run(steps) { for (let i = 0; i < steps; i++) this.sim.step(); }
   // 島をまたいで同じ系統かを見分けるキー。移住で生まれた種は出身の種のキーを受け継ぐ
   speciesKey(sp) { return this.originKey.get(sp.id) ?? `${this.index}:${sp.id}`; }
   // 島から k 体を選んで移出する。戻り値は移民の配列（{ genome, energyFrac, origin }）
   emigrate(k, rngSeed) {
-    const sim = this.sim;
-    const rng = makeRng(rngSeed);
+    const sim = this.sim, rng = makeRng(rngSeed), min = CFG.MIGRATE_MIN_SPECIES;
     const live = sim.creatures.filter(isLiving).sort((a, b) => a.id - b.id);
     const n = live.length;
+    const left = new Map();   // 種 → その島に残る数
+    for (const c of live) left.set(c.species, (left.get(c.species) || 0) + 1);
     const order = Array.from({ length: n }, (_, i) => i);
     const chosen = [];
-    const take = Math.min(k, n);
-    for (let i = 0; i < take; i++) {
+    let skipped = 0;          // 少数の種を守るために飛ばした個体の数
+    for (let i = 0; i < n && chosen.length < k; i++) {
       const j = i + Math.floor(rng() * (n - i));
       [order[i], order[j]] = [order[j], order[i]];
-      chosen.push(live[order[i]]);
+      const c = live[order[i]], m = left.get(c.species);
+      if (m < min) { skipped++; continue; }
+      left.set(c.species, m - 1);
+      chosen.push(c);
     }
+    this.lastSkipped = skipped;
     const migrants = chosen.map((c) => ({
       genome: cloneGenome(c.genome),
       energyFrac: c.maxE > 0 ? c.energy / c.maxE : 0,
@@ -58,6 +65,7 @@ export class IslandHost {
       if (c.species) c.species.count--;
       removeCreature(sim, c);
     }
+    for (const sp of new Set(chosen.map((c) => c.species))) markGoneIfEmpty(sim, sp, (s) => `種「${s.name}」はすべて移住して島からいなくなった`);
     return migrants;
   }
   // 島へ移民を受け入れる。戻り値は { placed, dropped }
