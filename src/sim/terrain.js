@@ -6,6 +6,22 @@ import { DEFAULT_SETTINGS, worldGeometry } from './world-settings.js';
 
 const BASE_WATER = 1.2;  // 初期の湖面（climate.js の baseWater と同じ値）
 
+const SHORE = 1.10;    // 水際（u = 距離 / radius）。今の深い窪みで実際に水際になっていた位置にほぼ合わせる（面積を保つ）
+const RIM = 1.75;     // 水際の外で、元の地面の高さに戻りきる位置
+// 湖 1 つ分の窪みを当てた高さ。h: それまでの高さ / u: 湖の中心からの距離 ÷ radius
+function lakeHeight(h, u) {
+  if (u < SHORE) {
+    const x = u / SHORE;
+    const bed = BASE_WATER - CFG.LAKE_DEPTH * (1 - x * x) ** 2;   // 水際で傾き 0、中央で深さ LAKE_DEPTH
+    return Math.min(h, bed);
+  }
+  if (u < RIM && h > BASE_WATER) {
+    const t = (u - SHORE) / (RIM - SHORE), s = t * t * (3 - 2 * t);   // smoothstep
+    return Math.min(h, BASE_WATER + (h - BASE_WATER) * s);
+  }
+  return h;
+}
+
 export class Terrain {
   constructor(rng, noise, settings = DEFAULT_SETTINGS) {
     this.rng = rng;
@@ -48,7 +64,7 @@ export class Terrain {
         radius: rng.range(18, 30),
       });
     }
-    // 湖（既定は 1〜3 個）：標高の低い平地に置き、底の平らな甕状の深い窪みで必要な面積を保証する
+    // 湖（既定は 1〜3 個）：標高の低い平地に置き、水際で傾きが 0 になる遠浅の窪みにする
     this.lakes = [];
     const nlRand = 1 + Math.floor(rng() * 3);
     const nl = cfg.lakeCount ?? nlRand;
@@ -70,25 +86,17 @@ export class Terrain {
         if (base < bb) { bb = base; bx = x; bz = z; }
       }
       if (!isFinite(bb)) { bb = fb; bx = fx; bz = fz; }
-      // 底の深さは湖の縁の最高地点より十分深くして、斜面でも面積を保つ
-      let rimMax = bb;
       const water = (lakeFrac / nl) * S * S * rng.range(0.9, 1.1);
       const radius = Math.sqrt(water / Math.PI) / 0.85;
-      for (let pv = 0; pv < 8; pv++) {
-        const a = (pv / 8) * Math.PI * 2;
-        rimMax = Math.max(rimMax, this.baseHeight(bx + radius * 0.8 * Math.cos(a), bz + radius * 0.8 * Math.sin(a), nz));
-      }
-      // 縁の高さが湖面（BASE_WATER）を下回る地点があると深さが負になるため、正の下限を設ける
-      const depth = Math.max(rimMax - BASE_WATER, 2) * rng.range(2.2, 3.0);
-      this.lakes.push({ x: bx, z: bz, depth, radius });
+      rng.range(2.2, 3.0);   // かつて深さの倍率に使っていた乱数（消費順を保つため呼ぶだけ）
+      this.lakes.push({ x: bx, z: bz, depth: CFG.LAKE_DEPTH, radius });
     }
     for (let i = 0; i <= N; i++) for (let j = 0; j <= N; j++) {
       const x = -S / 2 + i * S / N, z = -S / 2 + j * S / N;
-      // 基本土高（山・ノイズ・端の盛り上がり）から湖の窪みを引く。式は baseHeight にまとめる
+      // 基本土高（山・ノイズ・端の盛り上がり）から湖の遠浅の窪みを当てる
       let h = this.baseHeight(x, z, nz);
       for (const lk of this.lakes) {
-        const dl = Math.hypot(x - lk.x, z - lk.z);
-        h -= lk.depth * Math.exp(-(dl * dl * dl) / (lk.radius * lk.radius * lk.radius));
+        h = lakeHeight(h, Math.hypot(x - lk.x, z - lk.z) / lk.radius);
       }
       this.H[i * W + j] = h;
     }
