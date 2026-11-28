@@ -2,7 +2,7 @@
   "source": "docs/plans/environment-ui-plan.html",
   "branch": "develop/environment-ui-lake",
   "group": "lake",
-  "updated_at": "2026-11-28T16:18:10+09:00",
+  "updated_at": "2026-11-28T16:27:22+09:00",
   "tasks": [
     {
       "id": "T1",
@@ -35,9 +35,9 @@
     {
       "id": "T5",
       "title": "水面より下の体節に浮力をかける",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "0757274e9bc489f7b8eee833b60d9f0376551d42"
     },
     {
       "id": "T6",
