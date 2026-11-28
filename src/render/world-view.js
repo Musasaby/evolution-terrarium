@@ -17,7 +17,7 @@ export class WorldView {
     this.canvas = this.stage.renderer.domElement;
   }
 
-  attach(sim) {
+  attach(sim, { keepCamera = false } = {}) {
     this.sim = sim;
     this.terrain.attach(sim);
     this.env.attach(sim);
@@ -25,7 +25,7 @@ export class WorldView {
     this.plants.attach(sim);
     this.plants.rebuild();
     this.env.update(0);
-    this.stage.resetCamera(sim.size);
+    if (!keepCamera) this.stage.resetCamera(sim.size);
   }
 
   // シーンの中身を sim に合わせて更新する（描画そのものは render()）

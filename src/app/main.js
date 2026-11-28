@@ -82,6 +82,25 @@ store.subscribe((s, prev) => {
 });
 store.subscribe((s, prev) => { if (s.speed !== prev.speed) islands?.reset(); });
 
+// ---------- 見る島の切り替え ----------
+// 写しを作り直して描画とパネルをつなぎ直す。カメラは保ち、別の島の個体の選択と追跡は解除する
+let switching = Promise.resolve();
+store.subscribe((s, prev) => {
+  if (s.island !== prev.island && s.sim) switching = switching.then(() => switchIsland(s.island)).catch((err) => console.error(err));
+});
+async function switchIsland(i) {
+  const runner = islands;
+  if (!runner || runner.view === i) return;
+  store.set({ selected: null, follow: false });
+  const sim = await runner.setView(i);
+  if (runner !== islands) return;   // 待っている間に新しい世界になった
+  window.__sim = sim; // デバッグ用
+  view.attach(sim, { keepCamera: true });
+  panels.attach(sim);
+  store.set({ sim });
+  refreshUI();
+}
+
 // ---------- クリックで生物を選ぶ ----------
 let downAt = null;
 view.canvas.addEventListener('pointerdown', (e) => { downAt = [e.clientX, e.clientY]; });
@@ -96,6 +115,7 @@ let uiTimer = 0;
 function refreshUI() {
   const { sim } = store.get(); if (!sim) return;
   updateHeader(sim);
+  if (islands) store.set({ archipelago: islands.summary });
   panels.renderActive();
 }
 new GameLoop(perf)
@@ -145,7 +165,7 @@ async function start(seed, settings) {
   $('loading-msg').textContent = '島をつくり、最初の生物を試走させています…';
   await nextFrame();
   // 古い世界を止めてから解放する（ループが解放済みの世界を触らないように）
-  store.set({ sim: null, selected: null, follow: false });
+  store.set({ sim: null, selected: null, follow: false, island: 0, archipelago: null });
   islands?.dispose();
   islands = null;
   islands = await IslandRunner.create(seed, settings);
@@ -156,7 +176,7 @@ async function start(seed, settings) {
   view.attach(sim);
   panels.attach(sim);
   showWorldInfo(world);
-  store.set({ sim, world });
+  store.set({ sim, world, islandCount: islands.settings.islands, archipelago: islands.summary });
   $('loading').hidden = true;
   refreshUI();
   if (!hintTimer) hintTimer = setTimeout(() => $('hint').classList.add('gone'), HINT_MS); // 操作ヒントは最初の世界でだけ見せる
