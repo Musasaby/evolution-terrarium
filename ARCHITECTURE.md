@@ -30,7 +30,7 @@ app/main.js ──▶ render/ ──┐
 ```
 
 - 外から sim を使うときは **`src/sim/index.js` からだけ** import します。sim 内部のファイル構成を変えても外側は影響を受けません。
-- 部品どうしは直接呼び合わず、`app/store.js` の状態（`sim` `speed` `selected` `follow` `tab` `perfOpen`）を読み書き・購読します。たとえば 3D 画面で生物をクリックすると `store.set({ selected, tab: 'p-ind' })` するだけで、パネルの切り替えや再描画は購読側が行います。
+- 部品どうしは直接呼び合わず、`app/store.js` の状態（`sim` `speed` `selected` `follow` `tab` `perfOpen` `island` `islandCount` `archipelago`）を読み書き・購読します。たとえば 3D 画面で生物をクリックすると `store.set({ selected, tab: 'p-ind' })` するだけで、パネルの切り替えや再描画は購読側が行います。
 
 ## sim/ の中身
 
@@ -51,7 +51,7 @@ app/main.js ──▶ render/ ──┐
 | `speciation.js` | 生物学的種概念による種分化 | 同上 |
 | `founder.js` | 祖先の事前進化（別の小さな物理世界で試走） | 同上 |
 | `stats.js` | グラフ用の時系列 | 同上 |
-| `diversity.js` | `computeDiversity`：多様性指標（純粋関数。sim を読むだけ）。`computeArchipelagoDiversity`：群島全体の多様性 | creatures, speciation |
+| `diversity.js` | `computeDiversity`：多様性指標（純粋関数。sim を読むだけ）。`islandDiversityGroups`（1 島分の材料）と `combineArchipelagoDiversity`（材料を束ねる）・`computeArchipelagoDiversity`：群島全体の多様性 | creatures, speciation |
 | `profiler.js` | 処理区間の時間計測（使わないときは何もしない） | なし |
 | `sim.js` | `Sim`：部品の組み立てと `step()` の手順 | すべて |
 | `archipelago.js` | `Archipelago`：島 = `Sim` を並べ、`migrateEvery` ステップごとに移住する | sim, creatures, world-settings |
@@ -88,8 +88,10 @@ app/main.js ──▶ render/ ──┐
 - **進め方**: `step()` は島番号の順に各 `Sim.step()` を呼び、`stepCount` を 1 進めます。島が 2 つ以上で `migrateEvery > 0` かつ `migrants > 0` のとき、`stepCount` が `migrateEvery` の倍数になるたびに移住します。
 - **移住の順序と乱数**: 乱数の種は `seed * 1e6 + stepCount`。まず全島から島番号の順に `migrants` 体を選んで移出し（島 i の種は `base + i`。生きている個体を id の小さい順に並べ、Fisher-Yates で選ぶ）、そのあと島番号の順に移入します。島 i は島 `(i - 1 + n) % n` から受け取り（種は `base + src`）、陸地を最大 20 回試して置き場所を探します。見つからなければ捨てます（`dropped`）。受け入れ先は交配可能な種のうち個体数が最も多いもの。なければ新しい種を作り、移住で生まれた種は出身の種のキー（`originKey`）を引き継ぎます。
 - **集計**: `computeArchipelagoDiversity(sims)` は島ごと・種ごとに代表ゲノムを最大 3 つ取り、別の島の種どうしで `interfertile` な組があれば union-find で同じ種に束ねます（同じ島どうしは束ねません）。`effSpecies` は「島番号:種 id」を別の種として数えた実効種数、`effSpeciesFertile` は交配可能性で束ねたあとの実効種数です。
-- **画面**: ブラウザは島ごとに Web Worker（`app/island-worker.js`）を持ち、`app/island-runner.js` の `IslandRunner` が全島をそろえて進めます。見ている島（いまは島 0）の Worker だけが姿勢（毎フレーム）とパネル用の中身（250 ms ごと）を送ります。
-- **写し**: 送られた中身は主スレッドの `app/sim-mirror.js` の `SimMirror` が受け、描画・パネルは `Sim` の代わりにこの写しを読みます。中身を詰めるのは `app/island-snapshot.js` です。見る島の切り替えは #28 で行います。
+- **画面**: ブラウザは島ごとに Web Worker（`app/island-worker.js`）を持ち、`app/island-runner.js` の `IslandRunner` が全島をそろえて進めます。見る島はヘッダーのセレクトボックスで選びます（島が 1 つなら出しません）。見ている島の Worker だけが姿勢（毎フレーム）とパネル用の中身（250 ms ごと）を送ります。切り替えは `IslandRunner#setView` が写しを作り直し、新しい島の Worker に `frame` の `fresh` ですべて送り直させ、前の島の Worker に `profile` で区間計測を止めさせます。カメラは保ち、選択と追跡は解除します。
+- **群島の集計**: 2 秒ごとに全島へ `summary` を送り、主スレッドで `combineArchipelagoDiversity` を使って束ね、統計タブの「群島」の節に出す。
+- **移住のログ**: 移住のたびに `ParallelArchipelago#onMigrate` から `IslandRunner` が各島の記録に 1 行書きます（`kind` は `migrate`）。
+- **写し**: 送られた中身は主スレッドの `app/sim-mirror.js` の `SimMirror` が受け、描画・パネルは `Sim` の代わりにこの写しを読みます。中身を詰めるのは `app/island-snapshot.js` です。
 
 ### 生態のニッチ形質
 
@@ -173,6 +175,7 @@ npm run check:archipelago     # 群島を 600 ステップ進めて状態ハッ�
 npm run check:archipelago-diversity # 群島の多様性を 27000 ステップ・シード 1,2,3 で測る
 node tools/archipelago-check.mjs 3000 1 --workers [--jitter] # worker_threads で並行に動かす（1 スレッドと同じハッシュになること）
 node tools/mirror-check.mjs   # 写しが Sim と同じ値を持つか（最後の行が「すべて OK」）
+node tools/island-runner-check.mjs   # IslandRunner の進め方・島の切り替え・群島の集計・移住のログ（最後の行が「すべて OK」）
 node tools/sim-check.mjs 600 1 --settings terrain:mountain # 世界の設定を指定
 ```
 

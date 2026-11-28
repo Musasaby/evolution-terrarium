@@ -26,6 +26,10 @@ export function createStore(initial) {
 //   perfOpen  … パフォーマンス表示を出すか
 //   panelOpen … 右パネルを開いているか（ページ再読み込み後も controls.js が保つ）
 //   world     … 実行中の世界の { seed, settings, label }（タイトル画面で決めたもの）
+//   island    … 見ている島の番号（0 始まり）
+//   islandCount … 実行中の世界の島の数
+//   archipelago … 群島の集計（IslandRunner#summary。島が 1 つなら null）
 export const appStore = createStore({
   world: null, sim: null, speed: 1, selected: null, follow: false, tab: 'p-stats', perfOpen: false, panelOpen: true,
+  island: 0, islandCount: 1, archipelago: null,
 });

@@ -38,6 +38,7 @@ export class ParallelArchipelago {
     this.settings = normalizeSettings(settings);
     this.specs = islandSpecs(seed, this.settings);
     this.stepCount = 0; this.migrated = 0; this.dropped = 0;
+    this.onMigrate = null;   // 移住のたびに呼ぶ関数（使う側が代入する）
     this.computeMs = this.specs.map(() => 0);   // 島ごとの run の計算時間の累計
   }
   // 各 worker に島を作らせる。戻り値は島ごとの init の返信
@@ -61,5 +62,11 @@ export class ParallelArchipelago {
       return p.ask('immigrate', { migrants: out[src].migrants, rngSeed: migrationSeed(this.seed, this.stepCount, src) });
     }));
     for (const r of imm) { this.migrated += r.placed; this.dropped += r.dropped; }
+    // 島 i の行き来: from から sent 体が送られ、placed 体が降り立ち、dropped 体は陸地が無く消えた
+    const moves = imm.map((r, i) => {
+      const from = migrationSource(i, n);
+      return { to: i, from, sent: out[from].migrants.length, placed: r.placed, dropped: r.dropped };
+    });
+    this.onMigrate?.(moves, this.stepCount);
   }
 }

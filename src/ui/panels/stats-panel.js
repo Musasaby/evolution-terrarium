@@ -9,7 +9,8 @@ export class StatsPanel {
 
   reset() { $('plantbar').innerHTML = ''; $('plantlegend').innerHTML = ''; }
 
-  render(sim) {
+  render(sim, state) {
+    this.renderArchipelago(state.archipelago, state.island);
     const COL = this.colors, st = sim.stats;
     lineChart($('c-pop'), st, [{ get: p => p.pop, color: COL.accent, min: 0 }, { get: p => p.species, color: COL.water, min: 0 }, { get: p => p.effSpecies ?? 0, color: COL.leaf, min: 0, like: 1 }], COL);
     this.renderTopline(sim);
@@ -25,6 +26,20 @@ export class StatsPanel {
       ['種分化', splits],
     ]);
     this.renderVegetation(st[st.length - 1]);
+  }
+
+  // 群島の表（島が 1 つなら集計が null なので隠す）。view: 見ている島の番号。その行に cur を付ける
+  renderArchipelago(a, view) {
+    $('arch-box').hidden = !a;
+    if (!a) return;
+    const td = (v) => Object.assign(document.createElement('td'), { textContent: String(v) });
+    $('arch-table').tBodies[0].replaceChildren(...a.islands.map((r) => {
+      const tr = document.createElement('tr');
+      if (r.index === view) tr.className = 'cur';
+      tr.append(td(`島 ${r.index + 1}`), td(r.living), td(r.species));
+      return tr;
+    }));
+    $('arch-note').textContent = `全体 ${a.living} 体・${a.species} 種（交配で束ねると ${a.speciesFertile} 種）　実効種数 ${a.effSpecies.toFixed(1)}（交配で束ねると ${a.effSpeciesFertile.toFixed(1)}）　移住 ${a.migrated} 体（降り立てず ${a.dropped} 体）`;
   }
 
   renderTopline(sim) {
