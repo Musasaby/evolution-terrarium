@@ -12,6 +12,8 @@ node_modules/
 .agents/workflow/archive/
 # Claude Code 本体のランタイムファイル(コミット対象外)
 .agents/scheduled_tasks.lock
+# Claude デスクトップアプリのプレビュー設定(環境ごとに作られる。コミットしない)
+.agents/launch.json
 
 # yomiyasu(日本語の推敲)の検査記録
 .yomiyasu/
