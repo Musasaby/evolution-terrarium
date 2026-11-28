@@ -2,7 +2,7 @@
   "source": "docs/plans/environment-ui-plan.html",
   "branch": "develop/environment-ui",
   "group": "migrate",
-  "updated_at": "2026-11-28T15:06:07+09:00",
+  "updated_at": "2026-11-28T15:15:27+09:00",
   "tasks": [
     {
       "id": "T1",
@@ -14,9 +14,9 @@
     {
       "id": "T2",
       "title": "少数の種を守って見送った数を群島で数え、確認の道具に出す",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "054de5ab3c0ae7f7371813b590be1b8a35e95bf6"
     },
     {
       "id": "T3",
