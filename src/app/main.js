@@ -6,10 +6,9 @@
 //   ui/       パネル・ヘッダー・操作（ストアを読み書きする）
 //   perf/     パフォーマンス計測と表示
 //   app/      ストア・ループ・この配線
-import RAPIER from 'rapier';
-import { Sim, SectionProfiler, NULL_PROFILER } from '../sim/index.js';
 import { appStore as store } from './store.js';
-import { SimRunner, SPEED_MAX } from './sim-runner.js';
+import { IslandRunner } from './island-runner.js';
+import { SPEED_MAX } from './sim-runner.js';
 import { GameLoop } from './game-loop.js';
 import { WorldView } from '../render/world-view.js';
 import { PerfMonitor } from '../perf/perf-monitor.js';
@@ -39,8 +38,7 @@ const pref = {
 
 const COL = themeColors();
 const view = new WorldView($('view'), { markerColor: COL.accent });
-const runner = new SimRunner();
-const simProfiler = new SectionProfiler();
+let islands = null;
 const perf = new PerfMonitor({ interval: 500 });
 const overlay = new PerfOverlay($('perf'), perf, {
   speedMax: SPEED_MAX,
@@ -63,7 +61,7 @@ bindControls(store, {
 const MB = 1024 * 1024;
 perf
   .addSource('speed', () => store.get().speed)
-  .addSource('simSections', () => simProfiler.take())
+  .addSource('simSections', () => store.get().sim?.takeSections() ?? null)
   .addSource('render', () => view.renderInfo())
   .addSource('world', () => {
     const sim = store.get().sim; if (!sim) return null;
@@ -73,17 +71,16 @@ perf
   })
   .addSource('memory', () => performance.memory ? { used: performance.memory.usedJSHeapSize / MB, limit: performance.memory.jsHeapSizeLimit / MB } : null);
 
-// 表示しているときだけシミュレーション内部の区間計測を有効にする
-function applyPerfVisibility({ perfOpen, sim }) {
+// 表示しているときだけシミュレーション内部の区間計測を有効にする（切り替えは worker への profile で行う）
+function applyPerfVisibility({ perfOpen }) {
   overlay.setVisible(perfOpen);
-  if (sim) sim.profiler = perfOpen ? simProfiler : NULL_PROFILER;
 }
 if (pref.get(PERF_PREF_KEY) !== null) store.set({ perfOpen: pref.get(PERF_PREF_KEY) === '1' });
 store.subscribe((s, prev) => {
   if (s.perfOpen !== prev.perfOpen) pref.set(PERF_PREF_KEY, s.perfOpen ? '1' : '0'); // 利用者が切り替えたときだけ保存する
   if (s.perfOpen !== prev.perfOpen || s.sim !== prev.sim) applyPerfVisibility(s);
 });
-store.subscribe((s, prev) => { if (s.speed !== prev.speed) runner.reset(); });
+store.subscribe((s, prev) => { if (s.speed !== prev.speed) islands?.reset(); });
 
 // ---------- クリックで生物を選ぶ ----------
 let downAt = null;
@@ -103,9 +100,10 @@ function refreshUI() {
 }
 new GameLoop(perf)
   .add('シム', (dtr) => {
-    const { sim, speed } = store.get(); if (!sim) return;
-    const r = runner.advance(sim, dtr, speed);
-    perf.add('steps', r.steps); perf.add('simSeconds', r.simSeconds); perf.add('dropped', r.dropped);
+    if (!islands || !store.get().sim) return;
+    const { speed } = store.get();
+    const r = islands.advance(dtr, speed, { selectedId: store.get().selected?.id ?? null, profile: store.get().perfOpen });
+    perf.add('steps', r.steps); perf.add('simSeconds', r.simSeconds); perf.add('dropped', r.dropped); perf.add('workerMs', r.workerMs);
   })
   .add('描画更新', (dtr, now) => view.update(dtr, now, store.get()))
   .add('UI', (dtr) => { uiTimer += dtr; if (uiTimer > UI_INTERVAL) { uiTimer = 0; refreshUI(); } })
@@ -139,29 +137,24 @@ function openTitle() {
 
 // ---------- 起動 ----------
 const nextFrame = () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
-let rapierReady = false;
-// 物理エンジンはタイトル画面を見せている間に裏で読み込む
-const rapierLoading = RAPIER.init().then(() => { rapierReady = true; });
 const failLoading = (err) => { $('loading').hidden = false; $('loading-msg').textContent = '読み込みに失敗しました: ' + err.message; console.error(err); };
 const HINT_MS = 8000;
 let hintTimer = 0;
 async function start(seed, settings) {
   $('loading').hidden = false;
-  $('loading-msg').textContent = rapierReady ? '地形と植生をつくっています…' : '物理エンジンを読み込んでいます…';
+  $('loading-msg').textContent = '島をつくり、最初の生物を試走させています…';
   await nextFrame();
-  if (!rapierReady) { await rapierLoading; $('loading-msg').textContent = '地形と植生をつくり、最初の生物を試走させています…'; await nextFrame(); }
   // 古い世界を止めてから解放する（ループが解放済みの世界を触らないように）
-  const old = store.get().sim;
   store.set({ sim: null, selected: null, follow: false });
-  old?.dispose();
-  const sim = new Sim(RAPIER, seed, { settings, profiler: store.get().perfOpen ? simProfiler : NULL_PROFILER });
-  const world = { seed, settings: sim.settings, label: settingsLabel(sim.settings) };
+  islands?.dispose();
+  islands = null;
+  islands = await IslandRunner.create(seed, settings);
+  const sim = islands.mirror;
+  const world = { seed, settings: islands.settings, label: settingsLabel(islands.settings) };
   sim.log(`世界を始めました（シード ${seed} ／ 設定：${world.label}）`);
   window.__sim = sim; // デバッグ用
   view.attach(sim);
   panels.attach(sim);
-  runner.reset();
-  simProfiler.take();
   showWorldInfo(world);
   store.set({ sim, world });
   $('loading').hidden = true;
@@ -169,5 +162,4 @@ async function start(seed, settings) {
   if (!hintTimer) hintTimer = setTimeout(() => $('hint').classList.add('gone'), HINT_MS); // 操作ヒントは最初の世界でだけ見せる
 }
 applyPerfVisibility(store.get());
-rapierLoading.catch(failLoading);
 title.show(formFromSettings(lastWorld.settings, lastWorld.seed), { canCancel: false });

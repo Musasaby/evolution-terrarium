@@ -35,7 +35,7 @@ export class InspectorPanel {
     this.drawCost(c);
     this.drawTraits(c);
     const rows = [
-      ['年齢', c.age.toFixed(0) + ' 秒'], ['体積', c.vol.toFixed(2) + ' m³'], ['関節', c.joints.length || c.nParts - 1],
+      ['年齢', c.age.toFixed(0) + ' 秒'], ['体積', c.vol.toFixed(2) + ' m³'], ['関節', c.nJoints || c.nParts - 1],
       ['子の数', c.children], ['捕食した数', c.kills], ['獲得エネルギー', c.eaten.toFixed(0)],
       ['振動数', c.genome.freq.toFixed(2) + ' Hz'], ['親', c.parents ? '#' + c.parents.join(', #') : '祖先／移入'],
       ['同時に生まれた数', c.litter ? c.litter + ' 体' : '—'],
@@ -92,9 +92,9 @@ export class InspectorPanel {
   // 体の形（真上から見た図）
   drawBody(c) {
     const { ctx, w, h } = prepCanvas($('body2d'));
-    if (!c.bodies.length) return;
-    const pts = c.bodies.map((b, i) => {
-      const t = b.translation(), ax = qRot(b.rotation(), { x: 0, y: c.genome.parts[i].len / 2, z: 0 });
+    if (!c.pos.length) return;
+    const pts = c.pos.map((t, i) => {
+      const ax = qRot(c.rot[i], { x: 0, y: c.genome.parts[i].len / 2, z: 0 });
       return { x: t.x, z: t.z, ax: ax.x, az: ax.z, r: c.genome.parts[i].r };
     });
     let cx = 0, cz = 0; pts.forEach(p => { cx += p.x; cz += p.z; }); cx /= pts.length; cz /= pts.length;

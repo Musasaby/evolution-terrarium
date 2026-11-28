@@ -1,6 +1,7 @@
 // ===== シミュレーションコアの公開窓口 =====
 // 描画や UI はここからだけ import する（内部ファイルの構成を変えても外側に影響しないように）。
 export { Sim } from './sim.js';
+export { Climate } from './climate.js';
 export { Archipelago } from './archipelago.js';
 export { ParallelArchipelago, createPort, runIslandRequest } from './parallel-archipelago.js';
 export { IslandHost, islandSpecs, isMigrationStep, stepsToNextMigration, migrationSeed, migrationSource } from './island-host.js';

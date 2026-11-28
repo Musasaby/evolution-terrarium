@@ -1,8 +1,8 @@
 {
   "source": "https://github.com/Musasaby/evolution-terrarium/issues/27",
-  "branch": "develop/archipelago-worker",
-  "updated_at": "2026-11-28T03:37:25+09:00",
-  "group": "node-parallel",
+  "branch": "develop/archipelago-worker-browser",
+  "updated_at": "2026-11-28T11:07:34+09:00",
+  "group": "browser-worker",
   "tasks": [
     {
       "id": "T1",
@@ -28,37 +28,44 @@
     {
       "id": "T4",
       "title": "見ている島の毎フレームの写し(個体・姿勢・気候)を作る",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "be4c03bddafe160ceec295b52105ab6d88ae2237"
     },
     {
       "id": "T5",
       "title": "写しにパネル用の中身(種・植物・地形・統計・出来事・選択中の個体)を足す",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "317aa6c836a78ae722745118540325e11a36415a"
     },
     {
       "id": "T6",
       "title": "ブラウザの島の Web Worker と、全島を進める IslandRunner を作る",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "fa9fcc9d67e6377a43090afb2876803ce0b55755"
     },
     {
       "id": "T7",
       "title": "画面を IslandRunner と写しで動かす",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "da8105d0836c59f49e86cbdbfd9b30e78d227fd2"
     },
     {
       "id": "T8",
       "title": "ARCHITECTURE.md と AGENTS.md に Worker 化と確認ツールを書く",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "76a5c2d9ab67dff7d1c84ece6e711b9a6a64cb90"
+    },
+    {
+      "id": "T9",
+      "title": "IslandRunner が遅れを消費する前に捨てて止まる不具合と、性能表示の 1 ステップ時間を直す",
+      "status": "done",
+      "retries": 0,
+      "commit": "13fc8846996c5057d1ccf1fb4a33e694fb8ce3db"
     }
   ]
 }
