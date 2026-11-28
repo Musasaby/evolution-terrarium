@@ -2,7 +2,7 @@
   "source": "https://github.com/Musasaby/evolution-terrarium/issues/28",
   "branch": "develop/archipelago-view",
   "group": "",
-  "updated_at": "2026-11-28T12:36:05+09:00",
+  "updated_at": "2026-11-28T12:38:49+09:00",
   "tasks": [
     {
       "id": "T1",
@@ -42,9 +42,9 @@
     {
       "id": "T6",
       "title": "統計タブの先頭に群島の表と全体の実効種数を出す",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "aeec4b995848e4af3fede43d4eec56cb498969ea"
     },
     {
       "id": "T7",
