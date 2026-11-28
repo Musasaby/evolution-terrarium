@@ -45,6 +45,7 @@ app/main.js ──▶ render/ ──┐
 | `climate.js` | `Climate`：季節・天候・氷河期・湖面 | 乱数と記録関数だけ |
 | `terrain.js` | `Terrain`：高さ場・隆起と侵食・水域からの距離・土壌 | 乱数とノイズだけ |
 | `environment.js` | 地形×気候の問い合わせ（気温・水・土壌を含む植物の適地度） | Terrain, Climate |
+| `water.js` | 水の中の力（浮力）。体節の浸かった割合から上向きの力積を毎ステップかける | config |
 | `flora.js` | `Flora`：植物の発芽・成長・拡散・枯死 | 物理世界, Terrain, Climate |
 | `creatures.js` | 誕生・感覚・代謝・密集と疫病・死・移入 | sim を第1引数で受け取る |
 | `interactions.js` | 接触イベント → 採食・捕食・繁殖 | 同上 |
@@ -171,6 +172,9 @@ npm run check:sim             # 600 ステップ進めて状態ハッシュと�
 node tools/sim-check.mjs 1500 # ステップ数（とシード）を指定
 npm run check:diversity       # 27000 ステップ（3 年）・シード 1,2,3 を並行実行して多様性を表にする
 node tools/diversity-check.mjs 9000 1 # ステップ数とシード（カンマ区切りで複数可）を指定
+npm run check:environment     # 9000 ステップ・シード 1,2 で水（入水・上陸・転落）・標高・速さ・体節数を表にする
+node tools/environment-check.mjs 27000 1,2 # ステップ数とシードを指定
+node tools/lake-shape-check.mjs 1,2,20261007 # 世界を作った直後の湖の形（水面下の格子・最も低い地面・水際の勾配）
 npm run check:archipelago     # 群島を 600 ステップ進めて状態ハッシュ・島ごとの内訳・移住の回数を表示
 npm run check:archipelago-diversity # 群島の多様性を 27000 ステップ・シード 1,2,3 で測る
 node tools/archipelago-check.mjs 3000 1 --workers [--jitter] # worker_threads で並行に動かす（1 スレッドと同じハッシュになること）
