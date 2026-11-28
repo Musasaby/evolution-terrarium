@@ -15,6 +15,7 @@ export function bindControls(store, actions) {
   $('btn-perf').addEventListener('click', () => store.set({ perfOpen: !store.get().perfOpen }));
   const togglePanel = () => store.set({ panelOpen: !store.get().panelOpen });
   $('btn-panel').addEventListener('click', togglePanel);
+  $('island-sel').addEventListener('change', () => store.set({ island: +$('island-sel').value }));
   store.set({ panelOpen: loadPanelOpen() });
 
   // Space: 一時停止／再開　P: パフォーマンス表示　B: 右パネルの開閉（文字入力中は反応しない）
@@ -40,6 +41,12 @@ export function bindControls(store, actions) {
     if (prev && s.panelOpen !== prev.panelOpen) savePanelOpen(s.panelOpen);
     for (const b of speedButtons) b.setAttribute('aria-pressed', String(+b.dataset.s === s.speed));
     $('btn-perf').setAttribute('aria-pressed', String(s.perfOpen));
+    if (!prev || s.islandCount !== prev.islandCount) {
+      $('island-pick').hidden = s.islandCount <= 1;
+      const sel = $('island-sel');
+      sel.replaceChildren(...Array.from({ length: s.islandCount }, (_, i) => new Option(`島 ${i + 1}`, String(i))));
+    }
+    $('island-sel').value = String(s.island);
   };
   store.subscribe(sync);
   sync(store.get());
