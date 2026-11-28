@@ -2,7 +2,7 @@
   "source": "docs/plans/environment-ui-plan.html",
   "branch": "develop/environment-ui",
   "group": "migrate",
-  "updated_at": "2026-11-28T15:15:27+09:00",
+  "updated_at": "2026-11-28T15:32:26+09:00",
   "tasks": [
     {
       "id": "T1",
@@ -21,9 +21,9 @@
     {
       "id": "T3",
       "title": "移住を見送るしきい値を 4・6・8 で比べて決める",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "93ec5f3"
     },
     {
       "id": "T4",
