@@ -59,29 +59,41 @@ export function computeDiversity(sim) {
   };
 }
 
-// 群島全体の多様性（純粋関数）。sims は島の Sim の配列（島番号の順）。
+// 1 島分の集計材料（純粋関数）。postMessage で送れる形にする
+//   living … 生きている個体数。diet … [食性の分類, 数] の配列（はじめて現れた順）
+//   groups … 種ごとの { n: 個体数, genomes: 代表ゲノム（id の小さい順に最大 SAMPLE 個） }（種がはじめて現れた順）
+export function islandDiversityGroups(sim) {
+  const bySp = new Map(), diet = new Map();
+  let living = 0;
+  for (const c of sim.creatures) {
+    if (!isLiving(c)) continue;
+    living++;
+    const members = bySp.get(c.species);
+    if (members) members.push(c); else bySp.set(c.species, [c]);
+    // 食性ニッチ: diet < 0.25 = 草, < 0.75 = 木の葉, それ以上 = 肉
+    const d = c.genome.diet ?? 0.25;
+    const cls = d < 0.25 ? 0 : d < 0.75 ? 1 : 2;
+    diet.set(cls, (diet.get(cls) || 0) + 1);
+  }
+  const groups = [];
+  for (const members of bySp.values()) {
+    members.sort((a, b) => a.id - b.id);
+    groups.push({ n: members.length, genomes: members.slice(0, SAMPLE).map((c) => c.genome) });
+  }
+  return { living, diet: [...diet], groups };
+}
+
+// 群島全体の多様性（純粋関数）。parts は島番号の順の islandDiversityGroups の戻り値。
 //   effSpecies        … 種を「島番号:種 id」で別の種として数えた実効種数
 //   effSpeciesFertile … 別の島の種どうしを交配可能性で束ねた実効種数
-export function computeArchipelagoDiversity(sims) {
+export function combineArchipelagoDiversity(parts) {
   const groups = [];          // { island, n, genomes }（島ごと・種ごと）
   const dietCounts = new Map();
   let living = 0;
-  sims.forEach((sim, island) => {
-    const bySp = new Map();   // 種 -> 生きている個体の配列
-    for (const c of sim.creatures) {
-      if (!isLiving(c)) continue;
-      living++;
-      const members = bySp.get(c.species);
-      if (members) members.push(c); else bySp.set(c.species, [c]);
-      // 食性ニッチ: diet < 0.25 = 草, < 0.75 = 木の葉, それ以上 = 肉
-      const d = c.genome.diet ?? 0.25;
-      const cls = d < 0.25 ? 0 : d < 0.75 ? 1 : 2;
-      dietCounts.set(cls, (dietCounts.get(cls) || 0) + 1);
-    }
-    for (const members of bySp.values()) {
-      members.sort((a, b) => a.id - b.id);
-      groups.push({ island, n: members.length, genomes: members.slice(0, SAMPLE).map((c) => c.genome) });
-    }
+  parts.forEach((p, island) => {
+    living += p.living;
+    for (const [cls, k] of p.diet) dietCounts.set(cls, (dietCounts.get(cls) || 0) + k);
+    for (const g of p.groups) groups.push({ island, n: g.n, genomes: g.genomes });
   });
   // union-find：別の島の 2 種で、代表どうしのどれか 1 組が interfertile なら同じ根にまとめる。
   // 同じ島どうしは直接まとめない（fertileCounts と同じ）。根ごとに n を足して fertile（Map）を作る
@@ -105,4 +117,9 @@ export function computeArchipelagoDiversity(sims) {
     speciesFertile: fertile.size,
     effSpeciesFertile: effFromCounts(fertile),
   };
+}
+
+// sims は島の Sim の配列（島番号の順）。戻り値の意味は combineArchipelagoDiversity のとおり
+export function computeArchipelagoDiversity(sims) {
+  return combineArchipelagoDiversity(sims.map(islandDiversityGroups));
 }
