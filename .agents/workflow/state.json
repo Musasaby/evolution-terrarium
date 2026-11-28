@@ -2,14 +2,14 @@
   "source": "docs/plans/environment-ui-plan.html",
   "branch": "develop/environment-ui",
   "group": "migrate",
-  "updated_at": "2026-11-28T14:55:47+09:00",
+  "updated_at": "2026-11-28T15:06:07+09:00",
   "tasks": [
     {
       "id": "T1",
       "title": "移住で選ぶ個体から、島での個体数が少ない種を外す",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "commit": null
+      "commit": "dd5472d5db23e5c5286949ca372197c3c19f7bc9"
     },
     {
       "id": "T2",
