@@ -1,71 +1,57 @@
 {
-  "source": "https://github.com/Musasaby/evolution-terrarium/issues/27",
-  "branch": "develop/archipelago-worker-browser",
-  "updated_at": "2026-11-28T11:07:34+09:00",
-  "group": "browser-worker",
+  "source": "https://github.com/Musasaby/evolution-terrarium/issues/28",
+  "branch": "develop/archipelago-view",
+  "group": "",
+  "updated_at": "2026-11-28T11:49:20+09:00",
   "tasks": [
     {
       "id": "T1",
-      "title": "IslandHost を切り出し、Archipelago をそれに載せ替える",
-      "status": "done",
+      "title": "群島の多様性の集計を「1 島分の材料」と「束ねる計算」に分ける",
+      "status": "pending",
       "retries": 0,
-      "commit": "be49c581eab0373df931bfb58eb06bc25efb2a72"
+      "commit": null
     },
     {
       "id": "T2",
-      "title": "島を worker_threads で並行に動かす ParallelArchipelago と確認ツールの --workers を足す",
-      "status": "done",
+      "title": "移住の結果を知らせる onMigrate と、Worker の要求 summary・profile・frame の fresh を足す",
+      "status": "pending",
       "retries": 0,
-      "commit": "1793ff9897ac06605ea05265f5a6e29ba3acbf71"
+      "commit": null
     },
     {
       "id": "T3",
-      "title": "4 島を 1 スレッドと worker で測り、検証記録に書く",
-      "status": "done",
+      "title": "IslandRunner に見る島の切り替え・群島の集計・移住のログを足す",
+      "status": "pending",
       "retries": 0,
-      "commit": "f3fb2c783228e3210485364b9e356e01734e8ae9"
+      "commit": null
     },
     {
       "id": "T4",
-      "title": "見ている島の毎フレームの写し(個体・姿勢・気候)を作る",
-      "status": "done",
+      "title": "ヘッダーに見る島のセレクトボックスを足し、ストアに島の状態を置く",
+      "status": "pending",
       "retries": 0,
-      "commit": "be4c03bddafe160ceec295b52105ab6d88ae2237"
+      "commit": null
     },
     {
       "id": "T5",
-      "title": "写しにパネル用の中身(種・植物・地形・統計・出来事・選択中の個体)を足す",
-      "status": "done",
+      "title": "見る島の切り替えを配線し、カメラを保って描き直す",
+      "status": "pending",
       "retries": 0,
-      "commit": "317aa6c836a78ae722745118540325e11a36415a"
+      "commit": null
     },
     {
       "id": "T6",
-      "title": "ブラウザの島の Web Worker と、全島を進める IslandRunner を作る",
-      "status": "done",
+      "title": "統計タブの先頭に群島の表と全体の実効種数を出す",
+      "status": "pending",
       "retries": 0,
-      "commit": "fa9fcc9d67e6377a43090afb2876803ce0b55755"
+      "commit": null
     },
     {
       "id": "T7",
-      "title": "画面を IslandRunner と写しで動かす",
-      "status": "done",
+      "title": "ARCHITECTURE.md に見る島の切り替えと群島の集計を書く",
+      "status": "pending",
       "retries": 0,
-      "commit": "da8105d0836c59f49e86cbdbfd9b30e78d227fd2"
-    },
-    {
-      "id": "T8",
-      "title": "ARCHITECTURE.md と AGENTS.md に Worker 化と確認ツールを書く",
-      "status": "done",
-      "retries": 0,
-      "commit": "76a5c2d9ab67dff7d1c84ece6e711b9a6a64cb90"
-    },
-    {
-      "id": "T9",
-      "title": "IslandRunner が遅れを消費する前に捨てて止まる不具合と、性能表示の 1 ステップ時間を直す",
-      "status": "done",
-      "retries": 0,
-      "commit": "13fc8846996c5057d1ccf1fb4a33e694fb8ce3db"
+      "commit": null
     }
   ]
 }
