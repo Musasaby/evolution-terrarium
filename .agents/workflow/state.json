@@ -1,8 +1,8 @@
 {
   "source": "docs/plans/environment-ui-plan.html",
-  "branch": "develop/environment-ui",
-  "group": "migrate",
-  "updated_at": "2026-11-28T15:32:26+09:00",
+  "branch": "develop/environment-ui-lake",
+  "group": "lake",
+  "updated_at": "2026-11-28T15:37:02+09:00",
   "tasks": [
     {
       "id": "T1",
