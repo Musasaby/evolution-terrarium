@@ -4,7 +4,7 @@
 // 偽の Worker・port・mirror・arch で IslandRunner を直接作り、遅い環境で
 // シミュレーションが進むかを照らす。NG が 1 件でもあれば終了コード 1。
 import { IslandRunner } from '../src/app/island-runner.js';
-import { CFG } from '../src/sim/index.js';
+import { CFG, ParallelArchipelago } from '../src/sim/index.js';
 
 let ng = 0;
 function check(name, cond, expected, actual) {
@@ -52,8 +52,27 @@ async function testSlowResponse() {
   check('応答が 3 フレームに 1 回でも進む', total > 0, '> 0', total);
 }
 
+// 移住のたびに onMigrate が島ごとの行き来を受け取る
+async function testOnMigrate() {
+  const ports = [0, 1, 2].map((i) => ({ ask: async (type) => {
+    if (type === 'run') return { computeMs: 0 };
+    if (type === 'emigrate') return { migrants: [{}, {}] };
+    return i === 1 ? { placed: 1, dropped: 1 } : { placed: 2, dropped: 0 };
+  } }));
+  const arch = new ParallelArchipelago(ports, 1, { islands: 3, migrateEvery: 10, migrants: 2 });
+  const calls = [];
+  arch.onMigrate = (moves, step) => calls.push({ moves, step });
+  await arch.advance(10);
+  const expected = JSON.stringify([{ moves: [
+    { to: 0, from: 2, sent: 2, placed: 2, dropped: 0 },
+    { to: 1, from: 0, sent: 2, placed: 1, dropped: 1 },
+    { to: 2, from: 1, sent: 2, placed: 2, dropped: 0 }], step: 10 }]);
+  check('onMigrate が島ごとの行き来を受け取る', JSON.stringify(calls) === expected, expected, JSON.stringify(calls));
+}
+
 await testFastResponse();
 await testSlowResponse();
+await testOnMigrate();
 
 if (ng === 0) console.log('すべて OK');
 else { console.log('NG あり'); process.exitCode = 1; }
