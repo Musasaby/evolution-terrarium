@@ -2,7 +2,7 @@
   "source": "docs/plans/environment-ui-plan.html",
   "branch": "develop/environment-ui-lake",
   "group": "lake",
-  "updated_at": "2026-11-28T16:33:15+09:00",
+  "updated_at": "2026-11-28T17:38:49+09:00",
   "tasks": [
     {
       "id": "T1",
@@ -49,9 +49,9 @@
     {
       "id": "T7",
       "title": "浮力と湖の形を計測して調整する",
-      "status": "pending",
-      "retries": 0,
-      "commit": null
+      "status": "done",
+      "retries": 1,
+      "commit": "cce0506a1576891c355188dacc8faf366e0c7076"
     },
     {
       "id": "T8",
