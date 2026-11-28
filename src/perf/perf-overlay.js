@@ -80,7 +80,7 @@ export class PerfOverlay {
 
     const steps = s.counters.steps || 0;
     const simMs = s.tasks['シム'] || 0;
-    const stepMs = steps ? fmtMs(simMs * s.frames / steps) + ' ms' : '—';
+    const stepMs = steps ? fmtMs((s.counters.workerMs ?? simMs * s.frames) / steps) + ' ms' : '—';
     const speedLabel = speed === 0 ? '停止' : target ? `×${target}` : '最大';
     // 簡易表示の1行まとめ
     this.el.summary.textContent = speed === 0 ? `停止中 · 1フレーム処理 ${fmtMs(s.workMs)} ms`

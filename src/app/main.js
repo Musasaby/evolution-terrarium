@@ -103,7 +103,7 @@ new GameLoop(perf)
     if (!islands || !store.get().sim) return;
     const { speed } = store.get();
     const r = islands.advance(dtr, speed, { selectedId: store.get().selected?.id ?? null, profile: store.get().perfOpen });
-    perf.add('steps', r.steps); perf.add('simSeconds', r.simSeconds); perf.add('dropped', r.dropped);
+    perf.add('steps', r.steps); perf.add('simSeconds', r.simSeconds); perf.add('dropped', r.dropped); perf.add('workerMs', r.workerMs);
   })
   .add('描画更新', (dtr, now) => view.update(dtr, now, store.get()))
   .add('UI', (dtr) => { uiTimer += dtr; if (uiTimer > UI_INTERVAL) { uiTimer = 0; refreshUI(); } })

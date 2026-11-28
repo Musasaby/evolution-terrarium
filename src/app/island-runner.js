@@ -45,13 +45,16 @@ export class IslandRunner {
   // 毎フレーム呼ぶ。dtr: 前フレームからの実時間（秒）。戻り値は計測用 { steps, simSeconds, dropped }
   advance(dtr, speed, { selectedId = null, profile = false } = {}) {
     let dropped = 0, n = 0;
-    if (speed > 0 && speed < SPEED_MAX) {
-      this.acc += dtr * speed;
-      if (this.acc > MAX_BACKLOG) { dropped = this.acc; this.acc = 0; }
+    if (speed > 0 && speed < SPEED_MAX) this.acc += dtr * speed;
+    if (this.busy || this.disposed || this.error) {
+      // 応答待ちの間は遅れを MAX_BACKLOG で頭打ちにする（全部は捨てない）
+      if (this.acc > MAX_BACKLOG) { dropped = this.acc - MAX_BACKLOG; this.acc = MAX_BACKLOG; }
+      return { steps: 0, simSeconds: 0, dropped, workerMs: 0 };
     }
-    if (this.busy || this.disposed || this.error) return { steps: 0, simSeconds: 0, dropped };
     if (speed >= SPEED_MAX) n = Math.max(1, Math.floor(BUDGET_MAX_MS / this.msPerStep));
     else if (speed > 0) { n = Math.min(Math.floor(this.acc / CFG.DT), Math.max(1, Math.floor(BUDGET_MS / this.msPerStep))); this.acc -= n * CFG.DT; }
+    // 消費した後に、残りが多すぎるときだけ捨てる（SimRunner と同じ順）
+    if (this.acc > MAX_BACKLOG) { dropped += this.acc; this.acc = 0; }
     this.selectedId = selectedId; this.profile = profile;
     const now = performance.now(), panels = now - this.lastPanels >= PANELS_MS;
     if (panels) this.lastPanels = now;
@@ -60,7 +63,7 @@ export class IslandRunner {
       .then(() => { if (n > 0) this.msPerStep = 0.7 * this.msPerStep + 0.3 * Math.max(0.05, (performance.now() - now) / n); return this.fetchFrame(panels); })
       .then(() => { this.busy = false; })
       .catch((err) => { if (!this.disposed) { this.error = err; console.error(err); } });
-    return { steps: n, simSeconds: n * CFG.DT, dropped };
+    return { steps: n, simSeconds: n * CFG.DT, dropped, workerMs: n * this.msPerStep };
   }
   // Worker をすべて止める。待っている要求は失敗にする
   dispose() { this.disposed = true; for (const w of this.workers) w.terminate(); for (const p of this.ports) p.failAll(new Error('世界を閉じました')); this.mirror.dispose(); }
